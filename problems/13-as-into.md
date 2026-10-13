@@ -1,17 +1,17 @@
-# Explicit `as` and `into()`
+# Явные `as` и `into()`
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 let x: u64 = (a as u64) + b.into();
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 let x: u64 = a + b;
 ```
 
-## Implementation
+## Реализация
 
-Expression macro inserting `into()` for lossless widening conversions only.
+Макрос на выражение вставляет `into()` только для безопасных расширяющих приведений.

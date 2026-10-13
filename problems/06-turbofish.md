@@ -1,19 +1,19 @@
 # Turbofish
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 let n = s.parse::<u32>()?;
 let v = it.collect::<Vec<_>>();
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 let n = s.parse<u32>()?;
 let v = it.collect<Vec>();
 ```
 
-## Implementation
+## Реализация
 
-Token rewrite of `.method<T>(` into `.method::<T>(`, filling missing `<_>` params.
+Переписывание токенов `.method<T>(` в `.method::<T>(` с достройкой недостающих `<_>`.

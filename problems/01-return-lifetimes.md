@@ -1,17 +1,17 @@
-# Lifetimes in return types
+# Лайфтаймы в возвращаемом типе
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 fn first<'a>(xs: &'a [Item], key: &str) -> &'a Item
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 fn first(xs: &[Item], key: &str) -> &from(xs) Item
 ```
 
-## Implementation
+## Реализация
 
-Attribute macro that introduces a named lifetime and binds it to the parameter referenced by `from(..)`.
+Атрибутный макрос вводит именованный лайфтайм и привязывает его к параметру из `from(..)`.

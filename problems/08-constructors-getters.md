@@ -1,6 +1,6 @@
-# Constructors and getters
+# Конструкторы и геттеры
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 impl User {
@@ -9,13 +9,13 @@ impl User {
 }
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 #[data]
 struct User { name: String, age: u32 }
 ```
 
-## Implementation
+## Реализация
 
-Derive macro generating `new`, getters and an optional builder.
+Derive-макрос генерирует `new`, геттеры и опциональный builder.

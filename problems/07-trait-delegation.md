@@ -1,6 +1,6 @@
-# Trait boilerplate: delegation
+# Boilerplate вокруг трейтов: делегирование
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 impl Read for Wrapper {
@@ -10,7 +10,7 @@ impl Read for Wrapper {
 }
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 struct Wrapper {
@@ -19,6 +19,6 @@ struct Wrapper {
 }
 ```
 
-## Implementation
+## Реализация
 
-Delegation attribute macro (see `delegate`, `ambassador` crates).
+Атрибутный макрос делегирования (см. крейты `delegate`, `ambassador`).

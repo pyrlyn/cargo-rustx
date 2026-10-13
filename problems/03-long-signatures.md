@@ -1,6 +1,6 @@
-# Long signatures with generics and `where`
+# Длинные сигнатуры с generics и `where`
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 fn run<T, E>(x: T) -> Result<T, E>
@@ -9,12 +9,12 @@ where
     E: Error,
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 fn run(x: T: Clone + Debug + Send) -> Result<T, E: Error>
 ```
 
-## Implementation
+## Реализация
 
-Attribute macro that lifts inline bounds into the generic list and a `where` clause.
+Атрибутный макрос выносит inline-ограничения в список generics и `where`.
