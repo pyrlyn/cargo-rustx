@@ -1,17 +1,17 @@
-# `dyn Trait` in signatures
+# `dyn Trait` в сигнатурах
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 fn handlers() -> Vec<Box<dyn Fn(&Req) -> Resp + Send + Sync>>
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 fn handlers() -> Vec<~Fn(&Req) -> Resp>
 ```
 
-## Implementation
+## Реализация
 
-Desugar `~Trait` into `Box<dyn Trait + Send + Sync>` (configurable bounds).
+Десугаринг `~Trait` в `Box<dyn Trait + Send + Sync>` (набор ограничений настраивается).

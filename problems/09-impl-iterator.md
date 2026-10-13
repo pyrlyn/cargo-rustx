@@ -1,17 +1,17 @@
-# `impl Trait` and complex iterator returns
+# `impl Trait` и сложные возвращаемые итераторы
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 fn evens(v: &[i32]) -> impl Iterator<Item = &i32> + '_
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 fn evens(v: &[i32]) -> iter &i32
 ```
 
-## Implementation
+## Реализация
 
-Desugar `iter T` into `impl Iterator<Item = T> + '_`.
+Десугаринг `iter T` в `impl Iterator<Item = T> + '_`.

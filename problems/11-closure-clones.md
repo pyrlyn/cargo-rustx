@@ -1,6 +1,6 @@
-# Cloning for closures
+# Клонирование в замыканиях
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 let a = a.clone();
@@ -8,12 +8,12 @@ let b = b.clone();
 spawn(move || work(a, b));
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 spawn(move[a.clone(), b.clone()] || work(a, b));
 ```
 
-## Implementation
+## Реализация
 
-Capture-list macro expanding into `let` bindings before a `move` closure.
+Макрос списка захвата разворачивается в `let`-привязки перед `move`-замыканием.

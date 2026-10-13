@@ -1,6 +1,6 @@
-# Manual `impl` for simple cases
+# Ручной `impl` для простых случаев
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 impl From<io::Error> for MyErr {
@@ -8,12 +8,12 @@ impl From<io::Error> for MyErr {
 }
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 enum MyErr { Io(from io::Error) }
 ```
 
-## Implementation
+## Реализация
 
-Derive/attribute macro generating `From`, `Display` and constructors (like thiserror / derive_more).
+Derive/атрибутный макрос генерирует `From`, `Display` и конструкторы (как thiserror / derive_more).

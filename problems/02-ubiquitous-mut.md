@@ -1,19 +1,19 @@
-# Ubiquitous `mut`
+# Вездесущий `mut`
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 let mut v = Vec::new();
 let mut i = 0;
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 var v = Vec::new();
 var i = 0;
 ```
 
-## Implementation
+## Реализация
 
-Function/block macro rewriting `var x = ..` into `let mut x = ..`.
+Макрос на функцию или блок переписывает `var x = ..` в `let mut x = ..`.

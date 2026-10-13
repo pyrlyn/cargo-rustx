@@ -1,17 +1,17 @@
-# `async` with `Pin` and `Box` in traits
+# `async` с `Pin` и `Box` в трейтах
 
-## As is (Rust)
+## Как есть (Rust)
 
 ```rust
 fn call(&self) -> Pin<Box<dyn Future<Output = T> + Send + '_>>
 ```
 
-## Desired (sugar)
+## Как хочется
 
 ```rust
 async fn call(&self) -> T
 ```
 
-## Implementation
+## Реализация
 
-Native async fn in traits, plus `async_trait`-style boxing macro for `dyn` use.
+Нативный async fn в трейтах плюс макрос боксинга в стиле `async_trait` для `dyn`.
