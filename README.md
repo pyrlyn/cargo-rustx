@@ -6,6 +6,8 @@ BetterDiffuseRust — язык-надстройка над Rust. Синтакс�
 
 Бэкенд — десугаринг в валидный Rust через макросы (`syn`), без своего компилятора. Одна точка входа: `#[sugar]` или `sugar!`.
 
+План реализации: [ARCHITECTURE.md](ARCHITECTURE.md).
+
 - [Лайфтаймы в возвращаемом типе](problems/01-return-lifetimes.md)
 - [Вездесущий `mut`](problems/02-ubiquitous-mut.md)
 - [Длинные сигнатуры с generics и `where`](problems/03-long-signatures.md)
@@ -26,6 +28,8 @@ BetterDiffuseRust — язык-надстройка над Rust. Синтакс�
 BetterDiffuseRust is a syntax layer over Rust. It stays as close to Rust as possible while simplifying the least readable parts: return-type lifetimes via `from`, `var` instead of `mut`, inline bounds in signatures, `~Trait` instead of `dyn Trait + Send + Sync`, `from` in enums instead of manual `impl From`, `.method<T>()` instead of turbofish, `#[delegate]` for trait delegation, `#[data]` for constructors and getters, `iter T` instead of `impl Iterator`, `throws` instead of `Box<dyn Error>`, `move[a, b]` for cloning captures, `shared` for `Arc<Mutex>`, automatic `into()` for safe conversions, and `async fn` in traits without `Pin`/`Box`.
 
 The backend desugars into valid Rust through macros (`syn`), with no custom compiler. Single entry point: `#[sugar]` or `sugar!`.
+
+Implementation plan: [ARCHITECTURE.en.md](ARCHITECTURE.en.md).
 
 - [Lifetimes in return types](problems/01-return-lifetimes.en.md)
 - [Ubiquitous `mut`](problems/02-ubiquitous-mut.en.md)
