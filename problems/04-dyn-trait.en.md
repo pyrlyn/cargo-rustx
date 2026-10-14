@@ -67,7 +67,7 @@ impl Bus {
 }
 ```
 
-### Desired (BetterDiffuseRust)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used

@@ -1,8 +1,8 @@
-# BetterDiffuseRust
+# cargo-rustx
 
 ## Русский
 
-BetterDiffuseRust — язык-надстройка над Rust. Синтаксис максимально похож на Rust, но упрощает самые нечитаемые места: лайфтаймы в возвращаемых типах через `from`, `var` вместо `mut`, inline-ограничения в сигнатурах, `~Trait` вместо `dyn Trait + Send + Sync`, `from` в enum вместо ручного `impl From`, `.method<T>()` вместо turbofish, `#[delegate]` для делегирования трейтов, `#[data]` для конструкторов и геттеров, `iter T` вместо `impl Iterator`, `throws` вместо `Box<dyn Error>`, `move[a, b]` для захвата с клонированием, `shared` для `Arc<Mutex>`, автоматический `into()` при безопасных приведениях, `async fn` в трейтах без `Pin`/`Box`.
+cargo-rustx — язык-надстройка над Rust. Синтаксис максимально похож на Rust, но упрощает самые нечитаемые места: лайфтаймы в возвращаемых типах через `from`, `var` вместо `mut`, inline-ограничения в сигнатурах, `~Trait` вместо `dyn Trait + Send + Sync`, `from` в enum вместо ручного `impl From`, `.method<T>()` вместо turbofish, `#[delegate]` для делегирования трейтов, `#[data]` для конструкторов и геттеров, `iter T` вместо `impl Iterator`, `throws` вместо `Box<dyn Error>`, `move[a, b]` для захвата с клонированием, `shared` для `Arc<Mutex>`, автоматический `into()` при безопасных приведениях, `async fn` в трейтах без `Pin`/`Box`.
 
 Бэкенд — десугаринг в валидный Rust через макросы (`syn`), без своего компилятора. Одна точка входа: `#[sugar]` или `sugar!`.
 
@@ -25,7 +25,7 @@ BetterDiffuseRust — язык-надстройка над Rust. Синтакс�
 
 ## English
 
-BetterDiffuseRust is a syntax layer over Rust. It stays as close to Rust as possible while simplifying the least readable parts: return-type lifetimes via `from`, `var` instead of `mut`, inline bounds in signatures, `~Trait` instead of `dyn Trait + Send + Sync`, `from` in enums instead of manual `impl From`, `.method<T>()` instead of turbofish, `#[delegate]` for trait delegation, `#[data]` for constructors and getters, `iter T` instead of `impl Iterator`, `throws` instead of `Box<dyn Error>`, `move[a, b]` for cloning captures, `shared` for `Arc<Mutex>`, automatic `into()` for safe conversions, and `async fn` in traits without `Pin`/`Box`.
+cargo-rustx is a syntax layer over Rust. It stays as close to Rust as possible while simplifying the least readable parts: return-type lifetimes via `from`, `var` instead of `mut`, inline bounds in signatures, `~Trait` instead of `dyn Trait + Send + Sync`, `from` in enums instead of manual `impl From`, `.method<T>()` instead of turbofish, `#[delegate]` for trait delegation, `#[data]` for constructors and getters, `iter T` instead of `impl Iterator`, `throws` instead of `Box<dyn Error>`, `move[a, b]` for cloning captures, `shared` for `Arc<Mutex>`, automatic `into()` for safe conversions, and `async fn` in traits without `Pin`/`Box`.
 
 The backend desugars into valid Rust through macros (`syn`), with no custom compiler. Single entry point: `#[sugar]` or `sugar!`.
 
