@@ -1,0 +1,3 @@
+- T2. M1: `var` statements
+- T3. M2: type-prefix sugar `~Trait`, `iter T`, `rc T`, `weak T`
+- T4. M2: method generics without turbofish

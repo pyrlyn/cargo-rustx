@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: plan only. Nothing is implemented yet.
+Status: M0 (skeleton) is implemented; later milestones are in progress.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 

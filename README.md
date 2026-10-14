@@ -2,7 +2,7 @@
 
 cargo-rustx is a syntax layer over Rust. It stays as close to Rust as possible and only simplifies the places people find hardest to read and write. Everything desugars into ordinary Rust through procedural macros built on `syn`; there is no custom compiler. There are two entry points: `sugar! { .. }` for the full vocabulary and `#[sugar]` for code that is already valid Rust.
 
-Status: design only. Nothing is implemented yet.
+Status: early implementation. The workspace skeleton is in place; `sugar!` passes valid Rust through unchanged and sugar items land milestone by milestone (see [plan.md](plan.md)).
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it will be built.
 - [research.md](research.md): why these items were chosen, with sources, and what upstream Rust already fixes.
