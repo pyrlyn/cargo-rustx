@@ -16,6 +16,8 @@ fn evens(v: &[i32]) -> iter &i32
 
 Desugar `iter T` into `impl Iterator<Item = T> + '_`.
 
+Upstream: in edition 2024, `-> impl Trait` captures every in-scope lifetime, so `+ '_` is no longer required there (it still compiles). Edition 2021 code still needs it. The sugar keeps emitting `+ '_` so one expansion works on both editions; on 2024 its value is the shorter `iter T` and the `from(..)` lifetimes. See [research.md](../research.md).
+
 ## Detailed example
 
 ### As is (valid Rust)
