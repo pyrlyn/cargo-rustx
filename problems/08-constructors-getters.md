@@ -76,7 +76,7 @@ pub fn deactivate_by_domain(users: &mut [User], domain: &str) -> usize {
 }
 ```
 
-### Как хочется (BetterDiffuseRust)
+### Как хочется (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
