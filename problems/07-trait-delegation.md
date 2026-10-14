@@ -1,6 +1,6 @@
-# Boilerplate вокруг трейтов: делегирование
+# Trait boilerplate: delegation
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 impl Read for Wrapper {
@@ -10,7 +10,7 @@ impl Read for Wrapper {
 }
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 struct Wrapper {
@@ -19,13 +19,13 @@ struct Wrapper {
 }
 ```
 
-## Реализация
+## Implementation
 
-Атрибутный макрос делегирования (см. крейты `delegate`, `ambassador`).
+Delegation attribute macro (see `delegate`, `ambassador` crates).
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::io::{self, Read, Write};
@@ -76,7 +76,7 @@ pub fn copy_all<R: Read, W: Write>(t: &mut Tee<R, W>) -> io::Result<u64> {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -115,8 +115,8 @@ mod io_wrappers {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Три `impl` с пересылкой в поле заменены атрибутом `#[delegate(Trait)]` на поле.
-- `except(write)` оставляет ручную реализацию только нужного метода.
-- Попутно: inline-ограничения, `var`, неявный `into()`.
+- Three forwarding `impl` blocks became a `#[delegate(Trait)]` attribute on the field.
+- `except(write)` keeps a hand-written implementation only for the method that matters.
+- Also: inline bounds, `var`, implicit `into()`.

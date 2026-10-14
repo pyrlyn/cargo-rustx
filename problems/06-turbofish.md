@@ -1,26 +1,26 @@
 # Turbofish
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 let n = s.parse::<u32>()?;
 let v = it.collect::<Vec<_>>();
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 let n = s.parse<u32>()?;
 let v = it.collect<Vec>();
 ```
 
-## Реализация
+## Implementation
 
-Переписывание токенов `.method<T>(` в `.method::<T>(` с достройкой недостающих `<_>`.
+Token rewrite of `.method<T>(` into `.method::<T>(`, filling missing `<_>` params.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::{BTreeMap, HashSet};
@@ -64,7 +64,7 @@ pub fn total(rows: &[Row]) -> f32 {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -104,8 +104,8 @@ mod rows {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- `::<T>` заменён на `<T>` после имени метода.
-- Недостающие параметры дополняются `_`: `collect<Vec>` → `collect::<Vec<_>>`, `collect<BTreeMap>` → `collect::<BTreeMap<_, _>>`.
-- Попутно: `var` и `#[data]` с `Row::new`.
+- `::<T>` became `<T>` right after the method name.
+- Missing parameters are filled with `_`: `collect<Vec>` → `collect::<Vec<_>>`, `collect<BTreeMap>` → `collect::<BTreeMap<_, _>>`.
+- Also: `var` and `#[data]` with `Row::new`.

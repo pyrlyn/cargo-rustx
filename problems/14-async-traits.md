@@ -1,24 +1,24 @@
-# `async` с `Pin` и `Box` в трейтах
+# `async` with `Pin` and `Box` in traits
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 fn call(&self) -> Pin<Box<dyn Future<Output = T> + Send + '_>>
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 async fn call(&self) -> T
 ```
 
-## Реализация
+## Implementation
 
-Нативный async fn в трейтах плюс макрос боксинга в стиле `async_trait` для `dyn`.
+Native async fn in traits, plus `async_trait`-style boxing macro for `dyn` use.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::HashMap;
@@ -65,7 +65,7 @@ pub async fn copy_key(
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -106,8 +106,8 @@ mod store {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Псевдоним `BoxFut`, `Pin<Box<dyn Future>>`, `Box::pin(async move ..)` и лайфтаймы `'a` исчезли: в трейте пишется обычный `async fn`.
-- Для dyn-совместимых трейтов макрос генерирует боксинг (как `async_trait`), иначе — нативный async fn in traits.
-- Попутно: `shared` в поле, `~Store` вместо `dyn Store + Send + Sync`.
+- The `BoxFut` alias, `Pin<Box<dyn Future>>`, `Box::pin(async move ..)` and `'a` lifetimes are gone: the trait uses plain `async fn`.
+- For dyn-compatible traits the macro generates boxing (like `async_trait`), otherwise native async fn in traits.
+- Also: `shared` in a field, `~Store` instead of `dyn Store + Send + Sync`.

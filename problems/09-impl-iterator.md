@@ -1,24 +1,24 @@
-# `impl Trait` и сложные возвращаемые итераторы
+# `impl Trait` and complex iterator returns
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 fn evens(v: &[i32]) -> impl Iterator<Item = &i32> + '_
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 fn evens(v: &[i32]) -> iter &i32
 ```
 
-## Реализация
+## Implementation
 
-Десугаринг `iter T` в `impl Iterator<Item = T> + '_`.
+Desugar `iter T` into `impl Iterator<Item = T> + '_`.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -65,7 +65,7 @@ pub fn errors_in(log: &Log, module: &str) -> usize {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -104,8 +104,8 @@ mod log {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- `impl Iterator<Item = T> + '_` заменён на `iter T`.
-- Лайфтаймы для нескольких источников задаются через `&from(a, b) T`.
-- Попутно: inline-ограничение `I: Iterator<..>` вместо `where`, `#[data]`.
+- `impl Iterator<Item = T> + '_` became `iter T`.
+- Lifetimes over several sources are written as `&from(a, b) T`.
+- Also: inline bound `I: Iterator<..>` instead of `where`, `#[data]`.

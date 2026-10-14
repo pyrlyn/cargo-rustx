@@ -1,6 +1,6 @@
-# Длинные сигнатуры с generics и `where`
+# Long signatures with generics and `where`
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 fn run<T, E>(x: T) -> Result<T, E>
@@ -9,19 +9,19 @@ where
     E: Error,
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 fn run(x: T: Clone + Debug + Send) -> Result<T, E: Error>
 ```
 
-## Реализация
+## Implementation
 
-Атрибутный макрос выносит inline-ограничения в список generics и `where`.
+Attribute macro that lifts inline bounds into the generic list and a `where` clause.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::HashMap;
@@ -69,7 +69,7 @@ where
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -113,8 +113,8 @@ mod cache {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Ограничения пишутся на месте использования: `make: F: FnOnce(..)`, `E: Debug`.
-- Макрос собирает их в `<..>` и `where`; `impl` наследует ограничения структуры.
-- Блоки `where` из 3-5 строк исчезли, сигнатура читается слева направо.
+- Bounds are written at the use site: `make: F: FnOnce(..)`, `E: Debug`.
+- The macro hoists them into `<..>` and `where`; the `impl` inherits the struct bounds.
+- The 3-5 line `where` blocks are gone; the signature reads left to right.

@@ -1,108 +1,106 @@
-# Архитектура (план)
+# Architecture (plan)
 
-[English version](ARCHITECTURE.en.md)
+Status: plan only. Nothing is implemented yet.
 
-Статус: только план. Ничего ещё не реализовано.
+## a) Approach: proc-macro crate vs standalone transpiler
 
-## a) Подход: proc-macro крейт или отдельный транспайлер
-
-| | Proc-macro крейт (`sugar!` / `#[sugar]`) | Отдельный транспайлер (`.bdr` → `.rs`, build.rs или CLI) |
+| | Proc-macro crate (`sugar!` / `#[sugar]`) | Standalone transpiler (`.rustx` → `.rs`, build.rs or CLI) |
 |---|---|---|
-| Интеграция | `cargo add`, работает в любом крейте, без шага сборки | Нужен build.rs / CLI, сгенерированные файлы, доп. инструменты |
-| Вход | Должен токенизироваться как Rust (`TokenStream`) | Любой текст, свой лексер, любой синтаксис |
-| Спаны ошибок | Маппятся на исходник через `Span`; на stable в большинстве случаев хорошо | Нужны свои source maps; rustc указывает на сгенерированный `.rs` |
-| IDE | rust-analyzer раскрывает макросы, но автодополнение внутри тела слабое | Для `.bdr` нет поддержки без своего LSP |
-| Типы | Нет | Нет (если не вызывать rustc/rust-analyzer — вне рамок) |
-| Время сборки | Макрос работает на каждой сборке крейта | Один раз на изменение, результат кэшируется |
+| Integration | `cargo add`, works in any crate, no build step | Needs build.rs / CLI, generated files, extra tooling |
+| Input | Must tokenize as Rust tokens (`TokenStream`) | Arbitrary text, own lexer, any syntax |
+| Error spans | Map back to source via `Span`; good on stable for most cases | Needs own source maps; rustc points at generated `.rs` unless remapped |
+| IDE | rust-analyzer expands macros, but completion inside a custom-syntax body is weak | No IDE support for `.rustx` without a custom LSP |
+| Type info | None | None (unless it calls rustc/rust-analyzer, which is out of scope) |
+| Compile time | Macro runs on every build of the crate | Runs once per change, output is cached |
 
-**Рекомендация:** начать с proc-macro крейта, основной путь — function-like `sugar! { ... }`. Всё из словаря сахара выражается Rust-токенами, поэтому свой лексер не нужен, а маппинг спанов получается бесплатно. Десугарер держать отдельной библиотекой (`bdr-core`) поверх `proc_macro2::TokenStream`, чтобы позже добавить CLI-транспайлер (`bdr expand file.bdr`) на том же ядре без переписывания.
+**Recommendation:** start with a proc-macro crate, function-like `sugar! { ... }` as the main path. Every sugar item in the vocabulary is expressible in Rust tokens, which removes the need for a custom lexer and gives span mapping for free. Keep the desugarer as a plain library (`rustx-core`) that works on `proc_macro2::TokenStream`, so a CLI transpiler (`rustx expand file.rustx`) can be added later on top of the same core without rewriting anything.
 
-Структура крейтов:
+Crate layout:
 
-- `bdr-core` — парсер, AST, десугарер, диагностика. Обычная библиотека, тестируется без proc-macro контекста.
-- `bdr-macros` — тонкий `proc-macro = true` крейт: `sugar!`, `#[sugar]`, `#[data]`, `#[delegate]`.
-- `bdr` — фасад: реэкспорт макросов и runtime-хелперы (`Shared<T>`, алиас результата для `throws`).
-- `bdr-cli` (позже) — `bdr expand`, `bdr fmt`.
+- `rustx-core` — parser, AST, desugarer, diagnostics. Plain library, testable without proc-macro context.
+- `rustx-macros` — thin `proc-macro = true` crate: `sugar!`, `#[sugar]`, `#[data]`, `#[delegate]`.
+- `rustx` — facade crate re-exporting macros plus runtime helpers (`Shared<T>`, `throws` result alias).
+- `rustx-cli` (later) — `rustx expand`, `rustx fmt`.
 
-## b) Компоненты
+## b) Components
 
-1. **Лексер.** Своего нет: лексер — это `proc_macro2::TokenStream`. Все токены сахара (`var`, `~`, `throws`, `from`, `iter`, `shared`, `<` после имени метода) — валидные Rust-токены, просто в невалидных позициях.
-2. **Парсер.** Два варианта:
-   - Чистый `syn` — работает, только если вход уже парсится как Rust. Это не так (`var x = 1;` — не statement).
-   - **Свой парсер на `syn::parse::ParseStream`** (рекомендуется): форк нужных частей грамматики Rust (items, сигнатуры fn, типы, statements, выражения), который принимает формы сахара и переиспользует `syn` для всего неизменного (`syn::Expr`, `syn::Type`, `syn::Path`, атрибуты). Точек сахара мало и они локальны: начало statement (`var`, `shared`), позиция типа (`~T`, `&from(x) T`, `iter T`, `shared T`), возврат fn (`T throws`), параметры (`x: T: Bound`), вызовы методов (`.m<T>(`), замыкания (`move[..] ||`), выражения (`throw e`), поля вариантов enum (`from T`).
-3. **AST.** Типы `syn` плюс небольшой набор узлов сахара (`SugarType::Boxed`, `SugarType::Borrow { from: Vec<Ident> }`, `SugarStmt::Var`, `SugarFn { throws, inline_bounds }`, ...). Альтернатива — парсить сахар сразу в узлы `syn` с маркерами и десугарить вторым проходом; тогда AST на 100% `syn` и работает `syn::visit_mut`. Предпочтительно: сахарный AST только на границе, локальные преобразования сразу опускаются в `syn`, маркеры — там, где нужен контекст (лайфтаймы, `Ok(..)` в хвосте для `throws`).
-4. **Десугарер.** Набор независимых проходов, по одному на пункт, каждый — `VisitMut` по `syn::File`/`syn::ItemMod`:
+1. **Lexer.** None of our own: `proc_macro2::TokenStream` is the lexer. All sugar tokens (`var`, `~`, `throws`, `from`, `iter`, `shared`, `<` after a method name) are valid Rust tokens, just in invalid positions.
+2. **Parser.** Two options:
+   - Pure `syn` — only works when the input already parses as Rust. It does not (`var x = 1;` is not a statement).
+   - **Custom parser built on `syn::parse::ParseStream`** (recommended): a fork of the relevant parts of the Rust grammar (items, fn signatures, types, statements, expressions) that accepts sugar forms and reuses `syn` for everything unchanged (`syn::Expr`, `syn::Type`, `syn::Path`, attributes). Sugar points are few and local, so the fork stays small: statement start (`var`, `shared`), type position (`~T`, `&from(x) T`, `iter T`, `shared T`), fn return (`T throws`), fn params (`x: T: Bound`), method calls (`.m<T>(`), closures (`move[..] ||`), expressions (`throw e`), enum variant fields (`from T`).
+3. **AST.** `syn` types plus a small set of sugar node types (`SugarType::Boxed`, `SugarType::Borrow { from: Vec<Ident> }`, `SugarStmt::Var`, `SugarFn { throws: bool, inline_bounds }`, ...). Alternatively, parse sugar directly into `syn` nodes with marker attributes/placeholders and desugar in a second pass; this keeps the AST 100% `syn` and lets us use `syn::visit_mut`. Preferred: sugar AST only at the edges, lowered into `syn` immediately where the desugaring is local, and markers where it needs context (lifetimes, `throws` tail `Ok(..)`).
+4. **Desugarer.** A set of independent passes, one per item, each a `VisitMut` over `syn::File`/`syn::ItemMod`:
    - `var` → `let mut`; `shared x = e` → `let x = Shared::new(e)`.
    - `~T` → `Box<dyn T + Send + Sync>`.
-   - `&from(a) T` → ввести `'__a`, добавить в generics, переписать параметр `a` на `&'__a`.
-   - inline-ограничения → поднять в `Generics` / `where`.
-   - `.m<T>(` → `.m::<T>(`, дописать недостающие `_` для известных std-коллекций.
-   - `T throws` → `bdr::Result<T>` (= `anyhow::Result<T>`), хвост в `Ok(..)`, `throw e` → `return Err(e.into())`.
+   - `&from(a) T` → introduce `'__a`, add to generics, rewrite param `a` to `&'__a`.
+   - inline bounds → hoist into `Generics` / `where`.
+   - `.m<T>(` → `.m::<T>(`, fill missing args with `_` for known std collections.
+   - `T throws` → `rustx::Result<T>` (= `anyhow::Result<T>`), wrap tail in `Ok(..)`, `throw e` → `return Err(e.into())`.
    - `move[a.clone(), ..] || body` → `{ let a = a.clone(); move || body }`.
-   - `iter T` → `impl Iterator<Item = T> + '_` (или с лайфтаймом из `from`).
-   - `async fn` в трейтах → нативный AFIT или боксинг в стиле `async_trait`, если трейт используется как `dyn`/`~`.
-   - `#[data]`, `#[delegate]`, варианты с `from`, `#[display]` → сгенерированные `impl` (как derive; можно и отдельными атрибутными макросами).
-   - неявный `into()` → только там, где тип цели виден синтаксически (см. ограничения).
-   Порядок проходов важен: inline-ограничения и лайфтаймы `from` до `iter T`; `throws` после `throw`; derive в конце.
-5. **Диагностика / pretty-printer.** Каждый сгенерированный токен несёт спан исходного токена сахара. Ошибки десугарера выдаются через `compile_error!` с этим спаном; ошибки rustc указывают на исходный код, потому что спаны сохранены. `bdr-cli expand` использует `prettyplease` для читаемого вывода.
+   - `iter T` → `impl Iterator<Item = T> + '_` (or with the `from` lifetime).
+   - `async fn` in traits → native AFIT, or `async_trait`-style boxing when the trait is used as `dyn`/`~`.
+   - `#[data]`, `#[delegate]`, `from` variants, `#[display]` → generated `impl` items (derive-like, can also be separate attribute macros).
+   - implicit `into()` → only where the target type is syntactically known (see limitations).
+   Pass order matters: inline bounds and `from` lifetimes before `iter T`; `throws` after `throw`; derives last.
+5. **Diagnostics / pretty-printer.** Every generated token carries the span of the sugar token it came from. Errors detected by the desugarer are emitted as `compile_error!` with that span; errors detected by rustc point at the original code because spans are preserved. `rustx-cli expand` uses `prettyplease` for readable output.
 
-## c) Язык реализации
+## c) Implementation language
 
-Rust: `syn` (full + visit-mut + extra-traits), `quote`, `proc-macro2`, `proc-macro-error2` или ручной `compile_error!`, `prettyplease` для CLI. Почему:
+Rust, with `syn` (full + visit-mut + extra-traits), `quote`, `proc-macro2`, `proc-macro-error2` or manual `compile_error!`, `prettyplease` for the CLI. Why:
 
-- proc-макросы всё равно пишутся на Rust;
-- `syn` уже парсит 95% нужного, мы пишем только дельту сахара;
-- `proc_macro2` позволяет тестировать ядро вне компилятора (unit и snapshot);
-- один язык для пользователей и контрибьюторов, нет runtime-зависимости от Python/JS.
+- Proc macros must be Rust anyway.
+- `syn` already parses 95% of what we need; we only write the sugar delta.
+- `proc_macro2` makes the core testable outside the compiler (unit and snapshot tests).
+- One language for users and contributors; no runtime dependency on Python/JS tooling.
 
-## d) Точки входа: `#[sugar]` и `sugar!`
+## d) Entry points: `#[sugar]` vs `sugar!`
 
-Главное ограничение: **атрибутный макрос на item получает item только после того, как rustc распарсил его как валидный Rust.** `#[sugar] mod m { fn f() { var x = 1; } }` падает в парсере до запуска макроса. То же для `~Trait` в типе, `-> T throws`, `x: T: Clone`, `&from(a) T`, `move[..] ||`, `.parse<u32>()` (парсится как сравнения и падает или, хуже, меняет смысл).
+Key constraint: **an attribute macro on an item receives the item only after rustc has parsed it as valid Rust.** `#[sugar] mod m { fn f() { var x = 1; } }` fails in the parser before the macro runs. The same applies to `~Trait` in a type, `-> T throws`, `x: T: Clone`, `&from(a) T`, `move[..] ||`, `.parse<u32>()` (which parses as comparisons and fails or, worse, changes meaning).
 
-Поэтому:
+Therefore:
 
-- **`sugar! { ... }` (function-like) — основной путь.** Тело — произвольное дерево токенов, нужны только сбалансированные скобки. Поток: `TokenStream` → свой парсер на `ParseStream` → сахарный AST → опускание в `syn::File` → проходы `VisitMut` → `quote!` → вывод.
-- **`#[sugar]` (атрибут) — вторичный путь** для кода, который уже валиден как Rust и использует только сахар в форме атрибутов: `#[data]`, `#[delegate]`, `#[display]`, `from` на вариантах (в виде `#[from]`), и нормализации над валидным синтаксисом (например, `async fn` в трейтах → боксинг). Поток: `syn::parse::<Item>` → `VisitMut` → `quote!`.
-- Форма на целый файл через `sugar! { include!("foo.bdr") }` невозможна (`include!` раскрывается позже); для файлов нужен CLI/build.rs транспайлер — поздний этап.
+- **`sugar! { ... }` (function-like) is the main path.** The body is an arbitrary token tree; it only needs balanced delimiters. Flow: `TokenStream` → custom `ParseStream` parser → sugar AST → lowering into `syn::File` → `VisitMut` passes → `quote!` → output.
+- **`#[sugar]` (attribute) is the secondary path** for code that is already valid Rust and uses only attribute-shaped sugar: `#[data]`, `#[delegate]`, `#[display]`, `from` on enum variants (spelled `#[from]`), and normalizations that act on valid syntax (e.g. `async fn` in traits → boxed variant, inline `Shared<T>`). Flow: `syn::parse::<Item>` → `VisitMut` → `quote!`.
+- A whole-file form: `sugar! { include!("foo.rustx") }` is not possible (include! is expanded later); a file-level form needs the CLI/build.rs transpiler — a later stage.
 
-## e) Обработка ошибок и маппинг спанов
+## e) Error handling and span mapping
 
-- Сохранять спаны: каждый переписанный узел строится через `quote_spanned!(orig.span()=> ...)`, чтобы `var x` → `let mut x` указывал на `var`.
-- Гигиена: `Span::mixed_site()` для вспомогательных переменных (`__bdr_tmp`) и вводимых лайфтаймов, чтобы не конфликтовать с именами пользователя; пользовательские спаны — для видимых идентификаторов.
-- `Span::resolved_at` / `located_at` (stable в `proc_macro2`) — «резолвить как макрос, показывать как токен пользователя».
-- Ошибки десугарера (`from(y)` не называет параметр, `throws` на `main` без `Result`) → `syn::Error::new(span, msg).to_compile_error()`; несколько ошибок собирать через `syn::Error::combine`, не останавливаясь на первой.
-- `Span::join` (подчеркнуть диапазон) на `proc_macro` только в nightly; на stable — спан первого токена. Задокументировать.
-- Ошибки типов rustc внутри сгенерированного кода переписать нельзя; лучшее — хорошие спаны и предсказуемые имена сгенерированного (`__bdr_*`).
+- Keep spans: every rewritten node is built with `quote_spanned!(orig.span()=> ...)`, so `var x` → `let mut x` points at `var`.
+- Hygiene: use `Span::mixed_site()` for helper locals (`__rustx_tmp`) and introduced lifetimes so they cannot collide with user names; use `Span::call_site()`/user spans for user-visible identifiers.
+- `Span::resolved_at` / `located_at` (stable on `proc_macro2`) combine "resolve like the macro, report like the user token".
+- Desugarer errors (e.g. `from(y)` names no parameter, `throws` on `main` without `Result`) → `syn::Error::new(span, msg).to_compile_error()`; collect several with `syn::Error::combine` instead of stopping at the first.
+- `Span::join` (to underline a whole range) is nightly-only on `proc_macro`; on stable fall back to the first token's span. Document this.
+- rustc type errors inside generated code: we cannot rewrite them; best effort is good spans plus naming generated items predictably (`__rustx_*`) so messages stay readable.
 
-## f) Тестирование
+## f) Testing
 
-- **Snapshot-тесты (`insta`)** в `bdr-core`: `tests/cases/*.bdr` → раскрытый Rust через `prettyplease`, хранится в `.snap`. По кейсу на пункт плюс комбинированные (первые фикстуры — подробные примеры из `problems/`).
-- **Компиляционные тесты (`trybuild`)**: `tests/pass/*.rs` должны собираться; `tests/fail/*.rs` — падать с заданным `.stderr` (плохой `from(..)`, неверный `throws`, `move[..]` не с идентификатором). Проверяет, что спаны ошибок указывают куда надо.
-- **Roundtrip**: код «как есть» из каждого `problems/*.md` должен компилироваться (уже проверено вручную в scratch-крейте), а результат десугаринга — быть эквивалентным ему (сравнение вывода `prettyplease` или поведенческие unit-тесты).
-- **`cargo expand`** для ручной отладки; позже `bdr-cli expand`.
-- Property-тест (позже): любой валидный Rust проходит через `sugar!` без изменений (сахар — строгое надмножество).
+- **Snapshot tests (`insta`)** in `rustx-core`: `tests/cases/*.rustx` → expanded Rust, formatted with `prettyplease`, stored as `.snap`. One case per sugar item plus combined cases (the detailed examples from `problems/` are the first fixtures).
+- **Compile tests (`trybuild`)**: `tests/pass/*.rs` must compile; `tests/fail/*.rs` must fail with a given `.stderr` (bad `from(..)`, `throws` misuse, `move[..]` with non-ident). Checks that error spans point at the right place.
+- **Roundtrip tests**: as-is code from each `problems/*.md` must compile (already done manually in a scratch crate), and the desugared output must be equivalent to it (compare `prettyplease` output or run behavioural unit tests).
+- **`cargo expand`** for manual debugging; `rustx-cli expand` later.
+- Property test (later): any valid Rust input to `sugar!` passes through unchanged (sugar is a strict superset).
 
-## g) План по этапам
+## g) Roadmap
 
-1. **M0 каркас:** workspace, `bdr-core`, `bdr-macros`, `sugar!`, пропускающий валидный Rust без изменений; insta + trybuild; CI.
-2. **M1 statements:** `var` → `let mut` (пункт 2). Задаёт свой парсер для statements и протаскивание спанов.
-3. **M2 типы (чисто синтаксически):** `~Trait` (4), `iter T` (9), turbofish `.m<T>()` (6).
-4. **M3 сигнатуры:** inline-ограничения (3), лайфтаймы `&from(x) T` (1), `from` вместе с `iter`.
-5. **M4 derive:** `#[data]` (8), варианты `from` + `#[display]` (5), `#[delegate]` (7). Доступны и как отдельные атрибутные макросы.
-6. **M5 ошибки:** `T throws` + `throw` + `Ok(..)` в хвосте (10).
-7. **M6 замыкания и разделяемое состояние:** `move[..]` (11), `shared` + runtime-тип `Shared<T>` (12).
-8. **M7 async:** `async fn` в трейтах, боксинг для dyn (14).
-9. **M8 приведения:** неявный `into()` только в синтаксически типизированных позициях (13), явное включение.
-10. **M9 инструменты:** `bdr-cli expand`/`fmt`, файлы `.bdr` через build.rs, документация.
+1. **M0 skeleton:** workspace, `rustx-core`, `rustx-macros`, `sugar!` that passes valid Rust through unchanged; insta + trybuild wired; CI.
+2. **M1 statements:** `var` → `let mut` (item 2). Establishes the custom parser for statements and span plumbing.
+3. **M2 types (purely syntactic):** `~Trait` (4), `iter T` (9), turbofish `.m<T>()` (6).
+4. **M3 signatures:** inline bounds (3), `&from(x) T` lifetimes (1), `from` combined with `iter`.
+5. **M4 derives:** `#[data]` (8), `from` variants + `#[display]` (5), `#[delegate]` (7). Also usable as standalone attribute macros.
+6. **M5 errors:** `T throws` + `throw` + tail `Ok(..)` (10).
+7. **M6 closures and sharing:** `move[..]` (11), `shared` + `Shared<T>` runtime type (12).
+8. **M7 async:** `async fn` in traits, boxed for dyn use (14).
+9. **M8 conversions:** implicit `into()` in syntactically typed positions only (13); explicit opt-in.
+10. **M9 tooling:** `rustx-cli expand`/`fmt`, file-level `.rustx` via build.rs, docs.
 
-## h) Ограничения
+## h) Limitations
 
-- **Нет информации о типах.** Макрос видит токены, а не типы. Неявный `into()` (13) срабатывает только там, где тип цели написан в коде (`let x: u64 = ...`, литерал структуры, объявленной в том же `sugar!`). Для `+=` в поле нужен тип поля из того же входа. Остальное остаётся явным.
-- **Нет вывода типов.** `collect<Vec>` → `Vec<_>` работает только для известных имён; для пользовательских generic-типов арность неизвестна, если они не объявлены в том же входе.
-- **Нет информации между items.** Макрос видит только свой вход. `#[delegate(Read)]` должен знать методы трейта: работает для встроенного списка std-трейтов (`Read`, `Write`, `Iterator`, `Display`, ...) или трейтов из того же `sugar!`; иначе методы перечисляются явно.
-- **Доступ к полям `shared`** с `.lock().unwrap()` на каждое обращение не атомарен между statements; нужна форма `with(|m| ..)` и явная документация.
-- **IDE / rust-analyzer:** rust-analyzer раскрывает proc-макросы, поэтому переход к определению и типы работают по выводу, но автодополнение и подсветка внутри `sugar!{}` ограничены, а rustfmt не форматирует тела макросов. Нужен `bdr fmt`.
-- **Nightly-only API спанов:** `Span::join`, `Span::source_text` (частично), `Diagnostic` с note/help нестабильны; на stable — `compile_error!` со спаном одного токена.
-- **Атрибутный путь не может нести синтаксический сахар** (см. d); полный словарь — только через function-like путь.
-- **Время сборки:** `syn` с `full` и свой парсер добавляют время сборки каждому крейту пользователя.
-- **Дрейф семантики:** каждый пункт сахара должен оставаться чистым, документированным, локальным переписыванием; всё, что молча меняет поведение (например, приведения с потерями), — вне рамок.
+- **No type information.** Macros see tokens, not types. Implicit `into()` (13) can only fire where the target type is written in the source (`let x: u64 = ...`, struct literal of a struct declared in the same `sugar!`). Field `+=` needs the field type from the same macro input. Anything else stays explicit.
+- **No type inference.** `collect<Vec>` → `Vec<_>` works for known names only; for user generic types the arity is unknown unless declared in the same input.
+- **No cross-item info.** A macro sees only its own input. `#[delegate(Read)]` must know the trait's methods: works for a built-in list of std traits (`Read`, `Write`, `Iterator`, `Display`, ...) or traits declared in the same `sugar!`; otherwise the user lists methods explicitly.
+- **`shared` field access** inserting `.lock().unwrap()` per access is not atomic across statements; needs a `with(|m| ..)` form and clear docs.
+- **IDE / rust-analyzer:** rust-analyzer expands proc macros, so go-to-definition and types work on the output, but completion and highlighting inside `sugar!{}` are limited, and rustfmt does not format macro bodies. A `rustx fmt` tool is needed.
+- **Nightly-only span APIs:** `Span::join`, `Span::source_text` (partially), `Diagnostic` with notes/help are unstable; stable output uses `compile_error!` with single-token spans.
+- **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
+- **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
+- **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.

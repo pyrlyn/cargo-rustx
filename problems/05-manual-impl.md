@@ -1,6 +1,6 @@
-# Ручной `impl` для простых случаев
+# Manual `impl` for simple cases
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 impl From<io::Error> for MyErr {
@@ -8,19 +8,19 @@ impl From<io::Error> for MyErr {
 }
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 enum MyErr { Io(from io::Error) }
 ```
 
-## Реализация
+## Implementation
 
-Derive/атрибутный макрос генерирует `From`, `Display` и конструкторы (как thiserror / derive_more).
+Derive/attribute macro generating `From`, `Display` and constructors (like thiserror / derive_more).
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::fmt;
@@ -68,7 +68,7 @@ pub fn load_port(path: &str) -> Result<u16, LoadError> {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -99,8 +99,8 @@ mod load {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Два ручных `impl From` заменены пометкой `from` на варианте enum.
-- `impl Display` и `impl Error` генерируются из атрибутов `#[display(..)]`.
-- Из ~45 строк осталось ~20; логика `load_port` не изменилась.
+- Two hand-written `impl From` became a `from` marker on the enum variant.
+- `impl Display` and `impl Error` are generated from `#[display(..)]` attributes.
+- ~45 lines shrank to ~20; `load_port` logic is unchanged.

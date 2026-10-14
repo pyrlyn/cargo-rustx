@@ -1,26 +1,26 @@
-# `Arc<Mutex<T>>` и lock-шум
+# `Arc<Mutex<T>>` and lock noise
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 let s = Arc::new(Mutex::new(State::default()));
 s.lock().unwrap().count += 1;
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 shared s = State::default();
 s.count += 1;
 ```
 
-## Реализация
+## Implementation
 
-Тип-обёртка и макрос, вставляющий `.lock().unwrap()` (или замыкание `with`) при доступе.
+Wrapper type plus macro inserting `.lock().unwrap()` (or a `with` closure) on access.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ pub fn simulate(paths: Vec<String>, threads: usize) -> (u64, u64, usize) {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -93,9 +93,9 @@ mod metrics {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- `Arc::new(Mutex::new(..))` заменён на `shared x = ..`.
-- Доступ к полям сам вставляет `.lock().unwrap()`; для неизменяемых данных — просто `Arc`.
-- Внимание: каждое обращение — отдельная блокировка; для атомарной группы операций есть `metrics.with(|m| ..)`.
-- Попутно: `move[..]`, `var`.
+- `Arc::new(Mutex::new(..))` became `shared x = ..`.
+- Field access inserts `.lock().unwrap()` automatically; read-only data becomes a plain `Arc`.
+- Note: each access is a separate lock; use `metrics.with(|m| ..)` for an atomic group of operations.
+- Also: `move[..]`, `var`.

@@ -1,24 +1,24 @@
-# `dyn Trait` в сигнатурах
+# `dyn Trait` in signatures
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 fn handlers() -> Vec<Box<dyn Fn(&Req) -> Resp + Send + Sync>>
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 fn handlers() -> Vec<~Fn(&Req) -> Resp>
 ```
 
-## Реализация
+## Implementation
 
-Десугаринг `~Trait` в `Box<dyn Trait + Send + Sync>` (набор ограничений настраивается).
+Desugar `~Trait` into `Box<dyn Trait + Send + Sync>` (configurable bounds).
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::HashMap;
@@ -67,7 +67,7 @@ impl Bus {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -115,8 +115,8 @@ mod bus {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- `Box<dyn X + Send + Sync>` во всех пяти местах заменён на `~X`.
-- Десугаринг чисто синтаксический: `~T` → `Box<dyn T + Send + Sync>`.
-- Попутно: `var` и `#[data]` для `Event`.
+- `Box<dyn X + Send + Sync>` in all five places became `~X`.
+- The desugaring is purely syntactic: `~T` → `Box<dyn T + Send + Sync>`.
+- Also: `var` and `#[data]` for `Event`.
