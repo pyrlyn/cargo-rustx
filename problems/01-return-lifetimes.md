@@ -1,24 +1,24 @@
-# Лайфтаймы в возвращаемом типе
+# Lifetimes in return types
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 fn first<'a>(xs: &'a [Item], key: &str) -> &'a Item
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 fn first(xs: &[Item], key: &str) -> &from(xs) Item
 ```
 
-## Реализация
+## Implementation
 
-Атрибутный макрос вводит именованный лайфтайм и привязывает его к параметру из `from(..)`.
+Attribute macro that introduces a named lifetime and binds it to the parameter referenced by `from(..)`.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ pub fn section<'a, 'b>(name: &'a str, _sep: &'b str) -> &'a str {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -108,8 +108,8 @@ mod config {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- `<'a>` / `<'a, 'b>` и все `&'a` убраны; источник заимствования указан через `&from(x) T`.
-- Макрос сам вводит лайфтайм-параметр и связывает его с аргументом из `from(..)`.
-- Попутно: `var` вместо `let mut`, `#[data]` на структуре.
+- `<'a>` / `<'a, 'b>` and every `&'a` are gone; the borrow source is named with `&from(x) T`.
+- The macro introduces the lifetime parameter and ties it to the argument in `from(..)`.
+- Also: `var` instead of `let mut`, `#[data]` on the struct.

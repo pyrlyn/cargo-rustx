@@ -1,26 +1,26 @@
-# Вездесущий `mut`
+# Ubiquitous `mut`
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 let mut v = Vec::new();
 let mut i = 0;
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 var v = Vec::new();
 var i = 0;
 ```
 
-## Реализация
+## Implementation
 
-Макрос на функцию или блок переписывает `var x = ..` в `let mut x = ..`.
+Function/block macro rewriting `var x = ..` into `let mut x = ..`.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 pub struct Stats {
@@ -69,7 +69,7 @@ pub fn histogram(samples: &[f64], buckets: usize) -> Vec<usize> {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -113,8 +113,8 @@ mod stats {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Все `let mut` заменены на `var`; `let` теперь всегда означает неизменяемое.
-- `#[data]` генерирует `Stats::new` и геттеры.
-- `buckets as f64` стал неявным `into()` (расширяющее приведение).
+- Every `let mut` became `var`; `let` now always means immutable.
+- `#[data]` generates `Stats::new` and getters.
+- `buckets as f64` became an implicit `into()` (widening conversion).

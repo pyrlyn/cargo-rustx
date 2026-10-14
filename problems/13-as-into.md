@@ -1,24 +1,24 @@
-# Явные `as` и `into()`
+# Explicit `as` and `into()`
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 let x: u64 = (a as u64) + b.into();
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 let x: u64 = a + b;
 ```
 
-## Реализация
+## Implementation
 
-Макрос на выражение вставляет `into()` только для безопасных расширяющих приведений.
+Expression macro inserting `into()` for lossless widening conversions only.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 pub struct Sample {
@@ -60,7 +60,7 @@ pub fn bucket(latency_us: u16) -> usize {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -100,8 +100,8 @@ mod summary {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Расширяющие приведения без потерь (`u32 → u64`, `u16 → u64`, `u16 → u32`) стали неявными.
-- С потерями (`u64 → f64`, `f64 → f32`, `usize`) остаются явным `as` — это правильно.
-- Ограничение: макрос не знает типов, поэтому вставляет `.into()` только там, где тип цели виден синтаксически (аннотация `let`, `+=` в поле известного типа) — см. ARCHITECTURE.md.
+- Lossless widening conversions (`u32 → u64`, `u16 → u64`, `u16 → u32`) became implicit.
+- Lossy ones (`u64 → f64`, `f64 → f32`, `usize`) stay an explicit `as`, on purpose.
+- Limitation: the macro has no type info, so it inserts `.into()` only where the target type is syntactically visible (a `let` annotation, `+=` into a field of known type) — see ARCHITECTURE.en.md.

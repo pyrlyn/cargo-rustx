@@ -1,24 +1,24 @@
-# Ошибки и `Result`
+# Errors and `Result`
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 fn load() -> Result<Config, Box<dyn std::error::Error + Send + Sync>>
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 fn load() -> Config throws
 ```
 
-## Реализация
+## Implementation
 
-Атрибутный макрос оборачивает тип в `anyhow::Result<T>`, а хвостовое выражение в `Ok(..)`.
+Attribute macro wrapping the return type in `anyhow::Result<T>` and the tail expression in `Ok(..)`.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ pub fn load(path: &str) -> Result<Settings, Box<dyn Error + Send + Sync>> {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -103,8 +103,8 @@ mod settings {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- `Result<T, Box<dyn Error + Send + Sync>>` заменён на `T throws` (десугаринг в `anyhow::Result<T>`).
-- Хвостовое выражение оборачивается в `Ok(..)` автоматически; `throw x` → `return Err(x.into())`.
-- Попутно: `.parse<u16>()` без turbofish, `var`, `#[data]`.
+- `Result<T, Box<dyn Error + Send + Sync>>` became `T throws` (desugars to `anyhow::Result<T>`).
+- The tail expression is wrapped in `Ok(..)` automatically; `throw x` → `return Err(x.into())`.
+- Also: `.parse<u16>()` without turbofish, `var`, `#[data]`.

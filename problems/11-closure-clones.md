@@ -1,6 +1,6 @@
-# Клонирование в замыканиях
+# Cloning for closures
 
-## Как есть (Rust)
+## As is (Rust)
 
 ```rust
 let a = a.clone();
@@ -8,19 +8,19 @@ let b = b.clone();
 spawn(move || work(a, b));
 ```
 
-## Как хочется
+## Desired (sugar)
 
 ```rust
 spawn(move[a.clone(), b.clone()] || work(a, b));
 ```
 
-## Реализация
+## Implementation
 
-Макрос списка захвата разворачивается в `let`-привязки перед `move`-замыканием.
+Capture-list macro expanding into `let` bindings before a `move` closure.
 
-## Подробный пример
+## Detailed example
 
-### Как есть (валидный Rust)
+### As is (valid Rust)
 
 ```rust
 use std::sync::mpsc;
@@ -64,7 +64,7 @@ pub fn run_pool(jobs: Vec<Job>, prefix: String, workers: usize) -> Vec<String> {
 }
 ```
 
-### Как хочется (cargo-rustx)
+### Desired (cargo-rustx)
 
 ```rust
 // Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
@@ -105,8 +105,8 @@ mod pool {
 }
 ```
 
-### Что изменилось
+### What changed
 
-- Блоки `let x = x.clone();` перед `move` заменены списком захвата `move[a.clone(), ..]`.
-- Макрос разворачивает список в `{ let a = a.clone(); move || .. }`, имена не меняются (не нужен `report_prefix`).
-- Попутно: `var`, `collect<Vec<String>>()`, `#[data]`.
+- `let x = x.clone();` blocks before `move` became a capture list `move[a.clone(), ..]`.
+- The macro expands it into `{ let a = a.clone(); move || .. }`, keeping the names (no `report_prefix` needed).
+- Also: `var`, `collect<Vec<String>>()`, `#[data]`.
