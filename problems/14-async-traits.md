@@ -16,6 +16,8 @@ async fn call(&self) -> T
 
 Native async fn in traits, plus `async_trait`-style boxing macro for `dyn` use.
 
+Upstream: `async fn` in traits is stable (Rust 1.75), so the `Pin<Box<..>>` form above is only needed when the trait is used as `dyn`. Native `dyn` support for async traits is an accepted 2026–2027 project goal but is not available yet. Return type notation for `Send` bounds is still nightly-only. For the `dyn` case, generate code for the maintained `dynosaur` crate instead of hand-rolled boxing. See [research.md](../research.md).
+
 ## Detailed example
 
 ### As is (valid Rust)

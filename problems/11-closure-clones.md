@@ -18,6 +18,8 @@ spawn(move[a.clone(), b.clone()] || work(a, b));
 
 Capture-list macro expanding into `let` bindings before a `move` closure.
 
+Upstream: this is the most active ergonomics area. RFC 3680 (`.use`) is still open and contested. The accepted 2026 project goal "ergonomic ref-counting" moved to a `Share` trait plus `move(expr)` inside closures (RFC 3968, nightly `move_expr`). Neither is stable. The capture-list form is kept close to `move(expr)`, so the desugaring can switch to the native syntax once it lands without changing user code. See [research.md](../research.md).
+
 ## Detailed example
 
 ### As is (valid Rust)
