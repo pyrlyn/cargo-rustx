@@ -19,15 +19,15 @@ Crate layout:
 
 - `rustx-core` — parser, AST, desugarer, diagnostics. Plain library, testable without proc-macro context.
 - `rustx-macros` — thin `proc-macro = true` crate: `sugar!`, `#[sugar]`, `#[data]`, `#[delegate]`.
-- `rustx` — facade crate re-exporting macros plus runtime helpers (`Shared<T>`, `throws` result alias).
+- `rustx` — facade crate re-exporting macros plus runtime helpers (`Shared<T>`, `with`/`with_mut` for `rc T`, `throws` result alias).
 - `rustx-cli` (later) — `rustx expand`, `rustx fmt`.
 
 ## b) Components
 
-1. **Lexer.** None of our own: `proc_macro2::TokenStream` is the lexer. All sugar tokens (`var`, `~`, `throws`, `from`, `iter`, `shared`, `<` after a method name) are valid Rust tokens, just in invalid positions.
+1. **Lexer.** None of our own: `proc_macro2::TokenStream` is the lexer. All sugar tokens (`var`, `~`, `throws`, `from`, `iter`, `shared`, `rc`, `weak`, `into`, `bound`, `derive`, `<` after a method name, `=` after a field or parameter type) are valid Rust tokens, just in invalid positions.
 2. **Parser.** Two options:
    - Pure `syn` — only works when the input already parses as Rust. It does not (`var x = 1;` is not a statement).
-   - **Custom parser built on `syn::parse::ParseStream`** (recommended): a fork of the relevant parts of the Rust grammar (items, fn signatures, types, statements, expressions) that accepts sugar forms and reuses `syn` for everything unchanged (`syn::Expr`, `syn::Type`, `syn::Path`, attributes). Sugar points are few and local, so the fork stays small: statement start (`var`, `shared`), type position (`~T`, `&from(x) T`, `iter T`, `shared T`), fn return (`T throws`), fn params (`x: T: Bound`), method calls (`.m<T>(`), closures (`move[..] ||`), expressions (`throw e`), enum variant fields (`from T`).
+   - **Custom parser built on `syn::parse::ParseStream`** (recommended): a fork of the relevant parts of the Rust grammar (items, fn signatures, types, statements, expressions) that accepts sugar forms and reuses `syn` for everything unchanged (`syn::Expr`, `syn::Type`, `syn::Path`, attributes). Sugar points are few and local, so the fork stays small: item start (`bound X = ..;`, `derive X = ..;`), statement start (`var`, `shared`), type position (`~T`, `&from(x) T`, `&from(Self) T`, `iter T`, `shared T`, `rc T`, `weak T`), fn return (`T throws`), fn params (`x: T: Bound`, `x: into T`, `x: T = default`), struct fields (`f: T = default`), struct literals (`S { a: 1, .. }`), call arguments (`f(a, name: v)`), method calls (`.m<T>(`), closures (`move[..] ||`), expressions (`throw e`, `rc e`), enum variant fields (`from T`).
 3. **AST.** `syn` types plus a small set of sugar node types (`SugarType::Boxed`, `SugarType::Borrow { from: Vec<Ident> }`, `SugarStmt::Var`, `SugarFn { throws: bool, inline_bounds }`, ...). Alternatively, parse sugar directly into `syn` nodes with marker attributes/placeholders and desugar in a second pass; this keeps the AST 100% `syn` and lets us use `syn::visit_mut`. Preferred: sugar AST only at the edges, lowered into `syn` immediately where the desugaring is local, and markers where it needs context (lifetimes, `throws` tail `Ok(..)`).
 4. **Desugarer.** A set of independent passes, one per item, each a `VisitMut` over `syn::File`/`syn::ItemMod`:
    - `var` → `let mut`; `shared x = e` → `let x = Shared::new(e)`.
@@ -38,10 +38,16 @@ Crate layout:
    - `T throws` → `rustx::Result<T>` (= `anyhow::Result<T>`), wrap tail in `Ok(..)`, `throw e` → `return Err(e.into())`.
    - `move[a.clone(), ..] || body` → `{ let a = a.clone(); move || body }`.
    - `iter T` → `impl Iterator<Item = T> + '_` (or with the `from` lifetime).
-   - `async fn` in traits → native AFIT, or `async_trait`-style boxing when the trait is used as `dyn`/`~`.
+   - `async fn` in traits → native AFIT, or `dynosaur`-generated boxing when the trait is used as `dyn`/`~` (maintained crate; no hand-rolled boxing).
+   - `rc T` / `weak T` → `Rc<RefCell<T>>` / `Weak<RefCell<T>>`, `rc e` → `Rc::new(RefCell::new(e))`, `.borrow()`/`.borrow_mut()` on field access of bindings typed `rc T`.
+   - `x: into T` → `x: impl Into<T>` plus `let x: T = x.into();`; string literals → `.to_string()` where the target is written as `String`.
+   - field defaults → `impl Default` and `..Default::default()` for `S { .., .. }`; parameter defaults → `Option<T>` + `unwrap_or`, with calls in the same input filled in.
+   - `#[borrows]` → one lifetime on the type, its fields and its `impl` headers; `&from(Self)` / `&from(Type)` → that lifetime.
+   - `bound X = ..;` → trait with supertraits plus a blanket impl; `derive X = ..;` → expanded in every `#[derive(..)]` of the input.
    - `#[data]`, `#[delegate]`, `from` variants, `#[display]` → generated `impl` items (derive-like, can also be separate attribute macros).
    - implicit `into()` → only where the target type is syntactically known (see limitations).
-   Pass order matters: inline bounds and `from` lifetimes before `iter T`; `throws` after `throw`; derives last.
+   - `#[newtype(..)]` → one `impl` per listed flag.
+   Pass order matters: `bound` and `derive` presets first; `#[borrows]` before `from` lifetimes; inline bounds and `from` lifetimes before `iter T`; `throws` after `throw`; derives last.
 5. **Diagnostics / pretty-printer.** Every generated token carries the span of the sugar token it came from. Errors detected by the desugarer are emitted as `compile_error!` with that span; errors detected by rustc point at the original code because spans are preserved. `rustx-cli expand` uses `prettyplease` for readable output.
 
 ## c) Implementation language
@@ -60,7 +66,7 @@ Key constraint: **an attribute macro on an item receives the item only after rus
 Therefore:
 
 - **`sugar! { ... }` (function-like) is the main path.** The body is an arbitrary token tree; it only needs balanced delimiters. Flow: `TokenStream` → custom `ParseStream` parser → sugar AST → lowering into `syn::File` → `VisitMut` passes → `quote!` → output.
-- **`#[sugar]` (attribute) is the secondary path** for code that is already valid Rust and uses only attribute-shaped sugar: `#[data]`, `#[delegate]`, `#[display]`, `from` on enum variants (spelled `#[from]`), and normalizations that act on valid syntax (e.g. `async fn` in traits → boxed variant, inline `Shared<T>`). Flow: `syn::parse::<Item>` → `VisitMut` → `quote!`.
+- **`#[sugar]` (attribute) is the secondary path** for code that is already valid Rust and uses only attribute-shaped sugar: `#[data]`, `#[delegate]`, `#[display]`, `#[newtype]`, `#[borrows]` (references without a lifetime still parse; the error comes later, after the macro has added it), `from` on enum variants (spelled `#[from]`), and normalizations that act on valid syntax (e.g. `async fn` in traits → boxed variant, inline `Shared<T>`). Flow: `syn::parse::<Item>` → `VisitMut` → `quote!`.
 - A whole-file form: `sugar! { include!("foo.rustx") }` is not possible (include! is expanded later); a file-level form needs the CLI/build.rs transpiler — a later stage.
 
 ## e) Error handling and span mapping
@@ -76,7 +82,7 @@ Therefore:
 
 - **Snapshot tests (`insta`)** in `rustx-core`: `tests/cases/*.rustx` → expanded Rust, formatted with `prettyplease`, stored as `.snap`. One case per sugar item plus combined cases (the detailed examples from `problems/` are the first fixtures).
 - **Compile tests (`trybuild`)**: `tests/pass/*.rs` must compile; `tests/fail/*.rs` must fail with a given `.stderr` (bad `from(..)`, `throws` misuse, `move[..]` with non-ident). Checks that error spans point at the right place.
-- **Roundtrip tests**: as-is code from each `problems/*.md` must compile (already done manually in a scratch crate), and the desugared output must be equivalent to it (compare `prettyplease` output or run behavioural unit tests).
+- **Roundtrip tests**: as-is code from each `problems/*.md` must compile (done manually in a scratch crate on Rust 1.97.1, edition 2024, for all 21 items), and the desugared output must be equivalent to it (compare `prettyplease` output or run behavioural unit tests).
 - **`cargo expand`** for manual debugging; `rustx-cli expand` later.
 - Property test (later): any valid Rust input to `sugar!` passes through unchanged (sugar is a strict superset).
 
@@ -84,13 +90,13 @@ Therefore:
 
 1. **M0 skeleton:** workspace, `rustx-core`, `rustx-macros`, `sugar!` that passes valid Rust through unchanged; insta + trybuild wired; CI.
 2. **M1 statements:** `var` → `let mut` (item 2). Establishes the custom parser for statements and span plumbing.
-3. **M2 types (purely syntactic):** `~Trait` (4), `iter T` (9), turbofish `.m<T>()` (6).
-4. **M3 signatures:** inline bounds (3), `&from(x) T` lifetimes (1), `from` combined with `iter`.
-5. **M4 derives:** `#[data]` (8), `from` variants + `#[display]` (5), `#[delegate]` (7). Also usable as standalone attribute macros.
+3. **M2 types (purely syntactic):** `~Trait` (4), `iter T` (9), turbofish `.m<T>()` (6), `rc T`/`weak T` (16).
+4. **M3 signatures:** inline bounds (3), `bound` presets (21), `&from(x) T` lifetimes (1), `#[borrows]` (19), `from` combined with `iter`, `into T` parameters (15), parameter defaults (17).
+5. **M4 derives:** `#[data]` (8), `from` variants + `#[display]` (5), `#[delegate]` (7), `derive` presets (18), `#[newtype]` (20), field defaults (17). Also usable as standalone attribute macros.
 6. **M5 errors:** `T throws` + `throw` + tail `Ok(..)` (10).
-7. **M6 closures and sharing:** `move[..]` (11), `shared` + `Shared<T>` runtime type (12).
+7. **M6 closures and sharing:** `move[..]` (11), `shared` + `Shared<T>` runtime type (12), `rc` field access (16).
 8. **M7 async:** `async fn` in traits, boxed for dyn use (14).
-9. **M8 conversions:** implicit `into()` in syntactically typed positions only (13); explicit opt-in.
+9. **M8 conversions:** implicit `into()` in syntactically typed positions only (13), string literals into `String` (15); explicit opt-in.
 10. **M9 tooling:** `rustx-cli expand`/`fmt`, file-level `.rustx` via build.rs, docs.
 
 ## h) Limitations
@@ -99,6 +105,12 @@ Therefore:
 - **No type inference.** `collect<Vec>` → `Vec<_>` works for known names only; for user generic types the arity is unknown unless declared in the same input.
 - **No cross-item info.** A macro sees only its own input. `#[delegate(Read)]` must know the trait's methods: works for a built-in list of std traits (`Read`, `Write`, `Iterator`, `Display`, ...) or traits declared in the same `sugar!`; otherwise the user lists methods explicitly.
 - **`shared` field access** inserting `.lock().unwrap()` per access is not atomic across statements; needs a `with(|m| ..)` form and clear docs.
+- **`rc` field access** picks `.borrow_mut()` from a built-in list of `&mut self` std methods; user methods need `with_mut(|n| ..)`. `RefCell` still panics at run time on conflicting borrows.
+- **Parameter defaults and named arguments** only work for calls inside the same `sugar!` input. Callers elsewhere see the real `Option<T>` signature.
+- **`#[borrows]`** adds exactly one lifetime. Types with two independent lifetimes keep explicit parameters.
+- **`derive` and `bound` presets** are visible only inside the input that declares them (`bound` produces a real trait, so it can be exported; `derive` presets cannot).
+- **Edition differences:** on edition 2024, `-> impl Trait` already captures all lifetimes, so `iter T` mainly saves typing there. The expansion keeps `+ '_` to work on both editions.
+- **Upstream overlap:** default field values, trait aliases and capture expressions exist on nightly (see [research.md](research.md)). Each pass must be able to switch to the native form once it is stable, without changing user code.
 - **IDE / rust-analyzer:** rust-analyzer expands proc macros, so go-to-definition and types work on the output, but completion and highlighting inside `sugar!{}` are limited, and rustfmt does not format macro bodies. A `rustx fmt` tool is needed.
 - **Nightly-only span APIs:** `Span::join`, `Span::source_text` (partially), `Diagnostic` with notes/help are unstable; stable output uses `compile_error!` with single-token spans.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
