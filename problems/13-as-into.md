@@ -104,4 +104,4 @@ mod summary {
 
 - Lossless widening conversions (`u32 → u64`, `u16 → u64`, `u16 → u32`) became implicit.
 - Lossy ones (`u64 → f64`, `f64 → f32`, `usize`) stay an explicit `as`, on purpose.
-- Limitation: the macro has no type info, so it inserts `.into()` only where the target type is syntactically visible (a `let` annotation, `+=` into a field of known type) — see ARCHITECTURE.en.md.
+- Limitation: the macro has no type info, so it inserts `.into()` only where the target type is syntactically visible (a `let` annotation, `+=` into a field of known type) — see [ARCHITECTURE.md](../ARCHITECTURE.md), Limitations.

@@ -101,7 +101,7 @@ mod stats {
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let lo = sorted[0];
         let hi = sorted[sorted.len() - 1];
-        let width = (hi - lo) / buckets;      // implicit safe into()
+        let width = (hi - lo) / buckets as f64;   // usize → f64 is lossy: stays explicit (item 13)
         for s in sorted {
             var idx = ((s - lo) / width) as usize;
             if idx >= buckets { idx = buckets - 1; }
@@ -117,4 +117,4 @@ mod stats {
 
 - Every `let mut` became `var`; `let` now always means immutable.
 - `#[data]` generates `Stats::new` and getters.
-- `buckets as f64` became an implicit `into()` (widening conversion).
+- `buckets as f64` stays: `usize → f64` can lose precision, and item 13 only makes lossless conversions implicit.
