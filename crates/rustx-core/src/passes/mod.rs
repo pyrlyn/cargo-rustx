@@ -1,0 +1,38 @@
+//! Registry of desugaring passes and the order they run in.
+//!
+//! One module per sugar item keeps passes independent; only this file knows the order.
+//! Token passes run first, in list order, because their output must parse as Rust.
+//! AST passes then run on the parsed file; all of them run so errors are reported together.
+
+mod prefix_types;
+mod turbofish;
+mod var;
+
+use proc_macro2::TokenStream;
+
+type TokenPass = fn(TokenStream) -> syn::Result<TokenStream>;
+type AstPass = fn(&mut syn::File) -> syn::Result<()>;
+
+const TOKEN_PASSES: &[TokenPass] = &[var::rewrite, prefix_types::rewrite, turbofish::rewrite];
+
+const AST_PASSES: &[AstPass] = &[];
+
+pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
+    for pass in TOKEN_PASSES {
+        tokens = pass(tokens)?;
+    }
+    Ok(tokens)
+}
+
+pub(crate) fn rewrite_ast(file: &mut syn::File) -> syn::Result<()> {
+    let mut errors: Option<syn::Error> = None;
+    for pass in AST_PASSES {
+        if let Err(err) = pass(file) {
+            match &mut errors {
+                Some(all) => all.combine(err),
+                None => errors = Some(err),
+            }
+        }
+    }
+    errors.map_or(Ok(()), Err)
+}

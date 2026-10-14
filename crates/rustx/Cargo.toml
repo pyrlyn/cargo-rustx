@@ -1,0 +1,17 @@
+[package]
+name = "rustx"
+description = "cargo-rustx: a thin syntax layer over Rust that desugars into ordinary Rust"
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+rustx-macros.workspace = true
+
+[dev-dependencies]
+trybuild.workspace = true
+
+[lints]
+workspace = true

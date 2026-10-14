@@ -1,0 +1,16 @@
+[package]
+name = "rustx-macros"
+description = "Procedural macros for cargo-rustx: `sugar!`"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+rustx-core.workspace = true
+
+[lints]
+workspace = true
