@@ -26,6 +26,7 @@ mod param_defaults;
 mod prefix_types;
 mod rc_values;
 mod signatures;
+mod throws;
 mod turbofish;
 mod var;
 
@@ -52,6 +53,7 @@ const TOKEN_PASSES: &[TokenPass] = &[
     param_defaults::rewrite,
     call_defaults::rewrite,
     from_lifetimes::rewrite,
+    throws::rewrite,
     prefix_types::rewrite,
     rc_values::rewrite,
     turbofish::rewrite,
@@ -75,6 +77,7 @@ const AST_PASSES: &[AstPass] = &[
     param_defaults::lower,
     borrows::lower,
     from_lifetimes::lower,
+    throws::lower,
 ];
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};

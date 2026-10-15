@@ -7,7 +7,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T20 | todo | P2 | 4 | 0% | |
+| T20 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T21 | todo | P2 | 2 | 0% | |
 | T22 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T23 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
@@ -31,6 +31,10 @@ Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first)
 ### T20. M5: `T throws` return types and tail `Ok(..)`
 
 Problem 10. `fn load() -> Config throws` returns `anyhow::Result<Config>` and its tail expression is wrapped in `Ok(..)`. `anyhow` is reached through a re-export in the `rustx` facade (the `throws` result alias of ARCHITECTURE b), so users do not add it themselves. Done when the problem's detailed example expands to its "As is" code apart from the error type, with unit tests, a snapshot case, `pass/` and `fail/` tests; which tails are left alone (one that is already `Ok(..)`/`Err(..)`, `?`-only bodies, a body ending in `return`) is settled with the creator when the task is claimed.
+
+Decided with the creator: `T throws` returns `anyhow::Result<T>` (through the `rustx` re-export) and `T throws E` returns `Result<T, E>`. The tail is wrapped in `Ok(..)` unless it already is `Ok(..)` or `Err(..)`, or does not produce a value (`return`, `panic!`, `unreachable!`, `todo!`, `unimplemented!`, `loop`); a body without a tail gets `Ok(())`.
+
+Plan: token pass `passes/throws.rs::rewrite` (pre-registered before `prefix_types`, so `iter T throws` becomes `Result<iter T>` and `prefix_types` still sees the type) turns `-> T throws [E]` into the `Result` type and leaves a marker attribute on the fn; AST pass `throws::lower` (pre-registered last in `AST_PASSES`) wraps the tail of marked fns and removes the marker. `rustx` re-exports `anyhow`. Applies to fns, methods and trait methods with bodies; closures and nested fns keep their own signature. Verify: unit tests, `tests/cases/throws.rustx`, `pass/throws.rs`, `fail/throws_*.rs`, `just check`.
 
 ### T21. M5: `throw e`
 
@@ -66,9 +70,13 @@ Problem 16. On a binding whose type is written `rc T` or `&rc T`, field access g
 
 Problem 14. A trait with `async fn` stays native when it is not used as `dyn`; for `dyn` use the macro generates code for the maintained `dynosaur` crate instead of hand-rolled boxing (research.md). How a trait is marked for `dyn` use is settled with the creator when the task is claimed. Done when the problem's detailed example compiles, including a `dyn` call, with unit tests, a snapshot case and `pass/` and `fail/` tests; split into subtasks at claim time if it exceeds the task size.
 
+Decided with the creator: a trait is marked for `dyn` use by an attribute on the trait; without it the trait stays native.
+
 ### T28. M8: implicit lossless `into()`
 
 Problem 13. Where the target type is written in the input (a `let` annotation, a field of a struct declared in the input, a parameter of a fn declared in the input), a lossless widening (`u32` to `u64`, `u16` to `u32`, ...) gets `.into()`; lossy conversions stay explicit `as`. Explicit opt-in, as ARCHITECTURE g says; the opt-in form is settled with the creator when the task is claimed. Done when unit tests, a snapshot case and `pass/` tests cover each position, and nothing changes without the opt-in.
+
+Decided with the creator: opt-in through a `#[widen]` attribute on a fn, impl or module, or `#![widen]` at the start of the `sugar!` input; it applies only inside what is marked.
 
 ### T29. M8: string literals into `String`
 
