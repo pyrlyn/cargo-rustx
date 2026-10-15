@@ -75,3 +75,33 @@ Done: the token half turns `name: value` at the start of a call argument into a 
 The mandatory no-duplication rule: after T2–T7 several passes carry private copies of the same token logic — punct checks (`is_punct`, joint/alone), statement/item-start detection (`var`, `bound_presets`), outer-attribute and visibility skipping, angle-bracket depth and matching `>` (with `->` handling) in `turbofish`, `prefix_types` and `inline_bounds`, and error accumulation (`syn::Error::combine` helpers). Move one copy of each into `tokens.rs` (or a `tokens/` module), switch every pass to it, change no behaviour. Blocks T8–T10 so they start on the shared helpers.
 
 Done: shared helpers live in `tokens.rs` and `tokens/{punct,position,angle,syntax,params}.rs` (punct predicates, `->` detection, statement/item start, angle depth and matching `>`, error combining, bare names, the error-collecting walker, and the fn-parameter walker for parameter passes). No snapshot or compile-test output changed. Deliberately separate: `var`'s attribute rule, `prefix_types`' backward generics scan and single-user helpers.
+
+### T12. M4: `derive` presets
+
+Problem 18. `derive Id = Debug, Clone, Copy;` at item position declares a preset; in every `#[derive(..)]` of the same input a preset name expands to its list, deduplicated in order, so presets mix with ordinary derives. A preset that shadows a std derive name is an error.
+
+Done: pass `passes/derive_presets.rs` (with `lower` and `marker` submodules). The token half removes `derive Name = ..;` items and records each as a file-level `#![__rustx_derive_preset(Name = A, B)]` marker; the AST half expands preset names in every `#[derive(..)]` of the input, deduplicated in order. Errors: bad syntax, an empty list, a preset shadowing a std derive, a preset naming itself. `visibility_start` moved to `tokens/position.rs` and is shared with `bound_presets`.
+
+### T13. M4: field defaults and `S { .., .. }`
+
+Problem 17 (fields). `pub port: u16 = 8080` in a struct generates `impl Default`, and a struct literal ending in a bare `..` becomes `..Default::default()`. Follows RFC 3681 so the pass can switch to the native form once it is stable.
+
+Done: AST-only pass `passes/field_defaults.rs`, since `syn` parses RFC 3681 itself. It generates `impl Default` after the struct (generics, `where` and `cfg` copied; a string literal on a `String` field goes through `Into::into`) and fills a bare `..` in struct expressions, never on the left of an assignment and in macro bodies only inside std expression macros. Errors: `derive(Default)` next to field defaults, defaults on enum variant or union fields. Macro-body expression parsing is shared with `call_defaults` in `passes/macro_args.rs`.
+
+### T14. M4: `#[data]` constructors and getters
+
+Problem 08. `#[data] struct User { name: String, age: u32 }` generates `new` (all fields), getters returning `&T` (by value for `Copy` primitives) and an optional builder, as the problem file specifies.
+
+Done: AST pass `passes/data.rs` with `data/{methods,builder}.rs`. `#[data]` on a named-field struct at any depth adds `new`, getters (by value for primitives and shared references, `&str` for `String`, `&T` otherwise) and, with flags, `set_*`, `with_*` and a `NameBuilder` whose `build` reports a missing field. Defaults come from `#[default(expr)]` or `field: T = expr` (the pass runs before field defaults and shares their value conversion). `#[borrows]` structs name their lifetime in parameters and get a `#[borrows]` builder. Errors: non-named-field items, unknown, repeated or valued flags, `#[default]` without a value or given twice or next to `= value`, a builder that would collide with a field or a declared type.
+
+### T15. M4: `from` variants and `#[display]`
+
+Problem 05. `enum MyErr { Io(from io::Error) }` generates `From<io::Error> for MyErr`; `#[display(..)]` on an enum or its variants generates `Display` (and `Error` where the problem file asks for it), like thiserror / derive_more.
+
+Done: pass `passes/from_display.rs` with `from_display/{format,lower}.rs`. `Io(from io::Error)` generates `From`, `#[display("..")]` on every variant generates `Display` and `Error`, with positional and named placeholders checked against the variant's fields. Generic enums keep their generics without added bounds. Errors: `from` on a multi-field variant, a type converted twice, a variant missing `#[display]`, a placeholder naming no field, width or precision arguments.
+
+### T16. M4: `#[delegate]` fields
+
+Problem 07. `#[delegate(Read)] inner: File` generates `impl Read for Wrapper` forwarding every method to the field.
+
+Done in two commits to fit the task size (fields, then `except`). AST pass `passes/delegate.rs` with `delegate/{spec,std_traits,forward,except}.rs`: `#[delegate(Trait, ..)]` on a field of a named or tuple struct generates `impl Trait` forwarding the trait's required items through the trait path. Methods come from an explicit list `Trait { fn m(&self); }`, a trait declared in the input, or a std table (`Read`, `Write`, `BufRead`, `Seek`, `Iterator`, `DoubleEndedIterator`, `Display`, `Debug`, `Hash`). `except(m, ..)` merges the rest into a hand-written impl. `#[borrows]` structs get their lifetime in associated types. Errors: unknown trait, enum or union fields, a trait delegated twice, bad syntax, `except` problems, fns without `self`, typed receivers, generic associated types, ambiguous local traits.
