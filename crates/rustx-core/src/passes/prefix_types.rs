@@ -44,7 +44,11 @@
 //! - No type positions at the start of a group or after `,` outside `<..>`: tuple types, tuple
 //!   struct fields, fn-pointer parameters and array elements need the plain Rust spelling,
 //!   because `f(rc x)` there is the expression sugar of problem 16.
-//! - A struct literal field (`S { f: rc x }`) looks like a typed field and is rewritten as a type.
+//! - A struct literal field looks like a typed field. After a single `:`, `rc` is read as a type
+//!   only when the type ends where a typed binding or field does (at `,`, `;`, `=`, `|` or the end
+//!   of the group) and is not a macro; otherwise it is left for the value sugar of `rc_values`
+//!   (`S { f: rc make(), g: rc x.clone(), h: rc vec![] }`).
+//!   A bare name (`S { f: rc x }`) still reads as a type, so it needs `S { f: (rc x) }`.
 //! - Macro bodies are token trees like any other, so the rules above apply inside them too.
 //! - `iter T` always adds `+ '_`, which needs an elided lifetime in the signature.
 
@@ -77,7 +81,8 @@ fn rewrite_sequence(seq: Vec<TokenTree>) -> syn::Result<Vec<TokenTree>> {
         .collect();
     let mut out = seq;
     for &(i, prefix) in found.iter().rev() {
-        let Some((used, expansion)) = expand(prefix, &out[i], &out[i + 1..])? else {
+        let after_colon = i.checked_sub(1).is_some_and(|p| is_single_colon(&out, p));
+        let Some((used, expansion)) = expand(prefix, after_colon, &out[i], &out[i + 1..])? else {
             continue;
         };
         out.splice(i..=i + used, expansion);
@@ -212,6 +217,7 @@ fn binds_type(seq: &[TokenTree], eq: usize) -> bool {
 
 fn expand(
     prefix: Prefix,
+    after_colon: bool,
     sugar: &TokenTree,
     rest: &[TokenTree],
 ) -> syn::Result<Option<(usize, TokenStream)>> {
@@ -219,9 +225,16 @@ fn expand(
     let (inner, used) = match prefix {
         Prefix::Boxed => parse_bounds(rest).ok_or_else(|| not_a_trait(span))?,
         Prefix::Iter | Prefix::Rc | Prefix::Weak => match parse_front(rest, Type::without_plus) {
-            Some((ty, used)) => (unparen(&ty, &rest[..used]), used),
-            // Not followed by a type after all (`-> rc where ..`): the name is plain Rust.
-            None => return Ok(None),
+            Some((ty, used))
+                if !(matches!(prefix, Prefix::Rc)
+                    && after_colon
+                    && is_field_value(&ty, rest.get(used))) =>
+            {
+                (unparen(&ty, &rest[..used]), used)
+            }
+            // Not followed by a type after all (`-> rc where ..`), or a struct literal field
+            // value: the name is plain Rust or the value sugar of `rc_values`.
+            _ => return Ok(None),
         },
     };
     let tokens = match prefix {
@@ -233,6 +246,16 @@ fn expand(
         Prefix::Weak => quote_spanned!(span=> ::std::rc::Weak<::core::cell::RefCell<#inner>>),
     };
     Ok(Some((used, tokens)))
+}
+
+/// Whether `rc ty` after a single `:` is a struct literal field value rather than a type: a typed
+/// binding or field ends at `,`, `;`, `=`, `|` or the end of its group, and a macro, which `syn`
+/// also accepts as a type, is far more often a value (`vec![]`) than a type macro.
+fn is_field_value(ty: &Type, after: Option<&TokenTree>) -> bool {
+    let ends_binding = after.is_none_or(
+        |tree| matches!(tree, TokenTree::Punct(p) if matches!(p.as_char(), ',' | ';' | '=' | '|')),
+    );
+    matches!(ty, Type::Macro(_)) || !ends_binding
 }
 
 /// Parses one `T` from the front of `rest`; returns it and how many token trees it spans.
@@ -444,6 +467,26 @@ mod tests {
             impl iter for rc {}
             fn g() -> r#rc {}
         });
+    }
+
+    #[test]
+    fn rc_field_value_beyond_a_type_is_left_for_value_sugar() {
+        unchanged(&quote! {
+            S { a: rc make(x), b: rc Node { size: 1 }, c: rc x.clone(), d: rc vec![], e: rc 5,
+                f: rc Node::new(x), g: rc a + b }
+        });
+    }
+
+    #[test]
+    fn rc_after_a_colon_that_ends_like_a_typed_binding_is_a_type() {
+        expands_to(
+            quote! { fn f() { let a: rc Node = b; let c: rc Node; g(|d: rc Node, e| d); } },
+            quote! { fn f() {
+                let a: ::std::rc::Rc<::core::cell::RefCell<Node>> = b;
+                let c: ::std::rc::Rc<::core::cell::RefCell<Node>>;
+                g(|d: ::std::rc::Rc<::core::cell::RefCell<Node>>, e| d);
+            } },
+        );
     }
 
     #[test]
