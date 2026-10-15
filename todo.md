@@ -1,5 +1,4 @@
 - T19. Convert plain Rust into rustx sugar
-- T19.2. Reverse rule for the turbofish sugar
 - T24. M6: `shared` bindings and `shared T` types
 - T26. M6: borrows on `rc T` field access
 - T28. M8: implicit lossless `into()`
