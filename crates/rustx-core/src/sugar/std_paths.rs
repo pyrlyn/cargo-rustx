@@ -156,10 +156,12 @@ impl StdPaths {
         Self { roots, one_crate }
     }
 
-    /// The tokens of `tokens` with every path to a known std item replaced by one canonical
-    /// token, so that two spellings of that path compare equal. Delimiters and spacing are kept,
-    /// since they take part in what the tokens mean.
+    /// The tokens of `tokens` as the sugar check compares them: without trailing commas that
+    /// mean nothing ([`super::commas`]), and with every path to a known std item replaced by one
+    /// canonical token, so that two spellings of that path compare equal. Delimiters and spacing
+    /// are kept, since they take part in what the tokens mean.
     pub(super) fn normalise(&self, tokens: TokenStream) -> Vec<String> {
+        let tokens = super::without_trailing_commas(tokens, super::MacroTokens::Kept);
         let mut out = Vec::new();
         self.flatten(&tokens.into_iter().collect::<Vec<_>>(), &mut out);
         out
