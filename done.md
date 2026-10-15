@@ -39,3 +39,9 @@ Done: `[vis] bound Name = A + B;` at item position becomes a trait plus a blanke
 Problems 01 and 09 (`from` combined with `iter T`). `-> &from(xs) Item` introduces a lifetime, adds it to the fn generics and to the reference parameter `xs`; `from(a, b)` ties several parameters; `iter T` with `from(..)` uses that lifetime instead of `'_`.
 
 Done: `&from(a, b) T` becomes a marker lifetime, then the AST pass gives the named parameters one shared `'__rustx_from_*` lifetime (references, `self` receivers, `impl Trait` and bare type parameters with reference bounds) and replaces `'_` of a return `impl Trait` that contains it, so `iter &from(x) T` works. Unknown names, non-reference parameters and `from` outside a return type are errors. Limits: `from(Self)` belongs to T8; destructured parameters cannot be named; only the outer reference of `&Vec<&str>` is tied.
+
+### T11. Shared token helpers for passes
+
+The mandatory no-duplication rule: after T2–T7 several passes carry private copies of the same token logic — punct checks (`is_punct`, joint/alone), statement/item-start detection (`var`, `bound_presets`), outer-attribute and visibility skipping, angle-bracket depth and matching `>` (with `->` handling) in `turbofish`, `prefix_types` and `inline_bounds`, and error accumulation (`syn::Error::combine` helpers). Move one copy of each into `tokens.rs` (or a `tokens/` module), switch every pass to it, change no behaviour. Blocks T8–T10 so they start on the shared helpers.
+
+Done: shared helpers live in `tokens.rs` and `tokens/{punct,position,angle,syntax,params}.rs` (punct predicates, `->` detection, statement/item start, angle depth and matching `>`, error combining, bare names, the error-collecting walker, and the fn-parameter walker for parameter passes). No snapshot or compile-test output changed. Deliberately separate: `var`'s attribute rule, `prefix_types`' backward generics scan and single-user helpers.

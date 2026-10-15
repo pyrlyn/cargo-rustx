@@ -1,4 +1,4 @@
 - T8. M3: `#[borrows]` structs and `&from(Self)`
 - T9. M3: `into T` parameters
-- T10. M3: parameter defaults and named arguments
-- T11. Shared token helpers for passes
+- T10.1. M3: parameter defaults in signatures
+- T10.2. M3: default and named arguments at call sites

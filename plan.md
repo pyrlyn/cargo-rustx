@@ -6,26 +6,29 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
-| T11 | in progress | P0 | 3 | 0% | Claude / opus-5.5 |
-| T8 | todo | P2 | 4 | 0% | |
-| T9 | todo | P2 | 3 | 0% | |
-| T10 | todo | P2 | 5 | 0% | |
+| T8 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
+| T9 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T10.1 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T10.2 | todo | P2 | 4 | 0% | |
 
 ### T8. M3: `#[borrows]` structs and `&from(Self)`
 
 Problem 19. `#[borrows] struct Lexer { src: &str }` adds one lifetime to the type, its fields and its `impl` headers; `&from(Self) T` / `&from(Type) T` resolve to that lifetime. Depends on T7.
 
+Plan: own pass `passes/borrows.rs` (AST pass before `from_lifetimes::lower`); extend `from_lifetimes` so `from(Self)` / `from(Type)` resolve to the type's lifetime instead of "not a parameter". Unit tests, snapshot case, `pass/` compile test from the problem file, `fail/` cases (`#[borrows]` on a type with no references, two independent lifetimes, `from(Self)` outside a `#[borrows]` impl).
+
 ### T9. M3: `into T` parameters
 
 Problem 15. `name: into String` becomes `name: impl Into<String>` plus `let name: String = name.into();` at the top of the body.
 
-### T10. M3: parameter defaults and named arguments
+Plan: own pass `passes/into_params.rs` (token half on `tokens::params::map_fn_parameters` with a parameter marker, AST half rewrites the type and prepends the conversion). Unit tests, snapshot case, `pass/` compile test from the problem file, `fail/` cases (`into` without a type, `into` on `self`).
 
-Problem 17 (parameters only; field defaults belong to M4). `port: u16 = 8080` becomes `Option<u16>` with `unwrap_or`, calls inside the same `sugar!` input are filled in. Split when claimed.
+### T10.1. M3: parameter defaults in signatures
 
-### T11. Shared token helpers for passes
+Problem 17 (parameters only; field defaults belong to M4). `port: u16 = 8080` becomes `port: Option<u16>` with `let port = port.unwrap_or(8080);` (or `unwrap_or_else` when the default is not a literal) at the top of the body.
 
-The mandatory no-duplication rule: after T2–T7 several passes carry private copies of the same token logic — punct checks (`is_punct`, joint/alone), statement/item-start detection (`var`, `bound_presets`), outer-attribute and visibility skipping, angle-bracket depth and matching `>` (with `->` handling) in `turbofish`, `prefix_types` and `inline_bounds`, and error accumulation (`syn::Error::combine` helpers). Move one copy of each into `tokens.rs` (or a `tokens/` module), switch every pass to it, change no behaviour. Blocks T8–T10 so they start on the shared helpers.
+Plan: own pass `passes/param_defaults.rs` (token half on `tokens::params::map_fn_parameters` with a parameter marker, AST half prepends the statement). Unit tests, snapshot case, `pass/` compile test calling with `Some(..)`/`None`, `fail/` cases (default before a parameter without one if disallowed, default on `self`).
 
-Plan: inventory duplicates across `passes/*`; extract into `tokens.rs` with unit tests; replace call sites pass by pass; all existing unit, snapshot and trybuild tests must stay green with unchanged snapshots and `.stderr`.
+### T10.2. M3: default and named arguments at call sites
 
+Problem 17. Calls inside the same `sugar!` input to a fn with defaults: omitted trailing arguments become `None`, given ones `Some(..)`; named arguments `f(a, port: 9000)` are reordered to the declaration. Callers elsewhere see the real `Option<T>` signature. Depends on T10.1.
