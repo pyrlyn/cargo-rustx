@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: M0 (skeleton) is implemented; later milestones are in progress.
+Status: M0–M2 are implemented; M3–M9 are planned (see roadmap.md).
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
@@ -116,6 +116,7 @@ Therefore:
 - **Nightly-only span APIs:** `Span::join`, `Span::source_text` (partially), `Diagnostic` with notes/help are unstable; stable output uses `compile_error!` with single-token spans.
 - **Sugar inside macro arguments is expanded too.** Token passes also rewrite the argument groups of macro calls (`vec![..]`, `assert_eq!(..)`), because users expect sugar there. A user macro that itself accepts tokens like `var x` receives the desugared form instead.
 - **`.m<T>(` inside a comma list.** `(a.b < c, d > (e))` is valid Rust (two comparisons) but reads as the turbofish sugar `a.b::<c, d>(e)`. Parenthesise the comparison: `((a.b < c), d > (e))`.
+- **Type prefixes need a recognisable type position.** `iter`, `rc` and `weak` are ordinary identifiers, so they are sugar only after `->`, `:`, `<`, `,` inside `<..>`, `&` and similar. At the start of a group or after `,` outside `<..>` (tuple types, fn-pointer parameters) the plain Rust spelling is needed, because `f(rc x)` there is the expression sugar of item 16.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
 - **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
 - **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.
