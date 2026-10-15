@@ -3,5 +3,8 @@
 - T19.4. Reverse rule: `Rc::new(RefCell::new(e))` back to `rc e`
 - T19.5. Reverse rule: string literal conversions back to a bare literal
 - T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
+- T19.7. Reverse rule: `Result` functions back to `throws`
+- T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
+- T19.9. Reverse rule: generic bounds back to inline bounds
 - T31.2. M9: `rustx-cli fmt` for the remaining sugar
 - T33. M9: user documentation

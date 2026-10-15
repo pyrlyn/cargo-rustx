@@ -9,8 +9,11 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19 | todo | P2 | 5 | 0% | |
 | T19.3 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.4 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
-| T19.5 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
+| T19.5 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.6 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.7 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
+| T19.8 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.9 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
 | T33 | in progress | P3 | 2 | 100% | Claude / opus-5.5 |
 
@@ -45,6 +48,24 @@ Plan: `sugar/string_literals.rs` implementing `ReverseRule`, using `typed_positi
 Inverts the `into T` parameter pass (problem 15): a parameter `x: impl Into<T>` whose body starts with the exact rebinding the pass emits becomes `x: into T` with the rebinding removed. Done when the rule turns the pass output back into the sugar on ordinary code and leaves any other use of `impl Into<T>` alone.
 
 Plan: read `passes/into_params.rs` for the exact emitted shape (rebinding statement, generic or `impl` form); `sugar/into_params.rs` implementing `ReverseRule` with two edits per parameter (the type and the rebinding), both kept or both dropped; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
+
+### T19.7. Reverse rule: `Result` functions back to `throws`
+
+Inverts T20 for the explicit form: a fn returning `Result<T, E>` whose every tail and `return` value the `throws` pass would have wrapped (`Ok(..)` around values, `Err(..)`/`?` kept) becomes `-> T throws E` with the wrappers removed. Done when the pass output turns back into the sugar on ordinary code and a fn the pass would not produce (a tail that is already a `Result` expression, `Ok` used as a value elsewhere in a way the pass would not emit) is left alone.
+
+Plan: read `passes/throws.rs` (and `throw.rs` for `return Err(..)` back to `throw e` if it fits the size) for the exact emitted shapes; `sugar/throws.rs` implementing `ReverseRule`, all edits of one fn kept or dropped together; the anyhow default form (`throws` without `E`) is out of scope unless the normaliser already equates its path. Register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
+
+### T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
+
+Inverts parameter defaults (problem 17, from the T19 card): `x: Option<T>` plus the exact `let x = x.unwrap_or(..)` (or whatever `param_defaults` emits) becomes `x: T = ..`. Call sites are out of scope unless the pass rewrites them in a way a rule can invert safely. Done when the pass output turns back into the sugar and other `Option` parameters are left alone.
+
+Plan: read `passes/param_defaults.rs` and `call_defaults` for the emitted shapes; `sugar/param_defaults.rs` implementing `ReverseRule` with the type and rebinding edits kept or dropped together; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
+
+### T19.9. Reverse rule: generic bounds back to inline bounds
+
+Inverts inline bounds (problem 3): a generic parameter used by exactly one fn parameter, declared with bounds the `inline_bounds` pass would have generated, becomes `x: T: Bound` with the generic removed. Done when the pass output turns back into the sugar and generics used elsewhere (return type, other parameters, body turbofish, where clauses the pass would not write) are left alone.
+
+Plan: read `passes/inline_bounds.rs` for the emitted shape (generic list position, naming, where clauses); `sugar/inline_bounds.rs` implementing `ReverseRule` with the generic removal and the parameter edit kept or dropped together; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T31.2. M9: `rustx-cli fmt` for the remaining sugar
 
