@@ -1,0 +1,11 @@
+error: `from` needs a tuple variant with exactly one field, as in `Io(from io::Error)`
+ --> tests/fail/from_display_multi_field.rs:3:14
+  |
+3 |         Pair(from std::io::Error, u8),
+  |              ^^^^
+
+error: `from` needs a tuple variant with exactly one field, as in `Io(from io::Error)`
+ --> tests/fail/from_display_multi_field.rs:4:25
+  |
+4 |         Named { source: from std::fmt::Error },
+  |                         ^^^^

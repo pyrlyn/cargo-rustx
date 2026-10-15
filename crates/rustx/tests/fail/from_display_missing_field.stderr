@@ -1,0 +1,11 @@
+error: `{1}` names no field of `Missing`
+ --> tests/fail/from_display_missing_field.rs:4:19
+  |
+4 |         #[display("missing key: {1}")]
+  |                   ^^^^^^^^^^^^^^^^^^
+
+error: `{line}` names no field of `Bad`
+ --> tests/fail/from_display_missing_field.rs:6:19
+  |
+6 |         #[display("bad {value} in {line}")]
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^

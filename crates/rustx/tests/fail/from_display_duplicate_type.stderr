@@ -1,0 +1,5 @@
+error: `Port` already converts from this type; `from` takes each type once
+ --> tests/fail/from_display_duplicate_type.rs:6:20
+  |
+6 |         Count(from ParseIntError),
+  |                    ^^^^^^^^^^^^^
