@@ -1,5 +1,4 @@
 - T19. Convert plain Rust into rustx sugar
-- T26. M6: borrows on `rc T` field access
 - T29. M8: string literals into `String`
 - T31. M9: `rustx-cli fmt`
 - T33. M9: user documentation
