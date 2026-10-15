@@ -73,6 +73,9 @@ const AST_PASSES: &[AstPass] = &[
     from_lifetimes::lower,
 ];
 
+pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
+pub(crate) use newtype::VALIDATOR_NOT_FOUND;
+
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {
         tokens = pass(tokens)?;

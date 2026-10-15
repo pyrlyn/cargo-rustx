@@ -71,6 +71,9 @@ const FLAGS: &[(&str, Kind)] = &[
 
 const UNKNOWN: &str = "unknown `#[newtype]` flag; expected `deref`, `as_ref`, `display`, \
                        `from_str`, `into`, `add`, `sub`, `mul`, `div`, `rem` or `validate`";
+/// The standalone attribute rewords this error, since it cannot see the struct's neighbours.
+pub(crate) const VALIDATOR_NOT_FOUND: &str = "`validate` needs a function declared next to the \
+     struct, as in `validate = check`, so `new` can name its error type";
 const VALIDATE_VALUE: &str = "`validate` needs a function: `validate = check`";
 const DISPLAY_VALUE: &str = "`display` takes a format string: `display = \"{} m\"`";
 
@@ -261,9 +264,7 @@ fn validator_error<'a>(
         .get_ident()
         .and_then(|name| functions.get(&name.to_string()))
     else {
-        let msg = "`validate` needs a function declared next to the struct, as in \
-                   `validate = check`, so `new` can name its error type";
-        return Err(syn::Error::new_spanned(path, msg));
+        return Err(syn::Error::new_spanned(path, VALIDATOR_NOT_FOUND));
     };
     let msg = "a `validate` function returns `Result<(), E>`";
     let ReturnType::Type(_, ty) = output else {

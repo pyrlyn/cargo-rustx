@@ -34,13 +34,16 @@ pub(super) fn check(delegation: &Delegation, trait_items: &[TraitItem]) -> syn::
     errors.map_or(Ok(()), Err)
 }
 
+/// Starts the error for `except(..)` without an impl; the standalone attribute rewords it.
+pub(crate) const EXCEPT_WITHOUT_IMPL: &str = "`except(..)` needs a hand-written";
+
 /// An error when `except(..)` has no hand-written impl to leave its methods to.
 pub(super) fn without_impl(delegation: &Delegation, owner: &Ident) -> syn::Result<()> {
     let Some(keyword) = delegation.except_span else {
         return Ok(());
     };
     let message = format!(
-        "`except(..)` needs a hand-written `impl {} for {owner}` next to the struct",
+        "{EXCEPT_WITHOUT_IMPL} `impl {} for {owner}` next to the struct",
         last_segment(&delegation.path),
     );
     Err(syn::Error::new(keyword, message))

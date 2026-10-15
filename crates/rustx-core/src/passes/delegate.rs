@@ -58,6 +58,7 @@ use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{Field, Index, Item, ItemImpl, ItemStruct, ItemTrait, Member, Path, TraitItem, Type};
 
+pub(crate) use self::except::EXCEPT_WITHOUT_IMPL;
 use self::forward::Target;
 use self::spec::Delegation;
 use super::borrows;
@@ -66,6 +67,8 @@ use super::item_lists::{Entry, ExpandList, for_each_list};
 use crate::tokens::syntax::{combine, take_attr};
 
 const ATTR: &str = "delegate";
+/// Starts the error for a trait whose methods are unknown; the standalone attribute rewords it.
+pub(crate) const UNKNOWN_TRAIT: &str = "`#[delegate]` does not know the methods of";
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
     let mut traits = Traits::default();
@@ -275,7 +278,7 @@ impl Walk {
         }
         std_traits::lookup(path, span).unwrap_or_else(|| {
             let message = format!(
-                "`#[delegate]` does not know the methods of `{name}`: it is neither in the \
+                "{UNKNOWN_TRAIT} `{name}`: it is neither in the \
                  built-in list of std traits nor declared in this input; list them: \
                  `{name} {{ fn method(&self); }}`"
             );

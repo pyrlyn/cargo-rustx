@@ -156,18 +156,18 @@ fn has_attr(attrs: &[Attribute], name: &str) -> bool {
 /// Rewords a pass error that tells the user to look next to the item, which a macro on the item
 /// alone cannot see.
 ///
-/// Matched by text because the pass owns that wording for `sugar!`, where it is right; the unit
-/// tests here pin both messages, so a change to either one fails them.
+/// Matched by the passes' own message constants, because the pass owns that wording for
+/// `sugar!`, where it is right.
 fn alone(err: syn::Error) -> syn::Error {
     let msg = err.to_string();
-    let reworded = if msg.contains("does not know the methods of") {
+    let reworded = if msg.starts_with(passes::UNKNOWN_TRAIT) {
         "`#[delegate]` on a struct knows only the built-in std traits; list the methods to \
          forward, as in `Shape { fn area(&self) -> f64; }`, or put `#[sugared]` on a module that \
          declares the trait"
-    } else if msg.starts_with("`except(..)` needs a hand-written") {
+    } else if msg.starts_with(passes::EXCEPT_WITHOUT_IMPL) {
         "`#[delegate]` on a struct cannot see the hand-written impl `except(..)` adds to; put \
          `#[sugared]` on a module that holds both"
-    } else if msg.starts_with("`validate` needs a function declared next to the struct") {
+    } else if msg == passes::VALIDATOR_NOT_FOUND {
         "`#[newtype]` on a struct cannot see the `validate` function next to it; put `#[sugared]` \
          on a module that declares both"
     } else {
