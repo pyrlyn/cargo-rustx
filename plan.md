@@ -9,15 +9,15 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19 | todo | P2 | 5 | 0% | |
 | T20 | todo | P2 | 4 | 0% | |
 | T21 | todo | P2 | 2 | 0% | |
-| T22 | todo | P2 | 3 | 0% | |
-| T23 | todo | P2 | 2 | 0% | |
+| T22 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T23 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T24 | todo | P2 | 4 | 0% | |
-| T25 | todo | P2 | 2 | 0% | |
+| T25 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T26 | todo | P2 | 4 | 0% | |
 | T27 | todo | P2 | 4 | 0% | |
 | T28 | todo | P3 | 4 | 0% | |
 | T29 | todo | P3 | 3 | 0% | |
-| T30 | todo | P2 | 3 | 0% | |
+| T30 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T31 | todo | P3 | 3 | 0% | |
 | T32 | todo | P3 | 4 | 0% | |
 | T33 | todo | P3 | 2 | 0% | |
@@ -40,9 +40,13 @@ Problem 10. `throw e` inside a `throws` fn becomes `return Err(::core::convert::
 
 Problem 11. `move[a.clone(), b.clone()] || work(a, b)` becomes `{ let a = a.clone(); let b = b.clone(); move || work(a, b) }`, keeping the user's names. The form stays close to `move(expr)` (RFC 3968) so the desugaring can switch to native syntax later without changing user code. Done when unit tests, a snapshot case and `pass/` and `fail/` tests cover plain and `async` closures and captures that are not a place expression.
 
+Plan: token pass `passes/capture_lists.rs` (pre-registered in `TOKEN_PASSES` after `var`) that turns `move[e1, e2] <closure>` into a block of `let` bindings plus `move <closure>`, naming each binding after the place the capture starts with; `move[` is never valid Rust, so nothing else changes. Errors on an empty list, a capture with no name to take, and `move[..]` not followed by a closure or `async` block. Verify: unit tests, `tests/cases/capture_lists.rustx`, `pass/capture_lists.rs`, `fail/capture_lists_*.rs`, `just check`.
+
 ### T23. M6: `Shared<T>` runtime type
 
 Problem 12. A `Shared<T>` type in the `rustx` facade wrapping `Arc<Mutex<T>>`, with `Shared::new`, `Clone`, a lock accessor the `shared` sugar desugars to, and `with(|v| ..)` / `with_mut(|v| ..)` for an atomic group of operations. The `rustx` crate's first runtime code. Done when its API has doc tests and unit tests, including poisoning behaviour.
+
+Plan: `crates/rustx/src/shared.rs` with `Shared<T>` over `Arc<Mutex<T>>`: `new`, `Clone`, `Default`, `Debug`, `From<T>`, a `lock()` returning the guard (recovering from poisoning, documented), `with(|&T| ..)` and `with_mut(|&mut T| ..)`; re-exported from `rustx`. Verify: unit tests (clones share the value, threads, poisoning), doc tests on every public item, `just check`.
 
 ### T24. M6: `shared` bindings and `shared T` types
 
@@ -51,6 +55,8 @@ Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type po
 ### T25. M6: `rc e` expressions
 
 Problem 16. `rc e` in expression position becomes `Rc::new(RefCell::new(e))` (the `rc T` / `weak T` types landed in M2). Expression position is told apart from type position as ARCHITECTURE h describes. Done when unit tests, a snapshot case and `pass/` tests cover arguments, `let` values and struct field values, and valid Rust using `rc` as an identifier still passes through unchanged.
+
+Plan: token pass `passes/rc_values.rs` (pre-registered in `TOKEN_PASSES` right after `prefix_types`, so every `rc` left is outside a type position) that rewrites `rc <expr>` into `::std::rc::Rc::new(::std::cell::RefCell::new(<expr>))` only where `rc` is a whole identifier followed by an expression start that would not be valid Rust after it (`rc(x)`, `rc[0]`, `rc.f`, `rc { .. }` stay). The expression extends to the next `,` or `;` at the same depth or the end of its group. Verify: unit tests including pass-through of `rc` as an identifier, `tests/cases/rc_values.rustx`, `pass/rc_values.rs`, `just check`.
 
 ### T26. M6: borrows on `rc T` field access
 
@@ -71,6 +77,8 @@ Problem 15. A string literal gets `.to_string()` where the target type is writte
 ### T30. M9: `rustx-cli expand`
 
 A `rustx-cli` binary whose `expand <file>` prints the plain Rust a `sugar!` body or `.rustx` file desugars to, formatted with `prettyplease`, and reports errors with file positions. T19 builds its reverse command on the same CLI. Done when integration tests run the binary on the problem examples and compare with snapshots.
+
+Plan: new workspace crate `crates/rustx-cli` (binary `rustx-cli`, `clap` derive) with `expand <file>`: reads a `.rustx` file or a Rust file, desugars every `sugar! { .. }` body (or the whole file for `.rustx`) through `rustx_core::expand`, prints it formatted with `prettyplease`, and on error prints `file:line:column: message` and exits non-zero. Verify: integration tests running the binary on problem examples with `insta` snapshots and an error case, `just check`; `toolchain.md` rows for new crates.
 
 ### T31. M9: `rustx-cli fmt`
 

@@ -8,6 +8,7 @@ mod attr_flags;
 mod borrows;
 mod bound_presets;
 mod call_defaults;
+mod capture_lists;
 mod data;
 mod delegate;
 mod derive_presets;
@@ -23,6 +24,7 @@ mod macro_args;
 mod newtype;
 mod param_defaults;
 mod prefix_types;
+mod rc_values;
 mod signatures;
 mod turbofish;
 mod var;
@@ -41,6 +43,7 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 // arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
+    capture_lists::rewrite,
     bound_presets::rewrite,
     derive_presets::rewrite,
     from_display::rewrite,
@@ -50,6 +53,7 @@ const TOKEN_PASSES: &[TokenPass] = &[
     call_defaults::rewrite,
     from_lifetimes::rewrite,
     prefix_types::rewrite,
+    rc_values::rewrite,
     turbofish::rewrite,
 ];
 
