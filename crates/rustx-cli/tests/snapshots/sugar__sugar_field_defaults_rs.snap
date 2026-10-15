@@ -1,0 +1,23 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! A server config with a hand-written `Default`, written without sugar.
+
+/// Where the server listens.
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub host: String = "127.0.0.1",
+    pub port: u16 = 8080,
+    // Off until certificates are set up.
+    pub tls: bool,
+}
+
+pub fn local(port: u16) -> Config {
+    var config = Config {
+        port,
+        ..
+    };
+    config.tls = port == 443;
+    config
+}
