@@ -3,3 +3,8 @@
 Not approved yet.
 
 - `#[widen]` in more positions: struct-literal fields (`S { f: e }` and shorthand), method-call arguments, typed `const`s and return positions. Left out of T28 to fit the task size.
+
+- Bug: named arguments do not skip a capture list. `call_defaults/named.rs` `argument_end` reads `h(move[c] |a: u8, b: u8| a)` with `b: u8` as a named argument and fails with "expected `,`" (found during T31.2).
+- Bug: a `String` parameter with a string-literal default (`user: String = "admin"`) expands to `unwrap_or("admin")`, which does not compile, and a given argument for it comes out as `Some("ann")`; `string_literals` (T29) could cover both positions (found during T33).
+- Bug: a `#[dyn]` trait declared inside a fn body fails with "cannot find trait" (found during T33).
+- Share the token helpers `rustx-cli fmt` repeats from `rustx-core` (`parameter_list`, `argument_end`, `angle_depth`, `matching_close`) through a small public API instead of copies (found during T31.1/T31.2).

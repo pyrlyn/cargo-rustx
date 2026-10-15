@@ -11,8 +11,8 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.4 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.5 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T19.6 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
-| T31.2 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
-| T33 | in progress | P3 | 2 | 0% | Claude / opus-5.5 |
+| T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
+| T33 | in progress | P3 | 2 | 90% | Claude / opus-5.5 |
 
 ### T19. Convert plain Rust into rustx sugar
 
