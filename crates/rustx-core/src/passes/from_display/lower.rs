@@ -28,14 +28,19 @@ struct Lower {
     errors: Option<syn::Error>,
 }
 
-/// The enum an impl is for: its name and generics, copied into every impl header.
-struct Header<'a> {
-    ident: &'a Ident,
-    generics: &'a Generics,
+/// The type an impl is for: its name and generics, copied into every impl header.
+pub(in crate::passes) struct Header<'a> {
+    pub(in crate::passes) ident: &'a Ident,
+    pub(in crate::passes) generics: &'a Generics,
 }
 
 impl Header<'_> {
-    fn implement(&self, span: Span, tr: &TokenStream, body: &TokenStream) -> TokenStream {
+    pub(in crate::passes) fn implement(
+        &self,
+        span: Span,
+        tr: &TokenStream,
+        body: &TokenStream,
+    ) -> TokenStream {
         let ident = self.ident;
         let (impl_generics, type_generics, where_clause) = self.generics.split_for_impl();
         quote_spanned! {span=>

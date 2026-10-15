@@ -107,7 +107,7 @@ fn is_copy(ty: &Type) -> bool {
 }
 
 /// `String`, `std::string::String` or `alloc::string::String`, read as the owned string.
-fn is_string(ty: &Type) -> bool {
+pub(in crate::passes) fn is_string(ty: &Type) -> bool {
     let Type::Path(path) = ty else {
         return false;
     };

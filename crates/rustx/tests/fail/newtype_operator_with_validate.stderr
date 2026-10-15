@@ -1,0 +1,5 @@
+error: `sub` would build a `Positive` that `validate` never checked; operators cannot be combined with `validate`
+ --> tests/fail/newtype_operator_with_validate.rs:6:22
+  |
+6 |     #[newtype(deref, sub, validate = positive)]
+  |                      ^^^

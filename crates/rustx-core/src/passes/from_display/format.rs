@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 ///
 /// `field` resolves a placeholder's argument (`0`, `name`, or the implicit index of `{}`
 /// written as a number) to the field's position in the variant.
-pub(super) fn rewrite(
+pub(in crate::passes) fn rewrite(
     text: &str,
     variant: &str,
     field: impl Fn(&str) -> Option<usize>,

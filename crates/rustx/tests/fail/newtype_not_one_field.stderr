@@ -1,0 +1,17 @@
+error: `#[newtype]` needs a tuple struct with one field, not a struct with named fields
+ --> tests/fail/newtype_not_one_field.rs:2:7
+  |
+2 |     #[newtype(deref)]
+  |       ^^^^^^^
+
+error: `#[newtype]` needs a tuple struct with one field, not a tuple struct with 2 fields
+ --> tests/fail/newtype_not_one_field.rs:5:7
+  |
+5 |     #[newtype]
+  |       ^^^^^^^
+
+error: `#[newtype]` needs a tuple struct with one field, not an enum
+ --> tests/fail/newtype_not_one_field.rs:8:7
+  |
+8 |     #[newtype(display)]
+  |       ^^^^^^^

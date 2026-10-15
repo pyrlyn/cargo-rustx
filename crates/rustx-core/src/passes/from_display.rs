@@ -29,10 +29,10 @@
 //! An enum that derives `Display` (`derive_more`, `parse-display`) keeps its attributes for that
 //! derive, and one that derives `Error` gets no `Error` impl from this pass.
 
-mod format;
+pub(super) mod format;
 mod lower;
 
-pub(super) use lower::lower;
+pub(super) use lower::{Header, lower};
 
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
 

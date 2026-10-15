@@ -1,0 +1,77 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/newtype.rustx
+---
+mod units {
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct Email(String);
+    #[allow(dead_code)]
+    impl Email {
+        pub fn new(__rustx_inner: String) -> ::core::result::Result<Self, String> {
+            check_email(&__rustx_inner)?;
+            ::core::result::Result::Ok(Self(__rustx_inner))
+        }
+    }
+    impl ::core::ops::Deref for Email {
+        type Target = str;
+        fn deref(&self) -> &str {
+            &self.0
+        }
+    }
+    impl ::core::convert::AsRef<str> for Email {
+        fn as_ref(&self) -> &str {
+            &self.0
+        }
+    }
+    impl ::core::fmt::Display for Email {
+        fn fmt(
+            &self,
+            __rustx_f: &mut ::core::fmt::Formatter<'_>,
+        ) -> ::core::fmt::Result {
+            ::core::fmt::Display::fmt(&self.0, __rustx_f)
+        }
+    }
+    impl ::core::str::FromStr for Email {
+        type Err = String;
+        fn from_str(__rustx_s: &str) -> ::core::result::Result<Self, Self::Err> {
+            Self::new(::core::convert::From::from(__rustx_s))
+        }
+    }
+    impl ::core::convert::From<Email> for String {
+        fn from(__rustx_value: Email) -> Self {
+            __rustx_value.0
+        }
+    }
+    fn check_email(s: &String) -> Result<(), String> {
+        if s.contains('@') { Ok(()) } else { Err(format!("invalid email: {s}")) }
+    }
+    #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
+    pub struct Meters(pub f64);
+    #[allow(dead_code)]
+    impl Meters {
+        pub fn new(__rustx_inner: f64) -> Self {
+            Self(__rustx_inner)
+        }
+    }
+    impl ::core::ops::Add for Meters {
+        type Output = Self;
+        fn add(self, __rustx_other: Self) -> Self {
+            Self(::core::ops::Add::add(self.0, __rustx_other.0))
+        }
+    }
+    impl ::core::fmt::Display for Meters {
+        fn fmt(
+            &self,
+            __rustx_f: &mut ::core::fmt::Formatter<'_>,
+        ) -> ::core::fmt::Result {
+            ::core::write!(__rustx_f, "{0} m", & self.0)
+        }
+    }
+    pub fn demo() -> Result<String, String> {
+        let e: Email = "ann@example.com".parse()?;
+        let total = Meters(1.5) + Meters(2.0);
+        let domain = e.split_once('@').map(|(_, d)| d).unwrap_or("");
+        Ok(format!("{e} ({domain}, {} chars), {total}", e.len()))
+    }
+}
