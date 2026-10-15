@@ -1,0 +1,64 @@
+---
+source: crates/rustx-core/tests/sugar.rs
+expression: converted
+input_file: crates/rustx-core/tests/sugar_cases/var.rs
+---
+// Problem 02's "As is" example, with comments that must survive the conversion.
+pub struct Stats {
+    pub count: usize,
+    pub sum: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+/// Summary of the samples, or `None` when there are none.
+pub fn summarize(samples: &[f64]) -> Option<Stats> {
+    if samples.is_empty() {
+        return None;
+    }
+    var count = 0; // samples seen
+    var sum = 0.0;
+    var min = f64::MAX;
+    var max: f64 = f64::MIN;
+    for &s in samples {
+        count += 1;
+        sum += s;
+        if s < min {
+            min = s;
+        }
+        if s > max {
+            max = s;
+        }
+    }
+    Some(Stats { count, sum, min, max })
+}
+
+pub fn histogram(samples: &[f64], buckets: usize) -> Vec<usize> {
+    var out = vec![0; buckets];
+    var sorted = samples.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let lo = sorted[0];
+    let hi = sorted[sorted.len() - 1];
+    let width = (hi - lo) / buckets as f64;
+    for s in sorted {
+        var idx = ((s - lo) / width) as usize;
+        if idx >= buckets {
+            idx = buckets - 1;
+        }
+        out[idx] += 1;
+    }
+    out
+}
+
+// Destructuring, `let ref mut` and `if let` stay; only the plain `let mut late` changes.
+pub fn untouched(pair: (u8, u8), o: Option<u8>) -> u8 {
+    let (mut a, b) = pair;
+    let ref mut r = 0u8;
+    if let Some(mut v) = o {
+        v += 1;
+        a += v;
+    }
+    var late;
+    late = a + b + *r;
+    late
+}

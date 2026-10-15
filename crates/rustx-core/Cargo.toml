@@ -6,6 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
+[features]
+# Converting plain Rust back into sugar (`rustx_core::sugar`) edits source text by byte offset,
+# which `proc-macro2` only knows with `span-locations`. Opt-in, so `rustx-macros`, a proc macro
+# built apart from the CLI, never compiles the converter or pays for span locations.
+sugar = ["proc-macro2/span-locations", "syn/visit"]
+
 [dependencies]
 proc-macro2.workspace = true
 quote.workspace = true
@@ -14,6 +20,10 @@ syn.workspace = true
 [dev-dependencies]
 insta.workspace = true
 prettyplease.workspace = true
+
+[[test]]
+name = "sugar"
+required-features = ["sugar"]
 
 [lints]
 workspace = true

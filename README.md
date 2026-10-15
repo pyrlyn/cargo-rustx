@@ -29,6 +29,8 @@ An attribute macro runs the one sugar item it names on the item it sits on, and 
 
 To see the plain Rust that sugar turns into, run `cargo run -p rustx-cli -- expand <file>`: a `.rustx` file is desugared as a whole, and in a Rust file every `sugar! { .. }` invocation is replaced by its expansion. The output is formatted with `prettyplease` (comments other than doc comments are dropped); errors are printed as `file:line:column: message` with a non-zero exit code.
 
+To move existing code onto sugar, run `cargo run -p rustx-cli -- sugar <file.rs>`: it prints the file rewritten into sugar as the text of a `.rustx` file (save it as one, or paste it into `sugar! { .. }`). Only code that a sugar item expands back to exactly is rewritten (so far `let mut x` becomes `var x`), and only those bytes change: comments and layout stay as written. Code that expansion would already change as written, such as `var x` inside a macro call, is reported as an error instead.
+
 ## Catalog
 
 Each file shows the problem in short form, then a detailed example in valid Rust and the same code with sugar.

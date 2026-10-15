@@ -10,9 +10,9 @@
 
 | Package | Where | Source | Why here |
 | --- | --- | --- | --- |
-| proc-macro2 | local | https://github.com/dtolnay/proc-macro2 | Tokens outside the compiler, so the core is testable; `span-locations` in `rustx-cli` for error lines and columns |
+| proc-macro2 | local | https://github.com/dtolnay/proc-macro2 | Tokens outside the compiler, so the core is testable; `span-locations` in `rustx-cli` for error lines and columns, and through the `rustx-core` `sugar` feature for byte offsets of edits |
 | quote | local | https://github.com/dtolnay/quote | Building output tokens |
-| syn | local | https://github.com/dtolnay/syn | Parsing the desugared body and AST passes |
+| syn | local | https://github.com/dtolnay/syn | Parsing the desugared body and AST passes; `visit` (through the `rustx-core` `sugar` feature) for reverse rules |
 | clap | local | https://github.com/clap-rs/clap | `rustx-cli` arguments and subcommands (derive) |
 | prettyplease | local | https://github.com/dtolnay/prettyplease | Formatting `rustx-cli expand` output and readable expansions in snapshots |
 | anyhow | local | https://github.com/dtolnay/anyhow | Error type of `-> T throws`, re-exported by `rustx` |
