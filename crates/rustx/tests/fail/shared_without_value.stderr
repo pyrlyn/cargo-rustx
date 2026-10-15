@@ -1,0 +1,5 @@
+error: `shared` needs a value, as in `shared name = value;`
+ --> tests/fail/shared_without_value.rs:3:9
+  |
+3 |         shared total: u64;
+  |         ^^^^^^

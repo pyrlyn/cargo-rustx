@@ -29,8 +29,8 @@ pub(crate) fn at_statement_start(before: &[TokenTree]) -> bool {
 /// attribute.
 ///
 /// An outer attribute right before counts on its own, without checking what precedes it the
-/// way `bound_presets` does for items; that is the rule statement sugar (`var`, `throw`) is
-/// specified and tested with.
+/// way `bound_presets` does for items; that is the rule statement sugar (`var`, `throw`,
+/// `shared`) is specified and tested with.
 pub(crate) fn starts_statement(seq: &[TokenTree], i: usize) -> bool {
     at_statement_start(&seq[..i]) || outer_attributes_start(seq, i) < i
 }

@@ -1,4 +1,4 @@
-//! Type-prefix sugar: `~Trait`, `iter T`, `rc T`, `weak T` (problems 04, 09, 16).
+//! Type-prefix sugar: `~Trait`, `iter T`, `rc T`, `weak T`, `shared T` (problems 04, 09, 16, 12).
 //!
 //! A token pass: a keyword or `~` before a type is not valid Rust, so it is rewritten before
 //! parsing. Expansions use fully qualified paths so user imports neither break nor change them:
@@ -7,13 +7,14 @@
 //! - `iter T` → `impl ::core::iter::Iterator<Item = T> + '_`
 //! - `rc T` → `::std::rc::Rc<::core::cell::RefCell<T>>`
 //! - `weak T` → `::std::rc::Weak<::core::cell::RefCell<T>>`
+//! - `shared T` → `::rustx::Shared<T>`
 //!
 //! # Detection
 //!
 //! `~` is never valid Rust, so every `~` is sugar and must be followed by a trait (a path, a
 //! `Fn(..) -> ..` bound, or `(A + B)`); anything else is an error on the `~`.
 //!
-//! `iter`, `rc` and `weak` are ordinary identifiers in valid Rust, so they are sugar only when
+//! `iter`, `rc`, `weak` and `shared` are ordinary identifiers in valid Rust, so they are sugar only when
 //! both of these hold, otherwise they pass through untouched:
 //!
 //! 1. They stand in a type position, judged from the preceding tokens: after `->`, after a
@@ -71,6 +72,7 @@ enum Prefix {
     Iter,
     Rc,
     Weak,
+    Shared,
 }
 
 fn rewrite_sequence(seq: Vec<TokenTree>) -> syn::Result<Vec<TokenTree>> {
@@ -102,6 +104,7 @@ fn sugar_at(seq: &[TokenTree], i: usize) -> Option<Prefix> {
                 "iter" => Prefix::Iter,
                 "rc" => Prefix::Rc,
                 "weak" => Prefix::Weak,
+                "shared" => Prefix::Shared,
                 _ => return None,
             };
             let follows = match seq.get(i + 1)? {
@@ -224,18 +227,20 @@ fn expand(
     let span = sugar.span();
     let (inner, used) = match prefix {
         Prefix::Boxed => parse_bounds(rest).ok_or_else(|| not_a_trait(span))?,
-        Prefix::Iter | Prefix::Rc | Prefix::Weak => match parse_front(rest, Type::without_plus) {
-            Some((ty, used))
-                if !(matches!(prefix, Prefix::Rc)
-                    && after_colon
-                    && is_field_value(&ty, rest.get(used))) =>
-            {
-                (unparen(&ty, &rest[..used]), used)
+        Prefix::Iter | Prefix::Rc | Prefix::Weak | Prefix::Shared => {
+            match parse_front(rest, Type::without_plus) {
+                Some((ty, used))
+                    if !(matches!(prefix, Prefix::Rc)
+                        && after_colon
+                        && is_field_value(&ty, rest.get(used))) =>
+                {
+                    (unparen(&ty, &rest[..used]), used)
+                }
+                // Not followed by a type after all (`-> rc where ..`), or a struct literal field
+                // value: the name is plain Rust or the value sugar of `rc_values`.
+                _ => return Ok(None),
             }
-            // Not followed by a type after all (`-> rc where ..`), or a struct literal field
-            // value: the name is plain Rust or the value sugar of `rc_values`.
-            _ => return Ok(None),
-        },
+        }
     };
     let tokens = match prefix {
         Prefix::Boxed => quote_spanned!(span=>
@@ -244,6 +249,7 @@ fn expand(
         Prefix::Iter => quote_spanned!(span=> impl ::core::iter::Iterator<Item = #inner> + '_),
         Prefix::Rc => quote_spanned!(span=> ::std::rc::Rc<::core::cell::RefCell<#inner>>),
         Prefix::Weak => quote_spanned!(span=> ::std::rc::Weak<::core::cell::RefCell<#inner>>),
+        Prefix::Shared => quote_spanned!(span=> ::rustx::Shared<#inner>),
     };
     Ok(Some((used, tokens)))
 }
@@ -487,6 +493,22 @@ mod tests {
                 g(|d: ::std::rc::Rc<::core::cell::RefCell<Node>>, e| d);
             } },
         );
+    }
+
+    #[test]
+    fn shared_becomes_the_rustx_shared_handle() {
+        expands_to(
+            quote! { struct Server { metrics: shared Metrics } fn f(m: &shared Metrics) -> Vec<shared u8> {} },
+            quote! { struct Server { metrics: ::rustx::Shared<Metrics> }
+            fn f(m: &::rustx::Shared<Metrics>) -> Vec<::rustx::Shared<u8> > {} },
+        );
+    }
+
+    #[test]
+    fn shared_used_as_an_identifier_stays() {
+        unchanged(&quote! {
+            fn shared(shared: u8) -> shared { let shared: shared = shared; S { shared: shared(1) } }
+        });
     }
 
     #[test]

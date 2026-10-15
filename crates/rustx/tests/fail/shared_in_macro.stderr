@@ -1,0 +1,5 @@
+error: a `shared` binding cannot be declared inside a macro call; declare it before the call
+ --> tests/fail/shared_in_macro.rs:5:13
+  |
+5 |             shared n = 1;
+  |             ^^^^^^
