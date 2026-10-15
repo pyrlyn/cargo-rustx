@@ -2,5 +2,4 @@
 - T26. M6: borrows on `rc T` field access
 - T29. M8: string literals into `String`
 - T31. M9: `rustx-cli fmt`
-- T32. M9: file-level `.rustx` via `build.rs`
 - T33. M9: user documentation
