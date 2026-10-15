@@ -7,10 +7,8 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
-| T26 | todo | P2 | 4 | 0% | |
-| T28 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
-| T29 | todo | P3 | 3 | 0% | |
+| T26 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
+| T29 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
 | T31 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
 | T32 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T33 | todo | P3 | 2 | 0% | |
@@ -23,27 +21,17 @@ Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first)
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
 
-### T24. M6: `shared` bindings and `shared T` types
-
-Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type position becomes `Shared<T>`, and field access on such bindings goes through the lock, one lock per access, as the problem file shows; read-only data becomes a plain `Arc`. Depends on T23. The access rewriting is written so T26 can reuse it. Done when the problem's detailed example compiles and runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.
-
-Plan: token pass `passes/shared.rs::rewrite` (pre-registered after `capture_lists`) turns the statement `shared s = e;` into a binding of `::rustx::Shared::new(e)` marked for the AST pass, and `shared T` in type positions into `::rustx::Shared<T>`; AST pass `shared::lower` (pre-registered before `throws::lower`) rewrites field access on marked bindings to go through `lock()`, giving each statement one guard so two accesses in one statement cannot deadlock, and makes never-mutated data a plain `Arc` as the problem file shows. Verify: unit tests, `tests/cases/shared.rustx`, `pass/shared.rs` running the problem's detailed example, `fail/shared_*.rs`, `just check`.
-
 ### T26. M6: borrows on `rc T` field access
 
 Problem 16. On a binding whose type is written `rc T` or `&rc T`, field access gets `.borrow_mut()` when the field is assigned, compound-assigned or receives a known `&mut self` std method call, and `.borrow()` otherwise, plus `with` / `with_mut` helpers in `rustx`. Reuses T24's access rewriting. Depends on T24 and T25. Done when the problem's tree example runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.
 
-### T28. M8: implicit lossless `into()`
-
-Problem 13. Where the target type is written in the input (a `let` annotation, a field of a struct declared in the input, a parameter of a fn declared in the input), a lossless widening (`u32` to `u64`, `u16` to `u32`, ...) gets `.into()`; lossy conversions stay explicit `as`. Explicit opt-in, as ARCHITECTURE g says; the opt-in form is settled with the creator when the task is claimed. Done when unit tests, a snapshot case and `pass/` tests cover each position, and nothing changes without the opt-in.
-
-Decided with the creator: opt-in through a `#[widen]` attribute on a fn, impl or module, or `#![widen]` at the start of the `sugar!` input; it applies only inside what is marked.
-
-Plan: AST pass `passes/widen.rs::lower` (pre-registered before `throws::lower`) that, inside a fn, impl or module marked `#[widen]` or in a `sugar!` input starting with `#![widen]`, removes the attribute and inserts `.into()` (as `::core::convert::Into::into(..)`) where the source type and the target type are both written in the input and the conversion is a lossless widening from the problem file's table: `let x: T = e`, `s.f = e` / `s.f += e` into a field of a struct declared in the input, and arguments of a fn declared in the input; the source type comes from a `let` annotation, a parameter or a field. Anything not provably widening stays as written. Verify: unit tests, `tests/cases/widen.rustx`, `pass/widen.rs`, `fail/widen_*.rs` for misplaced attributes, `just check`.
+Plan: AST pass `passes/rc_borrows.rs::lower` (pre-registered before `widen::lower`) that, for bindings and parameters whose type is written `rc T` / `&rc T` (already `Rc<RefCell<T>>` after `prefix_types`, so it matches that spelling) and `rc e` values bound by `let`, reuses `passes/access.rs` with an `Opening` that picks `.borrow_mut()` for writes and `MUTATING_METHODS`, `.borrow()` otherwise; `rustx` gets `with` / `with_mut` for `Rc<RefCell<T>>` through an extension trait. Verify: unit tests, `tests/cases/rc_borrows.rustx`, `pass/rc_borrows.rs` running the problem's tree example, `fail/` tests for misuse it reports, `just check`.
 
 ### T29. M8: string literals into `String`
 
 Problem 15. A string literal gets `.to_string()` where the target type is written as `String` in the same input (struct fields, `Option<String>`, `Vec<String>`, `let x: String`), on the machinery of T28 and the shared `is_string`. Depends on T28. Done when the problem's `Contact` example compiles, with unit tests, a snapshot case and `pass/` tests, and positions whose type is not written stay unchanged.
+
+Plan: always on, without an opt-in: a string literal in a position whose type is written `String` does not compile as plain Rust, so the rewrite cannot change the meaning of valid Rust. AST pass `passes/string_literals.rs::lower` (pre-registered before `widen::lower`) implements `typed_positions::Convert`: a literal, `Some(lit)` or `vec![lit, ..]` meeting `String`, `Option<String>` or `Vec<String>` (the shared `is_string`) gets `::std::string::String::from(lit)`; it adds the struct-literal field position to `typed_positions` (shorthand fields get their `:` back). Verify: unit tests, `tests/cases/string_literals.rustx`, `pass/string_literals.rs` with the problem's `Contact` example, `just check`.
 
 ### T31. M9: `rustx-cli fmt`
 

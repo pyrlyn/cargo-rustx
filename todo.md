@@ -1,7 +1,5 @@
 - T19. Convert plain Rust into rustx sugar
-- T24. M6: `shared` bindings and `shared T` types
 - T26. M6: borrows on `rc T` field access
-- T28. M8: implicit lossless `into()`
 - T29. M8: string literals into `String`
 - T31. M9: `rustx-cli fmt`
 - T32. M9: file-level `.rustx` via `build.rs`

@@ -26,9 +26,11 @@ mod macro_args;
 mod newtype;
 mod param_defaults;
 mod prefix_types;
+mod rc_borrows;
 mod rc_values;
 mod shared;
 mod signatures;
+mod string_literals;
 mod throw;
 mod throws;
 mod turbofish;
@@ -94,6 +96,8 @@ const AST_PASSES: &[AstPass] = &[
     from_lifetimes::lower,
     dyn_traits::lower,
     shared::lower,
+    rc_borrows::lower,
+    string_literals::lower,
     widen::lower,
     throws::lower,
 ];
