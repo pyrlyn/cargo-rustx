@@ -1,28 +1,32 @@
 //! The fns a call can resolve to: every signature of the input, by name.
 //!
 //! Fns without defaults are recorded too, so a call whose name also fits one of them is reported
-//! as ambiguous instead of being filled in for the wrong fn.
+//! as ambiguous instead of being filled in for the wrong fn. `widen` resolves calls the same way,
+//! to find the parameter types its arguments go into.
 
 use std::collections::HashMap;
 
+use proc_macro2::Ident;
 use quote::ToTokens;
-use syn::{FnArg, Pat, Signature, Type};
+use syn::{Expr, ExprPath, FnArg, Pat, Signature, Type};
 
 use crate::passes::param_defaults::default_of;
 
 /// The parameters a call has to supply, the receiver left out.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(super) struct Shape {
-    pub(super) params: Vec<Param>,
+pub(in crate::passes) struct Shape {
+    pub(in crate::passes) params: Vec<Param>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(super) struct Param {
+pub(in crate::passes) struct Param {
     /// The binding, when the parameter is a plain name a call can refer to.
     pub(super) name: Option<String>,
     /// How errors refer to the parameter: its name or its pattern as written.
     pub(super) label: String,
     pub(super) default: bool,
+    /// The type as written.
+    pub(in crate::passes) ty: Type,
 }
 
 impl Shape {
@@ -45,14 +49,14 @@ struct Entry {
 }
 
 #[derive(Default)]
-pub(super) struct Fns {
+pub(in crate::passes) struct Fns {
     by_name: HashMap<String, Vec<Entry>>,
 }
 
 impl Fns {
     /// Records a signature; `owner` is the name of the enclosing `impl` or trait type, `None`
     /// for a free fn.
-    pub(super) fn add(&mut self, sig: &Signature, owner: Option<String>) {
+    pub(in crate::passes) fn add(&mut self, sig: &Signature, owner: Option<String>) {
         let params = sig
             .inputs
             .iter()
@@ -62,6 +66,7 @@ impl Fns {
                     label: plain_name(&param.pat)
                         .unwrap_or_else(|| param.pat.to_token_stream().to_string()),
                     default: default_of(&param.attrs).is_some(),
+                    ty: (*param.ty).clone(),
                 }),
                 FnArg::Receiver(_) => None,
             })
@@ -78,7 +83,7 @@ impl Fns {
 
     /// The shapes `qualifier::name(..)` can call: free fns (the qualifier may be a module) and
     /// associated fns of a type named `qualifier`; a bare `name(..)` only reaches free fns.
-    pub(super) fn path_call(&self, name: &str, qualifier: Option<&str>) -> Vec<&Shape> {
+    pub(in crate::passes) fn path_call(&self, name: &str, qualifier: Option<&str>) -> Vec<&Shape> {
         self.matching(name, |entry| {
             !entry.receiver
                 && match (&entry.owner, qualifier) {
@@ -105,8 +110,29 @@ impl Fns {
     }
 }
 
+/// The name a path call is resolved by, and its qualifier with `Self` replaced by `owner`, the
+/// enclosing type; `None` for anything else that is called.
+pub(in crate::passes) fn path_target(
+    func: &Expr,
+    owner: Option<&str>,
+) -> Option<(Ident, Option<String>)> {
+    let Expr::Path(ExprPath {
+        qself: None, path, ..
+    }) = func
+    else {
+        return None;
+    };
+    let mut segments = path.segments.iter().rev();
+    let name = segments.next()?.ident.clone();
+    let qualifier = match segments.next().map(|segment| segment.ident.to_string()) {
+        Some(word) if word == "Self" => Some(owner?.to_owned()),
+        other => other,
+    };
+    Some((name, qualifier))
+}
+
 /// The last path segment of an `impl`'s self type, empty when it is not a path.
-pub(super) fn type_name(ty: &Type) -> String {
+pub(in crate::passes) fn type_name(ty: &Type) -> String {
     match ty {
         Type::Path(path) => path
             .path
@@ -151,6 +177,32 @@ mod tests {
         assert_eq!(fns.path_call("new", Some("Vec")).len(), 1);
         assert_eq!(fns.method_call("new").len(), 1);
         assert_eq!(fns.method_call("other").len(), 0);
+    }
+
+    #[test]
+    fn parameters_keep_their_written_types() {
+        let fns = fns(&[("fn f(a: u8, b: Option<u16>) {}", None)]);
+        let types: Vec<String> = fns.path_call("f", None)[0]
+            .params
+            .iter()
+            .map(|param| param.ty.to_token_stream().to_string())
+            .collect();
+        assert_eq!(types, ["u8", "Option < u16 >"]);
+    }
+
+    #[test]
+    fn a_path_call_is_named_by_its_last_segment_and_self_by_the_owner() {
+        let target = |source: &str, owner: Option<&str>| {
+            path_target(&syn::parse_str(source).unwrap(), owner)
+                .map(|(name, qualifier)| (name.to_string(), qualifier))
+        };
+        assert_eq!(target("a::f", None), Some(("f".into(), Some("a".into()))));
+        assert_eq!(
+            target("Self::f", Some("P")),
+            Some(("f".into(), Some("P".into())))
+        );
+        assert_eq!(target("Self::f", None), None);
+        assert_eq!(target("(f)", None), None);
     }
 
     #[test]

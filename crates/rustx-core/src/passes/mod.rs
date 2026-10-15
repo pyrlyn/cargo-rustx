@@ -31,6 +31,9 @@ mod signatures;
 mod throw;
 mod throws;
 mod turbofish;
+// Its first user, `widen`, lands in the next commit.
+#[allow(dead_code)]
+mod typed_positions;
 mod var;
 mod widen;
 
