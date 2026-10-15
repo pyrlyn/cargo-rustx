@@ -120,6 +120,7 @@ Therefore:
 - **`.m<T>(` inside a comma list.** `(a.b < c, d > (e))` is valid Rust (two comparisons) but reads as the turbofish sugar `a.b::<c, d>(e)`. Parenthesise the comparison: `((a.b < c), d > (e))`.
 - **Type prefixes need a recognisable type position.** `iter`, `rc` and `weak` are ordinary identifiers, so they are sugar only after `->`, `:`, `<`, `,` inside `<..>`, `&` and similar. At the start of a group or after `,` outside `<..>` (tuple types, fn-pointer parameters) the plain Rust spelling is needed, because `f(rc x)` there is the expression sugar of item 16.
 - **Inline bounds decide "new generic or existing type" from the input only.** A name in scope gets the bound, a type declared or imported in the same input is an error, anything else becomes a new generic, so a glob-imported type is shadowed by a fresh generic.
+- **`derive` presets are one flat namespace per `sugar!` input and match by written path.** A preset declared in a nested module is usable everywhere in the input, `Debug` and `std::fmt::Debug` are not recognised as the same derive, and derives inside macro bodies or nested `cfg_attr`s are not expanded.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
 - **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
 - **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.

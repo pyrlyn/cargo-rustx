@@ -1,0 +1,31 @@
+mod orders {
+    derive Id = Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord;
+    derive Value = Debug, Clone, PartialEq, Eq, Hash;
+    derive Wire = Value, serde::Serialize;
+
+    #[derive(Id)]
+    pub struct UserId(pub u64);
+
+    #[derive(Id, serde::Serialize)]
+    pub enum Status {
+        New,
+        Paid,
+    }
+
+    #[derive(Value, Default)]
+    pub struct Address {
+        pub city: String,
+    }
+
+    #[cfg_attr(feature = "wire", derive(Wire, Clone))]
+    pub struct Order {
+        pub user: UserId,
+    }
+
+    mod inner {
+        #[derive(super::Id)]
+        pub struct Plain;
+        #[derive(Id)]
+        pub struct Local;
+    }
+}

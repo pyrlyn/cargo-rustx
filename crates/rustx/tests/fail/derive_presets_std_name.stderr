@@ -1,0 +1,5 @@
+error: `derive` preset `Debug` shadows the std derive `Debug`; pick another name
+ --> tests/fail/derive_presets_std_name.rs:2:12
+  |
+2 |     derive Debug = Clone, Copy;
+  |            ^^^^^

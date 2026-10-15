@@ -36,6 +36,20 @@ pub(crate) fn outer_attributes_start(seq: &[TokenTree], mut end: usize) -> usize
     end
 }
 
+/// Index of the visibility (`pub`, `pub(crate)`, `pub(in path)`) right before `i`, or `i` if the
+/// token at `i` has none.
+pub(crate) fn visibility_start(seq: &[TokenTree], i: usize) -> usize {
+    match &seq[..i] {
+        [.., TokenTree::Ident(vis), TokenTree::Group(g)]
+            if vis == "pub" && g.delimiter() == Delimiter::Parenthesis =>
+        {
+            i - 2
+        }
+        [.., TokenTree::Ident(vis)] if vis == "pub" => i - 1,
+        _ => i,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,5 +80,15 @@ mod tests {
     fn an_inner_attribute_is_not_an_outer_one() {
         let seq = trees("#![x] b");
         assert_eq!(outer_attributes_start(&seq, 3), 3);
+    }
+
+    #[test]
+    fn a_visibility_is_found_in_front_of_the_token() {
+        let seq = trees("a; pub(crate) b; pub c; d; pub (x) e");
+        assert_eq!(visibility_start(&seq, 4), 2);
+        assert_eq!(visibility_start(&seq, 7), 6);
+        assert_eq!(visibility_start(&seq, 9), 9);
+        assert_eq!(visibility_start(&seq, 13), 11);
+        assert_eq!(visibility_start(&seq, 0), 0);
     }
 }
