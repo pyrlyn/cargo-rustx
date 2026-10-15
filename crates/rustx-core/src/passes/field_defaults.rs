@@ -62,7 +62,7 @@ use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     Attribute, Block, Expr, ExprAssign, ExprLit, ExprStruct, Field, Fields, Item, ItemMod,
-    ItemStruct, ItemUnion, Lit, Macro, Path, Stmt, Token, Type, Variant,
+    ItemStruct, ItemUnion, Lit, Macro, Path, Stmt, Token, Type, Variant, parse_quote_spanned,
 };
 
 use crate::passes::macro_args::MacroArgs;
@@ -261,14 +261,21 @@ impl VisitMut for Lower {
 fn field_value(field: &mut Field) -> TokenStream {
     let name = &field.ident;
     let cfgs = field.attrs.iter().filter(|attr| is_cfg(attr));
-    let value = match field.default.take() {
-        Some((_, expr)) if is_str_literal(&expr) && written_as_string(&field.ty) => {
-            quote_spanned!(expr.span()=> ::core::convert::Into::into(#expr))
-        }
-        Some((_, expr)) => expr.into_token_stream(),
-        None => quote_spanned!(name.span()=> ::core::default::Default::default()),
-    };
+    let value = field.default.take().map_or_else(
+        || quote_spanned!(name.span()=> ::core::default::Default::default()),
+        |(_, expr)| default_value(&expr, &field.ty).into_token_stream(),
+    );
     quote!(#(#cfgs)* #name: #value)
+}
+
+/// The value a field default `= expr` stands for. Shared with `#[data]`, whose `new` and builder
+/// must initialise the field exactly as `Default` does.
+pub(super) fn default_value(expr: &Expr, ty: &Type) -> Expr {
+    if is_str_literal(expr) && written_as_string(ty) {
+        parse_quote_spanned!(expr.span()=> ::core::convert::Into::into(#expr))
+    } else {
+        expr.clone()
+    }
 }
 
 fn is_cfg(attr: &Attribute) -> bool {

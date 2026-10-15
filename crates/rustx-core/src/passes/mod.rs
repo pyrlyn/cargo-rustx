@@ -49,13 +49,14 @@ const TOKEN_PASSES: &[TokenPass] = &[
 ];
 
 // Derive-like M4 passes first, so the impls they generate get generics and lifetimes from
-// `inline_bounds` and `#[borrows]`. `#[borrows]` before `from` lifetimes, so `from(Self)` finds
+// `inline_bounds` and `#[borrows]`. `#[data]` before field defaults, which take off the
+// `= value` that `new` and the builder read. `#[borrows]` before `from` lifetimes, so `from(Self)` finds
 // the type's lifetime. Call-site defaults before `param_defaults::lower`, which takes off the
 // markers they read.
 const AST_PASSES: &[AstPass] = &[
     derive_presets::lower,
-    field_defaults::lower,
     data::lower,
+    field_defaults::lower,
     from_display::lower,
     newtype::lower,
     delegate::lower,

@@ -51,6 +51,11 @@ rustx::sugar! {
         struct Local { n: u8 }
         Local::new(7).n()
     }
+
+    // Problem 17 field defaults are read by `new` and the builder and still give `Default`.
+    #[data(builder)]
+    #[derive(Debug, PartialEq)]
+    struct Config { host: String = "localhost", port: u16 = 8080, tls: bool }
 }
 
 use cache::Cache;
@@ -89,4 +94,9 @@ fn main() {
     assert_eq!(line.text(), "first line");
 
     assert_eq!(local(), 7);
+
+    let config = Config::new(true);
+    assert_eq!((config.host(), config.port(), config.tls()), ("localhost", 8080, true));
+    assert_eq!(Config::builder().tls(false).build().unwrap(), Config::default());
+    assert_eq!(Config::builder().port(1).build().unwrap_err(), "`Config` builder is missing `tls`");
 }

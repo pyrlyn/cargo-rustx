@@ -6,8 +6,8 @@
 //! `#[data]` on a struct with named fields, at any depth (modules, fn bodies), adds one `impl`
 //! right after the struct, with the struct's generics and `where` clause:
 //!
-//! - `pub fn new(..) -> Self` taking every field in order, except fields marked
-//!   `#[default(expr)]`, which are initialised with `expr`;
+//! - `pub fn new(..) -> Self` taking every field in order, except fields with a default, written
+//!   `#[default(expr)]` or `field: T = expr` (problem 17), which are initialised with `expr`;
 //! - a getter per field, named after it: by value for `Copy` primitives (`bool`, `char`, the
 //!   integer and float types) and shared references, `&str` for `String`, `&T` otherwise.
 //!
@@ -18,7 +18,7 @@
 //! - `builder`: `pub fn builder() -> <Name>Builder`, a builder struct with the struct's
 //!   visibility and generics, one `fn <field>(mut self, v: T) -> Self` per field, and
 //!   `fn build(self) -> Result<Name, &'static str>`, which fails on a missing field that has no
-//!   `#[default(..)]`.
+//!   default.
 //!
 //! Generated methods are `pub`, as in the problem file, and carry `#[allow(dead_code)]` on their
 //! `impl`: the user asked for the set, not for each method, so unused ones are not warnings.
@@ -31,8 +31,6 @@
 //!
 //! - `Copy` is judged by the written type: a user `Copy` type gets a `&T` getter.
 //! - `#[cfg]` on a field is not carried to the generated parameters and methods.
-//! - Field defaults written as `field: T = e` (problem 17) are not read: they are lowered
-//!   before this pass, so `new` still takes such a field.
 
 mod builder;
 mod methods;
@@ -45,7 +43,7 @@ use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{Attribute, Block, Expr, Fields, Ident, Item, ItemMod, ItemStruct, Lifetime, Meta, Stmt};
 
-use super::borrows;
+use super::{borrows, field_defaults};
 use crate::tokens::syntax::{combine, take_attr};
 
 const ATTR: &str = "data";
@@ -222,9 +220,18 @@ fn expand_struct(item: &mut ItemStruct, declared: &HashSet<String>) -> syn::Resu
         .named
         .iter_mut()
         .filter_map(|field| {
-            let default = take_default(&mut field.attrs)
+            let attr = take_default(&mut field.attrs)
                 .map_err(|err| combine(&mut errors, err))
                 .ok()?;
+            let written = field.default.as_ref();
+            if let (Some(_), Some((eq, _))) = (&attr, written) {
+                let msg = "a field takes `#[default(..)]` or `= value`, not both";
+                combine(&mut errors, syn::Error::new(eq.span, msg));
+                return None;
+            }
+            let default = attr.or_else(|| {
+                written.map(|(_, expr)| field_defaults::default_value(expr, &field.ty))
+            });
             Some(DataField {
                 ident: field.ident.clone()?,
                 ty: field.ty.clone(),
@@ -356,6 +363,30 @@ mod tests {
                 }
                 fn after() {}
             })
+        );
+    }
+
+    #[test]
+    fn field_defaults_written_with_eq_are_read_and_left_for_default() {
+        let expanded = lowered(quote! {
+            #[data]
+            struct Config { host: String = "localhost", port: u16 = 8080, tls: bool }
+        })
+        .unwrap();
+        for part in [
+            "host : String = \"localhost\"",
+            "pub fn new (tls : bool) -> Self",
+            "host : :: core :: convert :: Into :: into (\"localhost\") , port : 8080 , tls",
+        ] {
+            assert!(expanded.contains(part), "{part} in {expanded}");
+        }
+    }
+
+    #[test]
+    fn a_field_with_both_default_forms_is_an_error() {
+        assert_eq!(
+            errors(quote! { #[data] struct S { #[default(1)] a: u8 = 2 } }),
+            ["a field takes `#[default(..)]` or `= value`, not both"]
         );
     }
 
