@@ -1,0 +1,29 @@
+error: unknown `#[newtype]` flag; expected `deref`, `as_ref`, `display`, `from_str`, `into`, `add`, `sub`, `mul`, `div`, `rem` or `validate`
+ --> tests/fail/newtype_bad_flags.rs:2:22
+  |
+2 |     #[newtype(deref, deref_mut)]
+  |                      ^^^^^^^^^
+
+error: this `#[newtype]` flag is given twice
+ --> tests/fail/newtype_bad_flags.rs:5:24
+  |
+5 |     #[newtype(display, display)]
+  |                        ^^^^^^^
+
+error: the `#[newtype]` flag `deref` takes no value
+ --> tests/fail/newtype_bad_flags.rs:8:15
+  |
+8 |     #[newtype(deref = str)]
+  |               ^^^^^
+
+error: `validate` needs a function: `validate = check`
+  --> tests/fail/newtype_bad_flags.rs:11:15
+   |
+11 |     #[newtype(validate)]
+   |               ^^^^^^^^
+
+error: `{name}` names no field of `E`
+  --> tests/fail/newtype_bad_flags.rs:14:25
+   |
+14 |     #[newtype(display = "{name}")]
+   |                         ^^^^^^^^

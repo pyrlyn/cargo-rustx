@@ -1,0 +1,17 @@
+error: expected at least one derive after `=`, as in `derive Id = Debug, Clone;`
+ --> tests/fail/derive_presets_combined.rs:2:14
+  |
+2 |     derive A = ;
+  |              ^
+
+error: `derive` preset `Clone` shadows the std derive `Clone`; pick another name
+ --> tests/fail/derive_presets_combined.rs:3:12
+  |
+3 |     derive Clone = Debug;
+  |            ^^^^^
+
+error: `derive` presets take no visibility: they exist only inside this `sugar!` input
+ --> tests/fail/derive_presets_combined.rs:4:5
+  |
+4 |     pub derive B = Debug;
+  |     ^^^

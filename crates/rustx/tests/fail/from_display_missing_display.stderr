@@ -1,0 +1,5 @@
+error: `Missing` has no `#[display(..)]`, but other variants do; every variant needs one
+ --> tests/fail/from_display_missing_display.rs:6:9
+  |
+6 |         Missing(String),
+  |         ^^^^^^^

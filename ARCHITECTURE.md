@@ -1,10 +1,10 @@
 # Architecture (plan)
 
-Status: M0–M3 are implemented; M4–M9 are planned.
+Status: M0–M4 are implemented; M5–M9 are planned.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
-| | Proc-macro crate (`sugar!` / `#[sugar]`) | Standalone transpiler (`.rustx` → `.rs`, build.rs or CLI) |
+| | Proc-macro crate (`sugar!` / `#[sugared]`) | Standalone transpiler (`.rustx` → `.rs`, build.rs or CLI) |
 |---|---|---|
 | Integration | `cargo add`, works in any crate, no build step | Needs build.rs / CLI, generated files, extra tooling |
 | Input | Must tokenize as Rust tokens (`TokenStream`) | Arbitrary text, own lexer, any syntax |
@@ -18,7 +18,7 @@ Status: M0–M3 are implemented; M4–M9 are planned.
 Crate layout:
 
 - `rustx-core` — parser, AST, desugarer, diagnostics. Plain library, testable without proc-macro context.
-- `rustx-macros` — thin `proc-macro = true` crate: `sugar!`, `#[sugar]`, `#[data]`, `#[delegate]`.
+- `rustx-macros` — thin `proc-macro = true` crate: `sugar!` and the attribute macros `#[sugared]`, `#[data]`, `#[display]`, `#[delegate]`, `#[newtype]`.
 - `rustx` — facade crate re-exporting macros plus runtime helpers (`Shared<T>`, `with`/`with_mut` for `rc T`, `throws` result alias).
 - `rustx-cli` (later) — `rustx expand`, `rustx fmt`.
 
@@ -60,14 +60,15 @@ Rust, with `syn` (full + visit-mut + extra-traits), `quote`, `proc-macro2`, `pro
 - `proc_macro2` makes the core testable outside the compiler (unit and snapshot tests).
 - One language for users and contributors; no runtime dependency on Python/JS tooling.
 
-## d) Entry points: `#[sugar]` vs `sugar!`
+## d) Entry points: `#[sugared]` vs `sugar!`
 
-Key constraint: **an attribute macro on an item receives the item only after rustc has parsed it as valid Rust.** `#[sugar] mod m { fn f() { var x = 1; } }` fails in the parser before the macro runs. The same applies to `~Trait` in a type, `-> T throws`, `x: T: Clone`, `&from(a) T`, `move[..] ||`, `.parse<u32>()` (which parses as comparisons and fails or, worse, changes meaning).
+Key constraint: **an attribute macro on an item receives the item only after rustc has parsed it as valid Rust.** `#[sugared] mod m { fn f() { var x = 1; } }` fails in the parser before the macro runs. The same applies to `~Trait` in a type, `-> T throws`, `x: T: Clone`, `&from(a) T`, `move[..] ||`, `.parse<u32>()` (which parses as comparisons and fails or, worse, changes meaning).
 
 Therefore:
 
 - **`sugar! { ... }` (function-like) is the main path.** The body is an arbitrary token tree; it only needs balanced delimiters. Flow: `TokenStream` → custom `ParseStream` parser → sugar AST → lowering into `syn::File` → `VisitMut` passes → `quote!` → output.
-- **`#[sugar]` (attribute) is the secondary path** for code that is already valid Rust and uses only attribute-shaped sugar: `#[data]`, `#[delegate]`, `#[display]`, `#[newtype]`, `#[borrows]` (references without a lifetime still parse; the error comes later, after the macro has added it), `from` on enum variants (spelled `#[from]`), and normalizations that act on valid syntax (e.g. `async fn` in traits → boxed variant, inline `Shared<T>`). Flow: `syn::parse::<Item>` → `VisitMut` → `quote!`.
+- **`#[sugared]` (attribute) is the secondary path** for code that is already valid Rust and uses only attribute-shaped sugar: `#[data]`, `#[delegate]`, `#[display]`, `#[newtype]`, `#[borrows]` (references without a lifetime still parse; the error comes later, after the macro has added it), `from` on enum variants (spelled `#[from]`), and normalizations that act on valid syntax (e.g. `async fn` in traits → boxed variant, inline `Shared<T>`). Flow: `syn::parse::<Item>` → `VisitMut` → `quote!`. It is named `sugared` because `sugar!` holds the name: macros of every kind share one namespace, so a crate cannot export both.
+- **As built (M4):** `#[data]`, `#[display]`, `#[delegate]` and `#[newtype]` run the one AST pass behind them on their item; `#[sugared]` runs every AST pass on any item, an inline module included. The item is rebuilt into a `syn::File` (with `#[data(..)]` or `#[newtype(..)]` put back, since their passes read them), token passes do not run, and errors are emitted next to the item, which is kept so code using it adds no cascade. `from` is spelled `#[from]` on the variant's field, `Io(#[from] io::Error)`, where `from` sits in the sugar; `#[display]` and `#[sugared]` read it, `sugar!` does not. `#[display]` needs `#[display("..")]` on its variants and `#[delegate]` a field with `#[delegate(..)]`, so an attribute that would generate nothing is an error. Field defaults (`f: T = v`) do not parse on stable and `derive` presets are token sugar, so neither is reachable here.
 - A whole-file form: `sugar! { include!("foo.rustx") }` is not possible (include! is expanded later); a file-level form needs the CLI/build.rs transpiler — a later stage.
 
 ## e) Error handling and span mapping
@@ -105,12 +106,15 @@ Therefore:
 - **No type information.** Macros see tokens, not types. Implicit `into()` (13) can only fire where the target type is written in the source (`let x: u64 = ...`, struct literal of a struct declared in the same `sugar!`). Field `+=` needs the field type from the same macro input. Anything else stays explicit.
 - **No type inference.** `collect<Vec>` → `Vec<_>` works for known names only; for user generic types the arity is unknown unless declared in the same input.
 - **No cross-item info.** A macro sees only its own input. `#[delegate(Read)]` must know the trait's methods: works for a built-in list of std traits (`Read`, `Write`, `Iterator`, `Display`, ...) or traits declared in the same `sugar!`; otherwise the user lists methods explicitly.
+- **`#[delegate]` forwards required items only** (`Read::read`, not `read_exact`), so provided methods go through the wrapper's own methods, hand-written overrides included. The list form is `#[delegate(Trait { fn m(&self); })]`; a trait of the input with generic parameters needs it too. `except(m)` adds the other items to a hand-written `impl Trait for Type` next to the struct, matched by last path segment.
 - **`shared` field access** inserting `.lock().unwrap()` per access is not atomic across statements; needs a `with(|m| ..)` form and clear docs.
 - **`rc` field access** picks `.borrow_mut()` from a built-in list of `&mut self` std methods; user methods need `with_mut(|n| ..)`. `RefCell` still panics at run time on conflicting borrows.
 - **Parameter defaults and named arguments** only work for calls inside the same `sugar!` input. Callers elsewhere see the real `Option<T>` signature.
 - **Call-site defaults match calls by name.** A path call resolves by its last segment (and the qualifying type, when it is one declared in the input), a method call by its name alone, so a defaulted method `len` also rewrites `vec.len()`. Same-named fns that would read a call differently make it an error; `<T as Trait>::f(..)` is not resolved. Named arguments are evaluated in declaration order, not in the order written, and a call with generic arguments (`f::<T>(..)`) takes none.
 - **`#[borrows]`** adds exactly one lifetime. Types with two independent lifetimes keep explicit parameters. Borrowing types are matched by their last path segment across the whole input, ignoring modules.
+- **Field defaults and `S { .. }`** are read by `syn` (RFC 3681 syntax), so struct patterns keep their `..`. A bare `..` becomes `..Default::default()` in every struct expression, including structs declared outside the input, but inside macro arguments only for std expression macros (`vec!`, `assert_eq!`, `format!`, ...), never in `matches!` or user macros. Bounds are copied, not inferred: a generic field without a default needs `T: Default` on the struct. Enum variant and union fields take no defaults.
 - **A bare `<` in a parameter default** reads as the start of generics, so `ok: bool = a < b` needs parentheses: `ok: bool = (a < b)`. A non-constant default runs in a closure, so `?`, `return` and `.await` inside it act on that closure.
+- **`#[data]` judges getters by the written type.** Primitives and shared references are returned by value, `String` as `&str`, anything else as `&T`, so a user `Copy` type gets a `&T` getter. Field defaults for `new` are written `#[default(expr)]`; `field: T = e` (problem 17) is not read by `#[data]`.
 - **`derive` and `bound` presets** are visible only inside the input that declares them (`bound` produces a real trait, so it can be exported; `derive` presets cannot).
 - **Edition differences:** on edition 2024, `-> impl Trait` already captures all lifetimes, so `iter T` mainly saves typing there. The expansion keeps `+ '_` to work on both editions.
 - **Upstream overlap:** default field values, trait aliases and capture expressions exist on nightly (see [research.md](research.md)). Each pass must be able to switch to the native form once it is stable, without changing user code.
@@ -120,6 +124,10 @@ Therefore:
 - **`.m<T>(` inside a comma list.** `(a.b < c, d > (e))` is valid Rust (two comparisons) but reads as the turbofish sugar `a.b::<c, d>(e)`. Parenthesise the comparison: `((a.b < c), d > (e))`.
 - **Type prefixes need a recognisable type position.** `iter`, `rc` and `weak` are ordinary identifiers, so they are sugar only after `->`, `:`, `<`, `,` inside `<..>`, `&` and similar. At the start of a group or after `,` outside `<..>` (tuple types, fn-pointer parameters) the plain Rust spelling is needed, because `f(rc x)` there is the expression sugar of item 16.
 - **Inline bounds decide "new generic or existing type" from the input only.** A name in scope gets the bound, a type declared or imported in the same input is an error, anything else becomes a new generic, so a glob-imported type is shadowed by a fresh generic.
+- **`derive` presets are one flat namespace per `sugar!` input and match by written path.** A preset declared in a nested module is usable everywhere in the input, `Debug` and `std::fmt::Debug` are not recognised as the same derive, and derives inside macro bodies or nested `cfg_attr`s are not expanded.
+- **`from` variants and `#[display]`** generate impls that copy the enum's generics without adding bounds, so a generic enum states what `Display` and `Error` need (`T: Display + Debug`). The generated `Error` has no `source()`, as in problem 05, and needs the enum to implement `Debug`. Duplicate `from` types are found by their spelling, so `io::Error` and `std::io::Error` meet only in rustc's conflicting-impls error. `from (A, B)` and `from ::a::B` read as a type named `from`; write `from std::..` or alias the tuple. Width and precision arguments (`{0:1$}`, `{:.*}`) are not supported in `#[display]`.
+- **`#[newtype]` reads the validator's error type from its signature**, so `validate = f` needs `fn f(..) -> Result<(), E>` declared in the same item list as the struct. Its impls add no bounds (a generic newtype states `T: Display` itself), `deref` and `as_ref` lend `str` or `[T]` only for a type written `String` or `Vec<T>`, `display` forwards the formatter flags to the inner value, and operator flags cannot be combined with `validate`, because they would build unchecked values.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
+- **An attribute macro sees only its item.** `#[delegate]` on a struct knows the std table and listed traits only, and cannot add `except(..)` items to a hand-written impl; `#[newtype(validate = f)]` cannot see `f`; `#[data(builder)]` cannot see a type its builder's name collides with; `#[borrows]` under `#[sugared]` reaches only the impls inside the same item. `#[sugared]` on an inline module sees the whole module. `#[from]` in an enum that derives `Error` or `From` is left to that derive.
 - **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
 - **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.

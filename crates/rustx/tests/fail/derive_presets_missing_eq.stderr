@@ -1,0 +1,5 @@
+error: expected `=` after the preset name, as in `derive Id = Debug, Clone;`
+ --> tests/fail/derive_presets_missing_eq.rs:2:15
+  |
+2 |     derive Id Debug, Clone;
+  |               ^^^^^

@@ -1,0 +1,5 @@
+error: `#[delegate(..)]` works on struct fields, not on fields of an enum variant
+ --> tests/fail/delegate_enum_variant.rs:3:14
+  |
+3 |         File(#[delegate(Read)] std::fs::File),
+  |              ^^^^^^^^^^^^^^^^^

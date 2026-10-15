@@ -1,0 +1,11 @@
+error: `#[from]` needs a tuple variant with exactly one field, as in `Io(#[from] io::Error)`
+ --> tests/fail/attr_from_shape.rs:5:12
+  |
+5 |     Pair(#[from] u8, u16),
+  |            ^^^^
+
+error: `#[from]` needs a tuple variant with exactly one field, as in `Io(#[from] io::Error)`
+ --> tests/fail/attr_from_shape.rs:7:15
+  |
+7 |     Named { #[from] e: std::io::Error },
+  |               ^^^^

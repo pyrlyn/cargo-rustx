@@ -1,0 +1,13 @@
+error[E0599]: no method named `push` found for struct `Email` in the current scope
+ --> tests/fail/newtype_no_deref_mut.rs:9:11
+  |
+3 |     pub struct Email(String);
+  |     ---------------- method `push` not found for this struct
+...
+9 |     email.push('!');
+  |           ^^^^ method not found in `Email`
+  |
+help: one of the expressions' fields has a method of the same name
+  |
+9 |     email.0.push('!');
+  |           ++

@@ -1,0 +1,17 @@
+error[E0277]: `?` couldn't convert the error to `String`
+ --> tests/fail/newtype_parse_error_into_validator_error.rs:7:22
+  |
+7 |     #[newtype(from_str, validate = nonzero)]
+  |               -------^
+  |               |      |
+  |               |      the trait `From<ParseIntError>` is not implemented for `String`
+  |               this can't be annotated with `?` because it has type `Result<_, ParseIntError>`
+  |
+  = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+  = help: `String` implements trait `From<T>`:
+            From<&String>
+            From<&mut str>
+            From<&str>
+            From<Box<str>>
+            From<Cow<'_, str>>
+            From<char>

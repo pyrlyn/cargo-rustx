@@ -1,0 +1,181 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/data.rustx
+---
+mod users {
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct User {
+        id: u64,
+        name: String,
+        email: String,
+        active: bool,
+    }
+    #[allow(dead_code)]
+    impl User {
+        pub fn new(id: u64, name: String, email: String) -> Self {
+            Self {
+                id,
+                name,
+                email,
+                active: true,
+            }
+        }
+        pub fn id(&self) -> u64 {
+            self.id
+        }
+        pub fn name(&self) -> &str {
+            &self.name
+        }
+        pub fn email(&self) -> &str {
+            &self.email
+        }
+        pub fn active(&self) -> bool {
+            self.active
+        }
+        pub fn set_id(&mut self, id: u64) {
+            self.id = id;
+        }
+        pub fn set_name(&mut self, name: String) {
+            self.name = name;
+        }
+        pub fn set_email(&mut self, email: String) {
+            self.email = email;
+        }
+        pub fn set_active(&mut self, active: bool) {
+            self.active = active;
+        }
+        pub fn with_id(mut self, id: u64) -> Self {
+            self.id = id;
+            self
+        }
+        pub fn with_name(mut self, name: String) -> Self {
+            self.name = name;
+            self
+        }
+        pub fn with_email(mut self, email: String) -> Self {
+            self.email = email;
+            self
+        }
+        pub fn with_active(mut self, active: bool) -> Self {
+            self.active = active;
+            self
+        }
+    }
+    pub fn deactivate_by_domain(users: &mut [User], domain: &str) -> usize {
+        let mut n = 0;
+        for u in users.iter_mut() {
+            if u.email().ends_with(domain) && u.active() {
+                u.set_active(false);
+                n += 1;
+            }
+        }
+        n
+    }
+}
+mod cache {
+    pub struct Cache<K: std::hash::Hash + Eq, V>
+    where
+        V: Clone,
+    {
+        map: std::collections::HashMap<K, V>,
+        capacity: usize,
+    }
+    #[allow(dead_code)]
+    impl<K: std::hash::Hash + Eq, V> Cache<K, V>
+    where
+        V: Clone,
+    {
+        pub fn new(map: std::collections::HashMap<K, V>) -> Self {
+            Self { map, capacity: 16 }
+        }
+        pub fn map(&self) -> &std::collections::HashMap<K, V> {
+            &self.map
+        }
+        pub fn capacity(&self) -> usize {
+            self.capacity
+        }
+        pub fn builder() -> CacheBuilder<K, V> {
+            CacheBuilder {
+                map: ::core::option::Option::None,
+                capacity: ::core::option::Option::None,
+            }
+        }
+    }
+    pub struct CacheBuilder<K: std::hash::Hash + Eq, V>
+    where
+        V: Clone,
+    {
+        map: ::core::option::Option<std::collections::HashMap<K, V>>,
+        capacity: ::core::option::Option<usize>,
+    }
+    #[allow(dead_code)]
+    impl<K: std::hash::Hash + Eq, V> CacheBuilder<K, V>
+    where
+        V: Clone,
+    {
+        pub fn map(mut self, map: std::collections::HashMap<K, V>) -> Self {
+            self.map = ::core::option::Option::Some(map);
+            self
+        }
+        pub fn capacity(mut self, capacity: usize) -> Self {
+            self.capacity = ::core::option::Option::Some(capacity);
+            self
+        }
+        pub fn build(self) -> ::core::result::Result<Cache<K, V>, &'static str> {
+            ::core::result::Result::Ok(Cache {
+                map: self.map.ok_or("`Cache` builder is missing `map`")?,
+                capacity: self.capacity.unwrap_or_else(|| 16),
+            })
+        }
+    }
+}
+pub struct Line<'__rustx_borrows> {
+    text: &'__rustx_borrows str,
+    number: usize,
+}
+#[allow(dead_code)]
+impl<'__rustx_borrows> Line<'__rustx_borrows> {
+    pub fn new(text: &'__rustx_borrows str, number: usize) -> Self {
+        Self { text, number }
+    }
+    pub fn text(&self) -> &'__rustx_borrows str {
+        self.text
+    }
+    pub fn number(&self) -> usize {
+        self.number
+    }
+    pub fn set_text(&mut self, text: &'__rustx_borrows str) {
+        self.text = text;
+    }
+    pub fn set_number(&mut self, number: usize) {
+        self.number = number;
+    }
+    pub fn builder() -> LineBuilder<'__rustx_borrows> {
+        LineBuilder {
+            text: ::core::option::Option::None,
+            number: ::core::option::Option::None,
+        }
+    }
+}
+pub struct LineBuilder<'__rustx_borrows> {
+    text: ::core::option::Option<&'__rustx_borrows str>,
+    number: ::core::option::Option<usize>,
+}
+#[allow(dead_code)]
+impl<'__rustx_borrows> LineBuilder<'__rustx_borrows> {
+    pub fn text(mut self, text: &'__rustx_borrows str) -> Self {
+        self.text = ::core::option::Option::Some(text);
+        self
+    }
+    pub fn number(mut self, number: usize) -> Self {
+        self.number = ::core::option::Option::Some(number);
+        self
+    }
+    pub fn build(self) -> ::core::result::Result<Line<'__rustx_borrows>, &'static str> {
+        ::core::result::Result::Ok(Line {
+            text: self.text.ok_or("`Line` builder is missing `text`")?,
+            number: self.number.ok_or("`Line` builder is missing `number`")?,
+        })
+    }
+}

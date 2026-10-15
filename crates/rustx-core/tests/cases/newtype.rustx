@@ -1,0 +1,21 @@
+// Problem 20 in full.
+mod units {
+    #[newtype(deref, as_ref, display, from_str, into, validate = check_email)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct Email(String);
+
+    fn check_email(s: &String) -> Result<(), String> {
+        if s.contains('@') { Ok(()) } else { Err(format!("invalid email: {s}")) }
+    }
+
+    #[newtype(add, display = "{} m")]
+    #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
+    pub struct Meters(pub f64);
+
+    pub fn demo() -> Result<String, String> {
+        let e: Email = "ann@example.com".parse()?;
+        let total = Meters(1.5) + Meters(2.0);
+        let domain = e.split_once('@').map(|(_, d)| d).unwrap_or("");
+        Ok(format!("{e} ({domain}, {} chars), {total}", e.len()))
+    }
+}

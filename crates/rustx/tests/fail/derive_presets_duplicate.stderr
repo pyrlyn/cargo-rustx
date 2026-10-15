@@ -1,0 +1,5 @@
+error: `derive` preset `Id` is declared twice
+ --> tests/fail/derive_presets_duplicate.rs:3:12
+  |
+3 |     derive Id = Clone;
+  |            ^^

@@ -1,0 +1,5 @@
+error: `#[default]` on a `#[data]` field needs a value: `#[default(expr)]`
+ --> tests/fail/data_default_without_value.rs:5:11
+  |
+5 |         #[default]
+  |           ^^^^^^^

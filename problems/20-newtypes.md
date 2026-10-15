@@ -18,7 +18,7 @@ pub struct Email(String);
 
 ## Implementation
 
-Attribute macro on a one-field tuple struct, usable through `#[sugar]` because the input is valid Rust. Each flag generates one `impl`: `deref` (`Deref<Target = ..>`, `str` for `String`, `[T]` for `Vec<T>`), `as_ref`, `display` (optionally with a format string), `from_str`, `into` (`From<Newtype> for Inner`), and arithmetic operators (`add`, `sub`, `mul`, ...). With `validate = f`, where `f: fn(&Inner) -> Result<(), E>`, it also generates `new(inner) -> Result<Self, E>`, and `from_str` goes through it. Without `validate`, `new` is infallible.
+Attribute macro on a one-field tuple struct, usable through `#[sugared]` because the input is valid Rust. Each flag generates one `impl`: `deref` (`Deref<Target = ..>`, `str` for `String`, `[T]` for `Vec<T>`), `as_ref`, `display` (optionally with a format string), `from_str`, `into` (`From<Newtype> for Inner`), and arithmetic operators (`add`, `sub`, `mul`, ...). With `validate = f`, where `f: fn(&Inner) -> Result<(), E>`, it also generates `new(inner) -> Result<Self, E>`, and `from_str` goes through it. Without `validate`, `new` is infallible.
 
 ## Detailed example
 

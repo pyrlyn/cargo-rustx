@@ -1,0 +1,5 @@
+error: unknown `#[data]` flag; expected `setters`, `with` or `builder`
+ --> tests/fail/attr_data_bad_flag.rs:1:15
+  |
+1 | #[rustx::data(getters)]
+  |               ^^^^^^^

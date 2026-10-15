@@ -1,0 +1,24 @@
+// Problem 05 in full.
+mod load {
+    use std::io;
+    use std::num::ParseIntError;
+
+    #[derive(Debug)]
+    pub enum LoadError {
+        #[display("io error: {0}")]
+        Io(from io::Error),
+        #[display("parse error: {0}")]
+        Parse(from ParseIntError),
+        #[display("missing key: {0}")]
+        Missing(String),
+    }
+
+    pub fn load_port(path: &str) -> Result<u16, LoadError> {
+        let text = std::fs::read_to_string(path)?;
+        let line = text
+            .lines()
+            .find(|l| l.starts_with("port="))
+            .ok_or_else(|| LoadError::Missing("port".into()))?;
+        Ok(line["port=".len()..].trim().parse()?)
+    }
+}

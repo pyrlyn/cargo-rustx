@@ -1,0 +1,11 @@
+error: `validate` needs a function declared next to the struct, as in `validate = check`, so `new` can name its error type
+  --> tests/fail/newtype_validator.rs:12:26
+   |
+12 |     #[newtype(validate = checks::check)]
+   |                          ^^^^^^^^^^^^^
+
+error: a `validate` function returns `Result<(), E>`
+ --> tests/fail/newtype_validator.rs:8:28
+  |
+8 |     fn flag(s: &String) -> bool {
+  |                            ^^^^

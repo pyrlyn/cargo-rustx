@@ -1,0 +1,5 @@
+error: `#[delegate]` on a struct knows only the built-in std traits; list the methods to forward, as in `Shape { fn area(&self) -> f64; }`, or put `#[sugared]` on a module that declares the trait
+ --> tests/fail/attr_delegate_unknown_trait.rs:7:16
+  |
+7 |     #[delegate(Shape)]
+  |                ^^^^^

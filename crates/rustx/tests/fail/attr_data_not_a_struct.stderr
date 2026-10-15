@@ -1,0 +1,7 @@
+error: `#[data]` needs a struct with named fields
+ --> tests/fail/attr_data_not_a_struct.rs:1:1
+  |
+1 | #[rustx::data]
+  | ^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `rustx::data` (in Nightly builds, run with -Z macro-backtrace for more info)

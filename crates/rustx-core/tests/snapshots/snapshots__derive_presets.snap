@@ -1,0 +1,31 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/derive_presets.rustx
+---
+mod orders {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub struct UserId(pub u64);
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
+    pub enum Status {
+        New,
+        Paid,
+    }
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+    pub struct Address {
+        pub city: String,
+    }
+    #[cfg_attr(
+        feature = "wire",
+        derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)
+    )]
+    pub struct Order {
+        pub user: UserId,
+    }
+    mod inner {
+        #[derive(super::Id)]
+        pub struct Plain;
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub struct Local;
+    }
+}

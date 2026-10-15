@@ -48,7 +48,7 @@ use syn::Token;
 use syn::parse::{ParseStream, Parser};
 use syn::punctuated::Punctuated;
 
-use crate::tokens::position::{at_statement_start, outer_attributes_start};
+use crate::tokens::position::{at_statement_start, outer_attributes_start, visibility_start};
 use crate::tokens::punct::{is_alone, is_punct, loosen_end};
 use crate::tokens::syntax::{combine, introduced_span};
 use crate::tokens::{map_sequences, map_sequences_reporting};
@@ -94,19 +94,6 @@ fn preset_at(seq: &[TokenTree], i: usize) -> Option<usize> {
     }
     let attrs = outer_attributes_start(seq, visibility_start(seq, i));
     at_statement_start(&seq[..attrs]).then_some(attrs)
-}
-
-/// Index of the visibility in front of the token at `i`, or `i` if there is none.
-fn visibility_start(seq: &[TokenTree], i: usize) -> usize {
-    match &seq[..i] {
-        [.., TokenTree::Ident(vis), TokenTree::Group(g)]
-            if vis == "pub" && g.delimiter() == Delimiter::Parenthesis =>
-        {
-            i - 2
-        }
-        [.., TokenTree::Ident(vis)] if vis == "pub" => i - 1,
-        _ => i,
-    }
 }
 
 /// Expands the preset whose `bound` keyword is at `i`; returns the index after its `;`.

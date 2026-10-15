@@ -5,7 +5,6 @@ use std::{mem, slice};
 
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
-use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Paren, PathSep};
@@ -18,6 +17,7 @@ use syn::{
 use super::collect::{Fns, Shape, type_name};
 use super::named::{self, Named};
 use super::plan::{Plan, Problem, Slot, plan};
+use crate::passes::macro_args::MacroArgs;
 use crate::passes::param_defaults::default_of;
 use crate::tokens::syntax::combine;
 
@@ -309,49 +309,6 @@ fn option(span: Span, variant: &str, arg: Option<Expr>) -> Expr {
     }
 }
 
-/// A macro body made of expressions: `a, b, c` (`format!`, `assert_eq!`) or `value; count`
-/// (`vec![x; n]`).
-enum MacroArgs {
-    List(Args),
-    Repeat(Box<Expr>, Token![;], Box<Expr>),
-}
-
-impl Parse for MacroArgs {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let first: Expr = input.parse()?;
-        if input.peek(Token![;]) {
-            return Ok(Self::Repeat(
-                Box::new(first),
-                input.parse()?,
-                input.parse()?,
-            ));
-        }
-        let mut list = Args::new();
-        list.push_value(first);
-        while !input.is_empty() {
-            list.push_punct(input.parse()?);
-            if input.is_empty() {
-                break;
-            }
-            list.push_value(input.parse()?);
-        }
-        Ok(Self::List(list))
-    }
-}
-
-impl ToTokens for MacroArgs {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::List(list) => list.to_tokens(tokens),
-            Self::Repeat(value, semi, count) => {
-                value.to_tokens(tokens);
-                semi.to_tokens(tokens);
-                count.to_tokens(tokens);
-            }
-        }
-    }
-}
-
 impl VisitMut for Walk {
     fn visit_item_impl_mut(&mut self, item: &mut ItemImpl) {
         self.enter_owner(type_name(&item.self_ty), |walk| {
@@ -404,11 +361,9 @@ impl VisitMut for Walk {
         }
         if let Ok(body) = mac.parse_body::<MacroArgs>() {
             self.in_macro += 1;
-            self.opaque(&mut mac.tokens, body, |walk, body| match body {
-                MacroArgs::List(list) => list.iter_mut().for_each(|arg| walk.visit_expr_mut(arg)),
-                MacroArgs::Repeat(value, _, count) => {
-                    walk.visit_expr_mut(value);
-                    walk.visit_expr_mut(count);
+            self.opaque(&mut mac.tokens, body, |walk, body| {
+                for expr in body.exprs_mut() {
+                    walk.visit_expr_mut(expr);
                 }
             });
             self.in_macro -= 1;

@@ -1,6 +1,6 @@
 [package]
 name = "rustx-macros"
-description = "Procedural macros for cargo-rustx: `sugar!`"
+description = "Procedural macros for cargo-rustx: `sugar!` and the attribute macros"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

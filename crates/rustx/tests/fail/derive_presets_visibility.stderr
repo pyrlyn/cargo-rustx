@@ -1,0 +1,5 @@
+error: `derive` presets take no visibility: they exist only inside this `sugar!` input
+ --> tests/fail/derive_presets_visibility.rs:2:5
+  |
+2 |     pub derive Id = Debug;
+  |     ^^^

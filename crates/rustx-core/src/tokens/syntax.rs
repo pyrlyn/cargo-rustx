@@ -5,7 +5,8 @@
 //! module so every pass has one place to look for shared helpers.
 
 use proc_macro2::{Ident, Span};
-use syn::{Attribute, Type};
+use syn::punctuated::Punctuated;
+use syn::{Attribute, Path, PathArguments, Token, Type};
 
 /// Prefix of every name the passes generate; reserved, so user names cannot collide with them.
 pub(crate) const RESERVED_PREFIX: &str = "__rustx_";
@@ -41,6 +42,44 @@ pub(crate) fn take_attr(attrs: &mut Vec<Attribute>, name: &str) -> Option<Attrib
 
 /// Whether `attr` is some pass's marker rather than a Rust attribute, so copies of a parameter's
 /// attributes can leave markers of passes that have not run yet behind.
+/// The paths of an item's `#[derive(..)]` lists, in order. A list that does not parse is
+/// skipped: rustc reports it on the output, where it stays.
+pub(crate) fn derived_paths(attrs: &[Attribute]) -> impl Iterator<Item = Path> + '_ {
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("derive"))
+        .filter_map(|attr| {
+            attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
+                .ok()
+        })
+        .flatten()
+}
+
+/// The generic arguments of `ty` when it is written as the std type `name` of `module`: bare,
+/// or as `std::module::name` or `alloc::module::name`. A macro sees only the written path, so a
+/// renamed import or an alias is not recognised.
+pub(crate) fn std_type<'a>(ty: &'a Type, module: &str, name: &str) -> Option<&'a PathArguments> {
+    let Type::Path(path) = ty else {
+        return None;
+    };
+    let mut segments = path.path.segments.iter();
+    let last = segments.next_back()?;
+    let prefix: Vec<String> = segments
+        .map(|s| s.arguments.is_none().then(|| s.ident.to_string()))
+        .collect::<Option<_>>()?;
+    let in_std = match &prefix[..] {
+        [] => true,
+        [root, inner] => (root == "std" || root == "alloc") && inner == module,
+        _ => false,
+    };
+    (path.qself.is_none() && in_std && last.ident == name).then_some(&last.arguments)
+}
+
+/// `String`, `std::string::String` or `alloc::string::String`.
+pub(crate) fn is_string(ty: &Type) -> bool {
+    std_type(ty, "string", "String").is_some_and(PathArguments::is_none)
+}
+
 pub(crate) fn is_marker(attr: &Attribute) -> bool {
     attr.path()
         .get_ident()
@@ -85,6 +124,37 @@ mod tests {
         assert!(taken.path().is_ident("__rustx_into"));
         assert_eq!(attrs.len(), 2);
         assert!(take_attr(&mut attrs, "__rustx_into").is_none());
+    }
+
+    #[test]
+    fn derived_paths_come_from_every_parsable_derive_list_in_order() {
+        let item = syn::parse_str::<syn::ItemStruct>(
+            "#[derive(Debug, std::hash::Hash)] #[cfg(x)] #[derive(= bad)] #[derive(Clone,)] struct S;",
+        )
+        .unwrap();
+        let paths: Vec<String> = derived_paths(&item.attrs)
+            .map(|path| quote::ToTokens::to_token_stream(&path).to_string())
+            .collect();
+        assert_eq!(paths, ["Debug", "std :: hash :: Hash", "Clone"]);
+    }
+
+    #[test]
+    fn std_types_are_recognised_by_their_written_path() {
+        let ty = |source: &str| syn::parse_str::<Type>(source).unwrap();
+        for string in ["String", "std::string::String", "alloc::string::String"] {
+            assert!(is_string(&ty(string)), "{string}");
+        }
+        for other in [
+            "my::String",
+            "std::String",
+            "String<u8>",
+            "<T as X>::String",
+            "&String",
+        ] {
+            assert!(!is_string(&ty(other)), "{other}");
+        }
+        assert!(std_type(&ty("std::vec::Vec<u8>"), "vec", "Vec").is_some());
+        assert!(std_type(&ty("core::vec::Vec<u8>"), "vec", "Vec").is_none());
     }
 
     #[test]

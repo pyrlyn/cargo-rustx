@@ -1,0 +1,11 @@
+error: expected one format string, as in `#[display("io error: {0}")]`
+ --> tests/fail/from_display_bad_args.rs:4:9
+  |
+4 |         #[display(missing)]
+  |         ^^^^^^^^^^^^^^^^^^^
+
+error: `{0:>1$}`: width and precision arguments (`$`, `.*`) are not supported in `#[display]`; write them as numbers
+ --> tests/fail/from_display_bad_args.rs:6:19
+  |
+6 |         #[display("width {0:>1$}")]
+  |                   ^^^^^^^^^^^^^^^

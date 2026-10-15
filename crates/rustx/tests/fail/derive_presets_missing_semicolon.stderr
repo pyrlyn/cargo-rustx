@@ -1,0 +1,5 @@
+error: expected `;` after the derive list
+ --> tests/fail/derive_presets_missing_semicolon.rs:4:5
+  |
+4 |     struct S;
+  |     ^^^^^^

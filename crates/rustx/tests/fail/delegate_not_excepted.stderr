@@ -1,0 +1,5 @@
+error: `write` is written by hand and also delegated; add it to `except(..)`
+  --> tests/fail/delegate_not_excepted.rs:10:12
+   |
+10 |         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+   |            ^^^^^

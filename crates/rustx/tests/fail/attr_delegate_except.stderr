@@ -1,0 +1,13 @@
+error: `#[delegate]` on a struct cannot see the hand-written impl `except(..)` adds to; put `#[sugared]` on a module that holds both
+ --> tests/fail/attr_delegate_except.rs:5:23
+  |
+5 |     #[delegate(Write, except(write))]
+  |                       ^^^^^^
+
+error[E0046]: not all trait items implemented, missing: `flush`
+ --> tests/fail/attr_delegate_except.rs:9:1
+  |
+9 | impl Write for Counting {
+  | ^^^^^^^^^^^^^^^^^^^^^^^ missing `flush` in implementation
+  |
+  = help: implement the missing item: `fn flush(&mut self) -> Result<(), std::io::Error> { todo!() }`
