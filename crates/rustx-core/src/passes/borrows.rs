@@ -41,8 +41,8 @@ use syn::{
     ParenthesizedGenericArguments, PathArguments, Token, TypeFnPtr, TypePath, TypeReference,
 };
 
-use super::from_lifetimes::introduced_span;
 use crate::tokens::syntax::combine;
+use crate::tokens::syntax::introduced_span;
 
 /// The name of the one lifetime this pass adds.
 const NAME: &str = "__rustx_borrows";

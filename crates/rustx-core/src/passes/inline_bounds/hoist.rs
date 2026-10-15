@@ -18,7 +18,7 @@ use syn::{
 };
 
 use super::marker::MARKER;
-use crate::tokens::syntax::{bare_name, combine};
+use crate::tokens::syntax::{bare_name, combine, take_attr};
 
 type Bounds = Punctuated<TypeParamBound, Token![+]>;
 
@@ -217,8 +217,7 @@ impl<'k> Header<'k> {
 
     /// Removes the marker the token half put on a parameter and returns its `:` and bounds.
     fn take_marker(&mut self, attrs: &mut Vec<Attribute>) -> Option<(Span, Bounds)> {
-        let at = attrs.iter().position(|attr| attr.path().is_ident(MARKER))?;
-        let marker = attrs.remove(at);
+        let marker = take_attr(attrs, MARKER)?;
         match marker.parse_args_with(Bounds::parse_separated_nonempty) {
             Ok(bounds) => Some((marker.pound_token.spans[0], bounds)),
             Err(err) => {

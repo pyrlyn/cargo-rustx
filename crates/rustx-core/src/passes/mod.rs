@@ -11,6 +11,7 @@ mod inline_bounds;
 mod into_params;
 mod param_defaults;
 mod prefix_types;
+mod signatures;
 mod turbofish;
 mod var;
 

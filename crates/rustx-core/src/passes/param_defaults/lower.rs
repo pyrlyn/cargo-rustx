@@ -7,99 +7,74 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote_spanned};
 use syn::spanned::Spanned;
-use syn::visit_mut::{self, VisitMut};
+use syn::visit_mut::VisitMut;
 use syn::{
-    Attribute, Block, Expr, FnArg, ForeignItemFn, ImplItemFn, ItemFn, Pat, PatIdent, PatType,
-    Signature, Stmt, TraitItemFn, Type, TypeImplTrait, UnOp,
+    Attribute, Block, Expr, FnArg, Pat, PatIdent, PatType, Signature, Stmt, Type, TypeImplTrait,
+    UnOp,
 };
 
 use super::marker::MARKER;
 use super::{ParamDefault, default_of};
-use crate::tokens::syntax::combine;
+use crate::passes::signatures::for_each_signature;
+use crate::tokens::syntax::{combine, take_attr};
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
-    let mut lower = Lower { errors: None };
-    lower.visit_file_mut(file);
-    lower.errors.map_or(Ok(()), Err)
+    for_each_signature(file, signature)
 }
 
-struct Lower {
-    errors: Option<syn::Error>,
-}
-
-impl Lower {
-    fn error(&mut self, span: Span, message: &str) {
-        combine(&mut self.errors, syn::Error::new(span, message));
-    }
-
-    /// Lowers the defaults of one signature; `body` is `None` for a declaration without one.
-    fn signature(&mut self, sig: &mut Signature, body: Option<&mut Block>) {
-        let mut unwraps = Vec::new();
-        let mut first_default: Option<Span> = None;
-        for (index, arg) in sig.inputs.iter_mut().enumerate() {
-            match arg {
-                FnArg::Receiver(receiver) => {
-                    if let Some(default) = take(&mut receiver.attrs) {
-                        self.error(default.eq, "`self` takes no default value");
+/// Lowers the defaults of one signature; `body` is `None` for a declaration without one.
+fn signature(sig: &mut Signature, body: Option<&mut Block>) -> syn::Result<()> {
+    let mut errors = None;
+    let mut unwraps = Vec::new();
+    let mut first_default: Option<Span> = None;
+    for (index, arg) in sig.inputs.iter_mut().enumerate() {
+        match arg {
+            FnArg::Receiver(receiver) => {
+                if let Some(default) = take(&mut receiver.attrs) {
+                    error(&mut errors, default.eq, "`self` takes no default value");
+                }
+            }
+            FnArg::Typed(param) => match take(&mut param.attrs) {
+                Some(ParamDefault { eq, expr }) => {
+                    first_default.get_or_insert(eq);
+                    match expr.and_then(|expr| unwrap(param, index, eq, &expr)) {
+                        Ok(stmt) => unwraps.push(stmt),
+                        Err(err) => combine(&mut errors, err),
                     }
                 }
-                FnArg::Typed(param) => match take(&mut param.attrs) {
-                    Some(ParamDefault { eq, expr }) => {
-                        first_default.get_or_insert(eq);
-                        match expr.and_then(|expr| unwrap(param, index, eq, &expr)) {
-                            Ok(stmt) => unwraps.push(stmt),
-                            Err(err) => combine(&mut self.errors, err),
-                        }
-                    }
-                    None if first_default.is_some() => self.error(
-                        param.pat.span(),
-                        "a parameter without a default cannot follow one with a default; \
-                         move it before the defaulted parameters",
-                    ),
-                    None => {}
-                },
-            }
-        }
-        match (body, first_default) {
-            (Some(body), _) => {
-                body.stmts.splice(0..0, unwraps);
-            }
-            (None, Some(eq)) => self.error(
-                eq,
-                "a parameter default needs a fn body to apply it; declarations without a body \
-                 take `Option<T>` instead",
-            ),
-            (None, None) => {}
+                None if first_default.is_some() => error(
+                    &mut errors,
+                    param.pat.span(),
+                    "a parameter without a default cannot follow one with a default; \
+                     move it before the defaulted parameters",
+                ),
+                None => {}
+            },
         }
     }
+    match (body, first_default) {
+        (Some(body), _) => {
+            body.stmts.splice(0..0, unwraps);
+        }
+        (None, Some(eq)) => error(
+            &mut errors,
+            eq,
+            "a parameter default needs a fn body to apply it; declarations without a body \
+             take `Option<T>` instead",
+        ),
+        (None, None) => {}
+    }
+    errors.map_or(Ok(()), Err)
 }
 
-impl VisitMut for Lower {
-    fn visit_item_fn_mut(&mut self, item: &mut ItemFn) {
-        self.signature(&mut item.sig, Some(&mut item.block));
-        visit_mut::visit_item_fn_mut(self, item);
-    }
-
-    fn visit_impl_item_fn_mut(&mut self, item: &mut ImplItemFn) {
-        self.signature(&mut item.sig, Some(&mut item.block));
-        visit_mut::visit_impl_item_fn_mut(self, item);
-    }
-
-    fn visit_trait_item_fn_mut(&mut self, item: &mut TraitItemFn) {
-        self.signature(&mut item.sig, item.default.as_mut());
-        visit_mut::visit_trait_item_fn_mut(self, item);
-    }
-
-    fn visit_foreign_item_fn_mut(&mut self, item: &mut ForeignItemFn) {
-        self.signature(&mut item.sig, None);
-        visit_mut::visit_foreign_item_fn_mut(self, item);
-    }
+fn error(errors: &mut Option<syn::Error>, span: Span, message: &str) {
+    combine(errors, syn::Error::new(span, message));
 }
 
 /// Removes the marker from a parameter and returns the default it carried.
 fn take(attrs: &mut Vec<Attribute>) -> Option<ParamDefault> {
     let default = default_of(attrs);
-    attrs.retain(|attr| !attr.path().is_ident(MARKER));
+    take_attr(attrs, MARKER);
     default
 }
 
@@ -186,6 +161,7 @@ fn has_impl_trait(ty: &Type) -> bool {
 mod tests {
     use super::*;
     use quote::ToTokens;
+    use syn::ItemFn;
 
     fn constant(source: &str) -> bool {
         syn::parse_str::<Expr>(source).is_ok_and(|expr| is_constant(&expr))

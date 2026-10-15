@@ -31,7 +31,7 @@ mod lower;
 
 pub(super) use lower::lower;
 
-use proc_macro2::{Delimiter, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Ident, Punct, Spacing, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::Token;
 use syn::ext::IdentExt;
@@ -164,15 +164,10 @@ fn decode(ident: &Ident) -> Option<Vec<String>> {
     (!names.is_empty()).then_some(names)
 }
 
-/// The span to report a marker's lifetime at: resolved like macro output, so it cannot clash
-/// with a user lifetime, but shown on the user's `from`.
-pub(super) fn introduced_span(user: Span) -> Span {
-    Span::mixed_site().located_at(user)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proc_macro2::Span;
     use quote::quote;
 
     fn compact(tokens: &TokenStream) -> String {

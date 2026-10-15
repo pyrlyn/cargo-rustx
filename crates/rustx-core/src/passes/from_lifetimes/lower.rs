@@ -50,8 +50,9 @@ use syn::{
     TypeImplTrait, TypeParamBound, TypeReference, WherePredicate,
 };
 
-use super::{decode, introduced_span};
+use super::decode;
 use crate::passes::borrows;
+use crate::tokens::syntax::introduced_span;
 use crate::tokens::syntax::{bare_name, combine};
 
 pub(in crate::passes) fn lower(file: &mut syn::File) -> syn::Result<()> {

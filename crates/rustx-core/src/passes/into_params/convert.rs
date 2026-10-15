@@ -9,79 +9,47 @@
 use proc_macro2::Span;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
-use syn::visit_mut::{self, VisitMut};
-use syn::{
-    Attribute, Block, FnArg, ForeignItemFn, ImplItemFn, ItemFn, Pat, PatIdent, PatType, Signature,
-    Stmt, TraitItemFn,
-};
+use syn::{Attribute, Block, FnArg, Pat, PatIdent, PatType, Signature, Stmt};
 
 use super::marker::MARKER;
-use crate::tokens::syntax::combine;
+use crate::passes::signatures::for_each_signature;
+use crate::tokens::syntax::{combine, is_marker, take_attr};
 
+// `extern` fns are rewritten like trait declarations, so rustc, not an unknown marker, reports
+// that they cannot take `impl Trait`; the error then points at `into`.
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
-    let mut lower = Lower { errors: None };
-    lower.visit_file_mut(file);
-    lower.errors.map_or(Ok(()), Err)
+    for_each_signature(file, convert)
 }
 
-struct Lower {
-    errors: Option<syn::Error>,
-}
-
-impl Lower {
-    /// Rewrites the marked parameters of `sig`; `body` is `None` for a declaration, which only
-    /// states the type: whoever implements it converts in their own body.
-    fn convert(&mut self, sig: &mut Signature, body: Option<&mut Block>) {
-        let mut conversions = Vec::new();
-        for arg in &mut sig.inputs {
-            match arg {
-                FnArg::Typed(param) => match convert_parameter(param) {
-                    Ok(Some(stmt)) => conversions.push(stmt),
-                    Ok(None) => {}
-                    Err(err) => combine(&mut self.errors, err),
-                },
-                FnArg::Receiver(receiver) => {
-                    if let Some(into) = take_marker(&mut receiver.attrs) {
-                        let message = "`self` cannot take `into`; convert it in the body";
-                        combine(&mut self.errors, syn::Error::new(into, message));
-                    }
+/// Rewrites the marked parameters of `sig`; `body` is `None` for a declaration, which only
+/// states the type: whoever implements it converts in their own body.
+fn convert(sig: &mut Signature, body: Option<&mut Block>) -> syn::Result<()> {
+    let mut errors = None;
+    let mut conversions = Vec::new();
+    for arg in &mut sig.inputs {
+        match arg {
+            FnArg::Typed(param) => match convert_parameter(param) {
+                Ok(Some(stmt)) => conversions.push(stmt),
+                Ok(None) => {}
+                Err(err) => combine(&mut errors, err),
+            },
+            FnArg::Receiver(receiver) => {
+                if let Some(into) = take_marker(&mut receiver.attrs) {
+                    let message = "`self` cannot take `into`; convert it in the body";
+                    combine(&mut errors, syn::Error::new(into, message));
                 }
             }
         }
-        if let Some(body) = body {
-            body.stmts.splice(0..0, conversions);
-        }
     }
-}
-
-impl VisitMut for Lower {
-    fn visit_item_fn_mut(&mut self, item: &mut ItemFn) {
-        self.convert(&mut item.sig, Some(&mut item.block));
-        visit_mut::visit_item_fn_mut(self, item);
+    if let Some(body) = body {
+        body.stmts.splice(0..0, conversions);
     }
-
-    fn visit_impl_item_fn_mut(&mut self, item: &mut ImplItemFn) {
-        self.convert(&mut item.sig, Some(&mut item.block));
-        visit_mut::visit_impl_item_fn_mut(self, item);
-    }
-
-    fn visit_trait_item_fn_mut(&mut self, item: &mut TraitItemFn) {
-        self.convert(&mut item.sig, item.default.as_mut());
-        visit_mut::visit_trait_item_fn_mut(self, item);
-    }
-
-    // Rewritten like a trait declaration so rustc, not an unknown marker, reports that an
-    // `extern` fn cannot take `impl Trait`; the error then points at `into`.
-    fn visit_foreign_item_fn_mut(&mut self, item: &mut ForeignItemFn) {
-        self.convert(&mut item.sig, None);
-        visit_mut::visit_foreign_item_fn_mut(self, item);
-    }
+    errors.map_or(Ok(()), Err)
 }
 
 /// Removes the marker of a parameter and returns the span of its `into`.
 fn take_marker(attrs: &mut Vec<Attribute>) -> Option<Span> {
-    let at = attrs.iter().position(|attr| attr.path().is_ident(MARKER))?;
-    Some(attrs.remove(at).pound_token.spans[0])
+    take_attr(attrs, MARKER).map(|marker| marker.pound_token.spans[0])
 }
 
 /// `#[m] x: T` → `x: impl Into<T>`, returning `let x: T = Into::into(x);` for the body.
@@ -100,7 +68,7 @@ fn convert_parameter(param: &mut PatType) -> syn::Result<Option<Stmt>> {
         return Err(not_a_name(&param.pat));
     };
     // Other passes' markers stay on the parameter only; they are not Rust attributes.
-    let attrs = param.attrs.iter().filter(|attr| !is_rustx_marker(attr));
+    let attrs = param.attrs.iter().filter(|attr| !is_marker(attr));
     let target = &param.ty;
     // Fully qualified, so an inherent or other trait method named `into` cannot be picked.
     let stmt = syn::parse2(quote_spanned! {into=>
@@ -110,12 +78,6 @@ fn convert_parameter(param: &mut PatType) -> syn::Result<Option<Stmt>> {
     *by_ref = None;
     *mutability = None;
     Ok(Some(stmt))
-}
-
-fn is_rustx_marker(attr: &Attribute) -> bool {
-    attr.path()
-        .get_ident()
-        .is_some_and(|name| name.to_string().starts_with("__rustx_"))
 }
 
 fn not_a_name(pat: &Pat) -> syn::Error {

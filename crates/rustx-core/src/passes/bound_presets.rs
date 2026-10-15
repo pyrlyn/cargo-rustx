@@ -50,7 +50,7 @@ use syn::punctuated::Punctuated;
 
 use crate::tokens::position::{at_statement_start, outer_attributes_start};
 use crate::tokens::punct::{is_alone, is_punct, loosen_end};
-use crate::tokens::syntax::combine;
+use crate::tokens::syntax::{combine, introduced_span};
 use crate::tokens::{map_sequences, map_sequences_reporting};
 
 /// Name of the blanket impl's type parameter.
@@ -178,7 +178,7 @@ fn expand(seq: &[TokenTree], attrs: usize, i: usize) -> syn::Result<(usize, Toke
 }
 
 fn param_ident(located_at: Span) -> Ident {
-    Ident::new(PARAM, Span::mixed_site().located_at(located_at))
+    Ident::new(PARAM, introduced_span(located_at))
 }
 
 /// Replaces every `Self` with the impl parameter, keeping the position of each `Self`.
