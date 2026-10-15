@@ -1,6 +1,6 @@
 [package]
 name = "rustx-cli"
-description = "Command-line tools for cargo-rustx: `rustx-cli expand` prints the plain Rust that sugar desugars to, `rustx-cli sugar` rewrites plain Rust into sugar"
+description = "Command-line tools for cargo-rustx: `rustx-cli expand` prints the plain Rust that sugar desugars to, `rustx-cli sugar` rewrites plain Rust into sugar, `rustx-cli fmt` formats `.rustx` files"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 clap.workspace = true
+proc-macro2 = { workspace = true, features = ["span-locations"] }
 rustx-build.workspace = true
 rustx-core = { workspace = true, features = ["sugar"] }
 syn.workspace = true

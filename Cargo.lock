@@ -391,7 +391,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustx-core",
- "syn",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -400,6 +400,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
+ "proc-macro2",
  "rustx-build",
  "rustx-core",
  "syn 3.0.9",

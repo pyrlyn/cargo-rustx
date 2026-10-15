@@ -33,6 +33,8 @@ To see the plain Rust that sugar turns into, run `cargo run -p rustx-cli -- expa
 
 To move existing code onto sugar, run `cargo run -p rustx-cli -- sugar <file.rs>`: it prints the file rewritten into sugar as the text of a `.rustx` file (save it as one, or paste it into `sugar! { .. }`). Only code that a sugar item expands back to exactly is rewritten (so far `let mut x` becomes `var x`), and only those bytes change: comments and layout stay as written. Code that expansion would already change as written, such as `var x` inside a macro call, is reported as an error instead.
 
+To format a `.rustx` file, run `cargo run -p rustx-cli -- fmt <file.rustx>`: it rewrites the file in place with the layout `rustfmt` gives ordinary Rust, keeping the sugar and every comment (`--check` writes nothing and exits with 1 when the file is not formatted). It needs `rustfmt` on `PATH`, and refuses any change that would alter what the file expands to. Not formatted yet: `sugar! { .. }` bodies inside Rust files, and files that use `bound` or `derive` presets, inline bounds, parameter or call defaults, named arguments or capture lists, which it refuses with the position of the sugar.
+
 ### `.rustx` files via `build.rs`
 
 A whole file can be written in sugar as a `.rustx` file and desugared by the build script. Add `rustx-build` to `[build-dependencies]` (and `rustx` to `[dependencies]` when the sugar needs its runtime, as `throws` does), then:

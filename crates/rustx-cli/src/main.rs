@@ -1,5 +1,7 @@
 //! `rustx-cli`: command-line tools over the cargo-rustx desugarer.
 
+mod fmt;
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -27,6 +29,14 @@ enum Command {
         /// A Rust file; only code that sugar expands back to exactly is rewritten.
         file: PathBuf,
     },
+    /// Format a `.rustx` file in place with rustfmt, keeping its sugar.
+    Fmt {
+        /// The `.rustx` file to format.
+        file: PathBuf,
+        /// Write nothing; exit with 1 when the file is not formatted.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -46,6 +56,7 @@ fn run(cli: Cli) -> Result<(), String> {
             rustx_build::expand_source(source, rustx_build::Kind::of(&file))
         })?,
         Command::Sugar { file } => convert(&file, rustx_core::sugar)?,
+        Command::Fmt { file, check } => return fmt::run(&file, check),
     };
     // `print!` panics on a closed pipe (`rustx-cli expand f | head`); a write error is
     // reported instead.
