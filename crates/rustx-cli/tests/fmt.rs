@@ -185,17 +185,30 @@ fn what_rustfmt_cannot_parse_is_refused_at_its_position() {
 }
 
 #[test]
-fn a_rust_file_is_refused() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/server.rs");
+fn sugar_bodies_in_a_rust_file_are_formatted_and_the_rest_is_kept() {
+    if rustfmt_missing() {
+        return;
+    }
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/server.rs");
+    let path = copy("rust_file", &source);
+    let before = fs::read_to_string(&path).unwrap();
     let out = rustx_cli(&["fmt"], &path);
-    assert_eq!(out.status.code(), Some(1));
-    let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(
-        stderr.ends_with(
-            ": only `.rustx` files can be formatted; `sugar!` bodies in Rust files cannot yet\n"
-        ),
-        "{stderr}"
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
+    let after = fs::read_to_string(&path).unwrap();
+    insta::assert_snapshot!("fmt_server_rs", after);
+    assert!(rustx_cli(&["fmt", "--check"], &path).status.success());
+    assert_eq!(comments(&after), comments(&before));
+    let outside = |text: &str| -> Vec<String> {
+        let first = text.find("rustx::sugar! {").unwrap();
+        let tail = text.rfind("    println!").unwrap();
+        vec![text[..first].to_owned(), text[tail..].to_owned()]
+    };
+    assert_eq!(outside(&after), outside(&before));
+    assert_eq!(expand_formatted(&path), expand_formatted(&source));
 }
 
 #[test]
