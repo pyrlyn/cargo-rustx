@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: plan only. Nothing is implemented yet.
+Status: M0–M2 are implemented; M3–M9 are planned (see roadmap.md).
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
@@ -28,6 +28,7 @@ Crate layout:
 2. **Parser.** Two options:
    - Pure `syn` — only works when the input already parses as Rust. It does not (`var x = 1;` is not a statement).
    - **Custom parser built on `syn::parse::ParseStream`** (recommended): a fork of the relevant parts of the Rust grammar (items, fn signatures, types, statements, expressions) that accepts sugar forms and reuses `syn` for everything unchanged (`syn::Expr`, `syn::Type`, `syn::Path`, attributes). Sugar points are few and local, so the fork stays small: item start (`bound X = ..;`, `derive X = ..;`), statement start (`var`, `shared`), type position (`~T`, `&from(x) T`, `&from(Self) T`, `iter T`, `shared T`, `rc T`, `weak T`), fn return (`T throws`), fn params (`x: T: Bound`, `x: into T`, `x: T = default`), struct fields (`f: T = default`), struct literals (`S { a: 1, .. }`), call arguments (`f(a, name: v)`), method calls (`.m<T>(`), closures (`move[..] ||`), expressions (`throw e`, `rc e`), enum variant fields (`from T`).
+   - **As built (M0):** a staged form of the custom parser. Sugar that `syn` cannot parse is rewritten by small token passes (`passes/*.rs`, each walking token sequences through one shared walker), which use `syn` parsers on token slices where they need grammar (e.g. where a type ends). The result is parsed as a `syn::File`, and sugar that needs context (lifetimes, `throws` tails) is rewritten by `VisitMut` AST passes. This keeps each sugar item an independent module, so items can be built in parallel; a full `ParseStream` grammar fork stays an option if token passes hit ambiguities they cannot resolve locally.
 3. **AST.** `syn` types plus a small set of sugar node types (`SugarType::Boxed`, `SugarType::Borrow { from: Vec<Ident> }`, `SugarStmt::Var`, `SugarFn { throws: bool, inline_bounds }`, ...). Alternatively, parse sugar directly into `syn` nodes with marker attributes/placeholders and desugar in a second pass; this keeps the AST 100% `syn` and lets us use `syn::visit_mut`. Preferred: sugar AST only at the edges, lowered into `syn` immediately where the desugaring is local, and markers where it needs context (lifetimes, `throws` tail `Ok(..)`).
 4. **Desugarer.** A set of independent passes, one per item, each a `VisitMut` over `syn::File`/`syn::ItemMod`:
    - `var` → `let mut`; `shared x = e` → `let x = Shared::new(e)`.
@@ -113,6 +114,9 @@ Therefore:
 - **Upstream overlap:** default field values, trait aliases and capture expressions exist on nightly (see [research.md](research.md)). Each pass must be able to switch to the native form once it is stable, without changing user code.
 - **IDE / rust-analyzer:** rust-analyzer expands proc macros, so go-to-definition and types work on the output, but completion and highlighting inside `sugar!{}` are limited, and rustfmt does not format macro bodies. A `rustx fmt` tool is needed.
 - **Nightly-only span APIs:** `Span::join`, `Span::source_text` (partially), `Diagnostic` with notes/help are unstable; stable output uses `compile_error!` with single-token spans.
+- **Sugar inside macro arguments is expanded too.** Token passes also rewrite the argument groups of macro calls (`vec![..]`, `assert_eq!(..)`), because users expect sugar there. A user macro that itself accepts tokens like `var x` receives the desugared form instead.
+- **`.m<T>(` inside a comma list.** `(a.b < c, d > (e))` is valid Rust (two comparisons) but reads as the turbofish sugar `a.b::<c, d>(e)`. Parenthesise the comparison: `((a.b < c), d > (e))`.
+- **Type prefixes need a recognisable type position.** `iter`, `rc` and `weak` are ordinary identifiers, so they are sugar only after `->`, `:`, `<`, `,` inside `<..>`, `&` and similar. At the start of a group or after `,` outside `<..>` (tuple types, fn-pointer parameters) the plain Rust spelling is needed, because `f(rc x)` there is the expression sugar of item 16.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
 - **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
 - **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.

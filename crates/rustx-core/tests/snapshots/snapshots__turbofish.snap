@@ -1,0 +1,39 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/turbofish.rustx
+---
+use std::collections::{BTreeMap, HashSet};
+pub struct Row {
+    pub id: u32,
+    pub tags: Vec<String>,
+    pub score: f32,
+}
+pub fn parse_row(line: &str) -> Option<Row> {
+    let parts = line.split(';').map(str::trim).collect::<Vec<_>>();
+    if parts.len() != 3 {
+        return None;
+    }
+    let id = parts[0].parse::<u32>().ok()?;
+    let tags = parts[1].split(',').map(|t| t.to_lowercase()).collect::<Vec<String>>();
+    let score = parts[2].parse::<f32>().ok()?;
+    Some(Row { id, tags, score })
+}
+pub fn all_tags(rows: &[Row]) -> Vec<String> {
+    let set = rows.iter().flat_map(|r| r.tags.iter().cloned()).collect::<HashSet<_>>();
+    let mut v = set.into_iter().collect::<Vec<_>>();
+    v.sort();
+    v
+}
+pub fn by_id(rows: Vec<Row>) -> BTreeMap<u32, Row> {
+    rows.into_iter().map(|r| (r.id, r)).collect::<BTreeMap<_, _>>()
+}
+pub fn total(rows: &[Row]) -> f32 {
+    rows.iter().map(|r| r.score).sum::<f32>()
+}
+pub fn untouched(a: &Row, b: &[u8], c: &[u8]) -> bool {
+    let shorter = b.len() < c.len();
+    let low = a.score < 1.0;
+    let known = a.tags.iter().cloned().collect::<HashSet<_>>();
+    shorter && low && known.len() > 0
+}

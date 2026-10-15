@@ -1,0 +1,5 @@
+error: expected a trait after `~`, as in `~Trait` or `~Fn(T) -> U`
+ --> tests/fail/prefix_types_tilde_non_trait.rs:2:20
+  |
+2 |     fn add_sink(s: ~&str) {
+  |                    ^

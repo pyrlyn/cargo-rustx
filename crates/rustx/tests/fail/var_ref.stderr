@@ -1,0 +1,5 @@
+error: `var` binds by value; write `let ref mut x` for a mutable reference
+ --> tests/fail/var_ref.rs:3:13
+  |
+3 |         var ref x = 1;
+  |             ^^^

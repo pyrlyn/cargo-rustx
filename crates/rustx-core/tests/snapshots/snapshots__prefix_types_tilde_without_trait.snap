@@ -1,0 +1,6 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/prefix_types_tilde_without_trait.rustx
+---
+error: expected a trait after `~`, as in `~Trait` or `~Fn(T) -> U`

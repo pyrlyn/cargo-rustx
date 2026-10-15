@@ -1,0 +1,29 @@
+mod log {
+    pub struct Entry {
+        pub level: u8,
+        pub module: String,
+    }
+
+    pub struct Log {
+        entries: Vec<Entry>,
+    }
+
+    impl Log {
+        pub fn at_least(&self, min: u8) -> iter &Entry {
+            self.entries.iter().filter(move |e| e.level >= min)
+        }
+
+        pub fn modules(&self) -> iter &str {
+            self.entries.iter().map(|e| e.module.as_str())
+        }
+
+        pub fn numbered(&self) -> iter (usize, &Entry) {
+            self.entries.iter().enumerate()
+        }
+    }
+
+    // Plain Rust that names things `iter` is left alone.
+    pub fn count(iter: std::iter::Empty<u8>) -> usize {
+        iter.count()
+    }
+}

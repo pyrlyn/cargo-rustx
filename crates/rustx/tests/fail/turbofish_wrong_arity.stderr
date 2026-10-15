@@ -1,0 +1,13 @@
+error[E0107]: method takes 1 generic argument but 2 generic arguments were supplied
+  --> tests/fail/turbofish_wrong_arity.rs:15:11
+   |
+15 |         p.parse<u32, u8>()
+   |           ^^^^^    ---- help: remove the unnecessary generic argument
+   |           |
+   |           expected 1 generic argument
+   |
+note: method defined here, with 1 generic parameter: `F`
+  --> tests/fail/turbofish_wrong_arity.rs:9:12
+   |
+ 9 |         fn parse<F: Default>(&self) -> F {
+   |            ^^^^^ -

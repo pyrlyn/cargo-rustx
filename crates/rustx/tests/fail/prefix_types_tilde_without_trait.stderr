@@ -1,0 +1,5 @@
+error: expected a trait after `~`, as in `~Trait` or `~Fn(T) -> U`
+ --> tests/fail/prefix_types_tilde_without_trait.rs:2:26
+  |
+2 |     fn handlers() -> Vec<~> {
+  |                          ^

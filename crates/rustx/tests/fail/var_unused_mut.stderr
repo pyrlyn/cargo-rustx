@@ -1,0 +1,13 @@
+error: variable does not need to be mutable
+ --> tests/fail/var_unused_mut.rs:6:9
+  |
+6 |         var x = 1;
+  |         ----^
+  |         |
+  |         help: remove this `mut`
+  |
+note: the lint level is defined here
+ --> tests/fail/var_unused_mut.rs:2:9
+  |
+2 | #![deny(unused_mut)]
+  |         ^^^^^^^^^^

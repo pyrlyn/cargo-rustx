@@ -1,0 +1,49 @@
+pub struct Stats {
+    pub count: usize,
+    pub sum: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+pub fn summarize(samples: &[f64]) -> Option<Stats> {
+    if samples.is_empty() {
+        return None;
+    }
+    var count = 0;
+    var sum = 0.0;
+    var min = f64::MAX;
+    var max = f64::MIN;
+    for &s in samples {
+        count += 1;
+        sum += s;
+        if s < min {
+            min = s;
+        }
+        if s > max {
+            max = s;
+        }
+    }
+    Some(Stats { count, sum, min, max })
+}
+
+pub fn histogram(samples: &[f64], buckets: usize) -> Vec<usize> {
+    var out = vec![0; buckets];
+    var sorted = samples.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let lo = sorted[0];
+    let hi = sorted[sorted.len() - 1];
+    let width = (hi - lo) / buckets as f64;
+    for s in sorted {
+        var idx: usize = ((s - lo) / width) as usize;
+        if idx >= buckets {
+            idx = buckets - 1;
+        }
+        out[idx] += 1;
+    }
+    out
+}
+
+// `var` is an ordinary identifier everywhere else and must pass through.
+fn var(var: i32) -> i32 {
+    var + 1
+}

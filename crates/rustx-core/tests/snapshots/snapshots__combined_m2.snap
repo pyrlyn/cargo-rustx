@@ -1,0 +1,29 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/combined_m2.rustx
+---
+trait Shape {
+    fn area(&self) -> f64;
+}
+struct Scene {
+    shapes: Vec<
+        ::std::boxed::Box<dyn Shape + ::core::marker::Send + ::core::marker::Sync>,
+    >,
+    parent: Option<::std::rc::Weak<::core::cell::RefCell<Scene>>>,
+}
+impl Scene {
+    fn areas(&self) -> impl ::core::iter::Iterator<Item = f64> + '_ {
+        self.shapes.iter().map(|s| s.area())
+    }
+    fn total(&self, extra: &str) -> f64 {
+        let mut sum = extra.parse::<f64>().unwrap_or(0.0);
+        for a in self.areas().collect::<Vec<_>>() {
+            sum += a;
+        }
+        sum
+    }
+}
+fn shared(scene: Scene) -> ::std::rc::Rc<::core::cell::RefCell<Scene>> {
+    std::rc::Rc::new(std::cell::RefCell::new(scene))
+}

@@ -1,0 +1,48 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/prefix_types_dyn.rustx
+---
+mod bus {
+    use std::collections::HashMap;
+    pub struct Event {
+        pub topic: String,
+        pub payload: String,
+    }
+    pub trait Sink {
+        fn deliver(&self, e: &Event);
+    }
+    pub struct Bus {
+        handlers: HashMap<
+            String,
+            Vec<
+                ::std::boxed::Box<
+                    dyn Fn(&Event) -> bool + ::core::marker::Send + ::core::marker::Sync,
+                >,
+            >,
+        >,
+        sinks: Vec<
+            ::std::boxed::Box<dyn Sink + ::core::marker::Send + ::core::marker::Sync>,
+        >,
+    }
+    impl Bus {
+        pub fn on(
+            &mut self,
+            topic: &str,
+            h: ::std::boxed::Box<
+                dyn Fn(&Event) -> bool + ::core::marker::Send + ::core::marker::Sync,
+            >,
+        ) {
+            self.handlers.entry(topic.to_string()).or_default().push(h);
+        }
+        pub fn add_sink(
+            &mut self,
+            s: ::std::boxed::Box<dyn Sink + ::core::marker::Send + ::core::marker::Sync>,
+        ) {
+            self.sinks.push(s);
+        }
+    }
+    pub type Pair = ::std::boxed::Box<
+        dyn Sink + std::fmt::Debug + ::core::marker::Send + ::core::marker::Sync,
+    >;
+}
