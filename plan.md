@@ -12,7 +12,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T26 | todo | P2 | 4 | 0% | |
 | T28 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T29 | todo | P3 | 3 | 0% | |
-| T31 | todo | P3 | 3 | 0% | |
+| T31 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
 | T32 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T33 | todo | P3 | 2 | 0% | |
 
@@ -57,6 +57,8 @@ Problem 15. A string literal gets `.to_string()` where the target type is writte
 Formatting for sugar sources, so `.rustx` files and `sugar!` bodies get a consistent layout without rustfmt (which rejects the sugar). Scope (round-trip through the parser or a token-level formatter, which constructs) is settled with the creator when the task is claimed. Depends on T30. Done when `fmt` is idempotent on every snapshot case and keeps comments.
 
 Decided with the creator: format through rustfmt: replace the sugar with reversible placeholders that are valid Rust, run rustfmt, then restore the sugar, so the layout matches ordinary Rust and comments survive. Split into subtasks at claim time if it exceeds the task size.
+
+Plan: `rustx-cli fmt <file>` (with `--check`) in a module of its own: a reversible mapping replaces every sugar token sequence with a placeholder that is valid Rust of the same syntactic role and carries a unique id (e.g. `var x` as `let __rustx_fmt_N x`-like forms chosen per sugar item), runs `rustfmt` from the toolchain on the result through stdin, then maps the placeholders back; a sugar item it cannot map leaves the file unformatted with an error, never a changed meaning. Works on `.rustx` files and on `sugar!` bodies inside `.rs` files. Verify: `fmt` is idempotent on every snapshot case, keeps comments, and `expand(fmt(x))` equals `expand(x)` token for token; CLI integration tests; `just check`. If it exceeds the task size, split into T31.1 (mapping for the token-level sugar, CLI) and T31.2 (remaining items).
 
 ### T32. M9: file-level `.rustx` via `build.rs`
 
