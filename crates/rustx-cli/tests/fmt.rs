@@ -58,6 +58,28 @@ fn expand(path: &Path) -> Output {
     rustx_cli(&["expand"], path)
 }
 
+/// The expansion of `path` after rustfmt, so a trailing comma rustfmt adds inside `vec![..]`,
+/// which the expansion keeps as written, compares equal to the original.
+fn expand_formatted(path: &Path) -> Vec<u8> {
+    use std::io::Write;
+    let expanded = expand(path).stdout;
+    let mut child = Command::new("rustfmt")
+        .args(["--edition", "2024", "--emit", "stdout"])
+        .args(["--config", "reorder_imports=false,reorder_modules=false"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(&expanded).unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&expanded)
+    );
+    out.stdout
+}
+
 fn comments(text: &str) -> Vec<&str> {
     text.lines()
         .filter_map(|line| line.find("//").map(|at| line[at..].trim_end()))
@@ -147,7 +169,7 @@ fn every_case_formats_once_for_good_and_expands_as_before() {
         );
         let after = fs::read_to_string(&path).unwrap();
         assert_eq!(comments(&after), comments(&before), "{name}");
-        assert_eq!(expand(&path).stdout, expand(&source).stdout, "{name}");
+        assert_eq!(expand_formatted(&path), expand_formatted(&source), "{name}");
         formatted += 1;
     }
     assert!(formatted >= 19, "only {formatted} cases formatted");
