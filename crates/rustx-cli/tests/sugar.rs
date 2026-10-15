@@ -57,6 +57,19 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn rc_and_weak_types_written_with_short_std_names_become_prefixes() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_rc_types.rs"]);
+    insta::assert_snapshot!("sugar_rc_types_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_rc_types.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("::std::rc::Weak<::core::cell::RefCell<Node>>"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =

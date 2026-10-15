@@ -104,6 +104,8 @@ const AST_PASSES: &[AstPass] = &[
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
 pub(crate) use newtype::VALIDATOR_NOT_FOUND;
+#[cfg(feature = "sugar")]
+pub(crate) use rc_borrows::would_borrow;
 
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {
