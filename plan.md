@@ -10,7 +10,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.2 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T26 | todo | P2 | 4 | 0% | |
-| T27 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T28 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T29 | todo | P3 | 3 | 0% | |
 | T31 | todo | P3 | 3 | 0% | |
@@ -40,14 +39,6 @@ Plan: token pass `passes/shared.rs::rewrite` (pre-registered after `capture_list
 ### T26. M6: borrows on `rc T` field access
 
 Problem 16. On a binding whose type is written `rc T` or `&rc T`, field access gets `.borrow_mut()` when the field is assigned, compound-assigned or receives a known `&mut self` std method call, and `.borrow()` otherwise, plus `with` / `with_mut` helpers in `rustx`. Reuses T24's access rewriting. Depends on T24 and T25. Done when the problem's tree example runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.
-
-### T27. M7: `async fn` in traits for `dyn` use
-
-Problem 14. A trait with `async fn` stays native when it is not used as `dyn`; for `dyn` use the macro generates code for the maintained `dynosaur` crate instead of hand-rolled boxing (research.md). How a trait is marked for `dyn` use is settled with the creator when the task is claimed. Done when the problem's detailed example compiles, including a `dyn` call, with unit tests, a snapshot case and `pass/` and `fail/` tests; split into subtasks at claim time if it exceeds the task size.
-
-Decided with the creator: a trait is marked for `dyn` use by an attribute on the trait; without it the trait stays native.
-
-Plan: `#[dyn]` / `#[dyn(DynName)]` on a trait inside `sugar!` (a token pass `passes/dyn_traits.rs::rewrite` turns the keyword attribute into a marker, since `syn` cannot parse `#[dyn]`; AST pass `dyn_traits::lower` handles the marked trait) expands to the attribute of the maintained `dynosaur` crate, reached through a `rustx` re-export, so `&DynName` / `Box<DynName>` can be used where `dyn Trait` would be. Unmarked traits stay native. Verify: unit tests, `tests/cases/dyn_traits.rustx`, `pass/dyn_traits.rs` with a `dyn` call on the problem's example, `fail/dyn_traits_*.rs`, `just check`; the new dependency gets a `toolchain.md` row.
 
 ### T28. M8: implicit lossless `into()`
 

@@ -2,7 +2,6 @@
 - T19.2. Reverse rule for the turbofish sugar
 - T24. M6: `shared` bindings and `shared T` types
 - T26. M6: borrows on `rc T` field access
-- T27. M7: `async fn` in traits for `dyn` use
 - T28. M8: implicit lossless `into()`
 - T29. M8: string literals into `String`
 - T31. M9: `rustx-cli fmt`
