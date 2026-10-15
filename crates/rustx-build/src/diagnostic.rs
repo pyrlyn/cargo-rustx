@@ -6,7 +6,8 @@ use std::path::Path;
 use proc_macro2::Span;
 
 /// One line per message of `err`, with 1-based line and column like rustc.
-pub(crate) fn render(path: &Path, source: &str, err: syn::Error) -> String {
+#[must_use]
+pub fn render(path: &Path, source: &str, err: syn::Error) -> String {
     let lines: Vec<String> = err
         .into_iter()
         .map(|err| {

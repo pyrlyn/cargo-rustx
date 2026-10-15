@@ -1,8 +1,5 @@
 //! `rustx-cli`: command-line tools over the cargo-rustx desugarer.
 
-mod diagnostic;
-mod expand;
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -46,7 +43,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), String> {
     let output = match cli.command {
         Command::Expand { file } => convert(&file, |source| {
-            expand::expand_source(source, expand::Kind::of(&file))
+            rustx_build::expand_source(source, rustx_build::Kind::of(&file))
         })?,
         Command::Sugar { file } => convert(&file, rustx_core::sugar)?,
     };
@@ -65,5 +62,5 @@ fn convert(
 ) -> Result<String, String> {
     let source =
         std::fs::read_to_string(file).map_err(|err| format!("{}: {err}", file.display()))?;
-    convert(&source).map_err(|err| diagnostic::render(file, &source, err))
+    convert(&source).map_err(|err| rustx_build::render(file, &source, err))
 }

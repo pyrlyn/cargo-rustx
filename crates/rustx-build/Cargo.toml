@@ -1,0 +1,20 @@
+[package]
+name = "rustx-build"
+description = "Desugars cargo-rustx `.rustx` files from `build.rs`, and the expansion and error rendering behind `rustx-cli expand`"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+prettyplease.workspace = true
+# Outside a proc macro, spans only know their line and column with `span-locations`. A crate that
+# also uses `rustx` shares the host `proc-macro2` with `rustx-macros`, which then carries the
+# feature without using it; `rustx-core` itself gets no extra features from here.
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+quote.workspace = true
+rustx-core.workspace = true
+syn.workspace = true
+
+[lints]
+workspace = true

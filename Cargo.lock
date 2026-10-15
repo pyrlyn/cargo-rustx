@@ -384,14 +384,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustx-build"
+version = "0.1.0"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "rustx-core",
+ "syn",
+]
+
+[[package]]
 name = "rustx-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
- "prettyplease",
- "proc-macro2",
- "quote",
+ "rustx-build",
  "rustx-core",
  "syn 3.0.9",
 ]

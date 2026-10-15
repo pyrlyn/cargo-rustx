@@ -13,7 +13,7 @@ use crate::diagnostic::is_call_site;
 
 /// How a source file is read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Kind {
+pub enum Kind {
     /// The whole file is a `sugar!` body.
     Sugar,
     /// Plain Rust; only `sugar!` invocations in it are desugared.
@@ -21,7 +21,9 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
-    pub(crate) fn of(path: &Path) -> Self {
+    /// A `.rustx` file is sugar throughout; any other file is plain Rust.
+    #[must_use]
+    pub fn of(path: &Path) -> Self {
         if path.extension().is_some_and(|ext| ext == "rustx") {
             Self::Sugar
         } else {
@@ -33,7 +35,11 @@ impl Kind {
 /// Desugars `source` and pretty-prints the result.
 ///
 /// Non-doc comments are lost: `prettyplease` prints a syntax tree, which has none.
-pub(crate) fn expand_source(source: &str, kind: Kind) -> syn::Result<String> {
+///
+/// # Errors
+///
+/// Returns every desugaring and parse error, combined, with the spans of the offending tokens.
+pub fn expand_source(source: &str, kind: Kind) -> syn::Result<String> {
     let mut file = match kind {
         Kind::Sugar => rustx_core::try_expand(syn::parse_str(source)?)?,
         Kind::Rust => syn::parse_file(source)?,
