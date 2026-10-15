@@ -7,6 +7,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
+| T19.1 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T20 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T21 | todo | P2 | 2 | 0% | |
 | T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
@@ -24,6 +25,14 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 The reverse of `expand`: take existing Rust written without sugar and rewrite it into the rustx form, so old code can adopt the syntax without a manual rewrite. One reverse rule per sugar item that has a pass; a rule fires only when the code is exactly what that pass would generate (e.g. `x: Option<T>` + `unwrap_or(..)` back to `x: T = ..`, `let mut` back to `var`). Anything it cannot prove equivalent stays as written.
 
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
+
+Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
+
+### T19.1. Sugar conversion driver and `rustx-cli sugar`
+
+The shared part of T19: a reverse-rule driver in `rustx-core` that finds code a pass would have generated and rewrites only those source ranges, so comments and layout elsewhere survive; a `rustx-cli sugar <file>` command that prints the converted source; and the first rule, `let mut` back to `var`. Done when the command works on a file, a property test helper checks `expand(sugar(x))` against `x` after normalisation, and valid Rust with no matching shape comes back byte-for-byte unchanged.
+
+Plan: `crates/rustx-core/src/sugar/` with a `ReverseRule` trait (find matches in a parsed `syn::File`, return edits as byte ranges of the original text from `proc-macro2` `span-locations`), a driver that applies non-overlapping edits and rejects any rule output that does not expand back to the original tokens, and `sugar/var.rs`; `rustx-cli` gets a `Sugar { file }` command next to `Expand`. Verify: unit tests, snapshot cases, a round-trip test helper reused by later rules, CLI integration tests, `just check`.
 
 ### T20. M5: `T throws` return types and tail `Ok(..)`
 
