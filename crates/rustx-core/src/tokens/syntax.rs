@@ -5,7 +5,8 @@
 //! module so every pass has one place to look for shared helpers.
 
 use proc_macro2::{Ident, Span};
-use syn::{Attribute, Type};
+use syn::punctuated::Punctuated;
+use syn::{Attribute, Path, Token, Type};
 
 /// Prefix of every name the passes generate; reserved, so user names cannot collide with them.
 pub(crate) const RESERVED_PREFIX: &str = "__rustx_";
@@ -41,6 +42,19 @@ pub(crate) fn take_attr(attrs: &mut Vec<Attribute>, name: &str) -> Option<Attrib
 
 /// Whether `attr` is some pass's marker rather than a Rust attribute, so copies of a parameter's
 /// attributes can leave markers of passes that have not run yet behind.
+/// The paths of an item's `#[derive(..)]` lists, in order. A list that does not parse is
+/// skipped: rustc reports it on the output, where it stays.
+pub(crate) fn derived_paths(attrs: &[Attribute]) -> impl Iterator<Item = Path> + '_ {
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("derive"))
+        .filter_map(|attr| {
+            attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
+                .ok()
+        })
+        .flatten()
+}
+
 pub(crate) fn is_marker(attr: &Attribute) -> bool {
     attr.path()
         .get_ident()
@@ -85,6 +99,18 @@ mod tests {
         assert!(taken.path().is_ident("__rustx_into"));
         assert_eq!(attrs.len(), 2);
         assert!(take_attr(&mut attrs, "__rustx_into").is_none());
+    }
+
+    #[test]
+    fn derived_paths_come_from_every_parsable_derive_list_in_order() {
+        let item = syn::parse_str::<syn::ItemStruct>(
+            "#[derive(Debug, std::hash::Hash)] #[cfg(x)] #[derive(= bad)] #[derive(Clone,)] struct S;",
+        )
+        .unwrap();
+        let paths: Vec<String> = derived_paths(&item.attrs)
+            .map(|path| quote::ToTokens::to_token_stream(&path).to_string())
+            .collect();
+        assert_eq!(paths, ["Debug", "std :: hash :: Hash", "Clone"]);
     }
 
     #[test]

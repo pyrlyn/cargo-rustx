@@ -57,17 +57,16 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote, quote_spanned};
-use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     Attribute, Block, Expr, ExprAssign, ExprLit, ExprStruct, Field, Fields, Item, ItemMod,
-    ItemStruct, ItemUnion, Lit, Macro, Path, Token, Type, Variant, parse_quote_spanned,
+    ItemStruct, ItemUnion, Lit, Macro, Type, Variant, parse_quote_spanned,
 };
 
 use crate::passes::item_lists::{Entry, insert_after};
 use crate::passes::macro_args::MacroArgs;
-use crate::tokens::syntax::combine;
+use crate::tokens::syntax::{combine, derived_paths};
 
 /// Std macros whose arguments are all expressions, so a struct literal in them is never a
 /// pattern.
@@ -283,14 +282,7 @@ fn written_as_string(ty: &Type) -> bool {
 
 /// The span of `Default` in the struct's `#[derive(..)]`, if it derives it.
 fn derived_default(attrs: &[Attribute]) -> Option<Span> {
-    attrs
-        .iter()
-        .filter(|attr| attr.path().is_ident("derive"))
-        .filter_map(|attr| {
-            attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
-                .ok()
-        })
-        .flatten()
+    derived_paths(attrs)
         .find(|path| {
             path.segments
                 .last()

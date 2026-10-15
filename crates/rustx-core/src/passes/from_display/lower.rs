@@ -10,11 +10,11 @@ use quote::{ToTokens, quote, quote_spanned};
 use syn::ext::IdentExt;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{Attribute, Fields, Generics, Item, ItemEnum, LitStr, Path, Token};
+use syn::{Attribute, Fields, Generics, Item, ItemEnum, LitStr, Token};
 
 use super::{FROM_MARKER, FROM_SHAPE, format};
 use crate::passes::item_lists::{Entry, ExpandList, for_each_list, insert_after};
-use crate::tokens::syntax::{combine, introduced_span, take_attr};
+use crate::tokens::syntax::{combine, derived_paths, introduced_span, take_attr};
 
 pub(in crate::passes) fn lower(file: &mut syn::File) -> syn::Result<()> {
     let mut pass = Lower { errors: None };
@@ -210,14 +210,7 @@ fn display_arm(variant: &syn::Variant, attr: &Attribute, f: &Ident) -> syn::Resu
 
 /// The last path segment of every trait in the enum's `#[derive(..)]` lists.
 fn derived_names(attrs: &[Attribute]) -> Vec<String> {
-    attrs
-        .iter()
-        .filter(|attr| attr.path().is_ident("derive"))
-        .filter_map(|attr| {
-            attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
-                .ok()
-        })
-        .flatten()
+    derived_paths(attrs)
         .filter_map(|path| Some(path.segments.last()?.ident.to_string()))
         .collect()
 }
