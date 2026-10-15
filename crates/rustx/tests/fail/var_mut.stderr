@@ -1,0 +1,5 @@
+error: `var` already makes the binding mutable; remove `mut`
+ --> tests/fail/var_mut.rs:3:13
+  |
+3 |         var mut x = 1;
+  |             ^^^

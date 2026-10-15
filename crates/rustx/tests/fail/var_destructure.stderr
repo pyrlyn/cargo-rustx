@@ -1,0 +1,5 @@
+error: `var` takes a single name; to destructure, write `let` and mark each binding (`let (mut a, mut b) = ..`)
+ --> tests/fail/var_destructure.rs:3:9
+  |
+3 |         var (a, b) = t;
+  |         ^^^

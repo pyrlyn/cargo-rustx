@@ -1,0 +1,5 @@
+error: `var _` binds no name to mutate; write `let _`
+ --> tests/fail/var_wildcard.rs:3:13
+  |
+3 |         var _ = 1;
+  |             ^
