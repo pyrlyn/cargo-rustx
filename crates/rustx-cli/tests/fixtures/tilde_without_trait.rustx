@@ -1,0 +1,3 @@
+fn handlers() -> Vec<~> {
+    Vec::new()
+}

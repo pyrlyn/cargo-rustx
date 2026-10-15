@@ -1,0 +1,23 @@
+[package]
+name = "rustx-cli"
+description = "Command-line tools for cargo-rustx: `rustx-cli expand` prints the plain Rust that sugar desugars to"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+clap.workspace = true
+prettyplease.workspace = true
+# Outside a proc macro, spans only know their line and column with `span-locations`. Cargo keeps
+# proc-macro (host) dependencies apart from this binary's, so `rustx-macros` never sees it.
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+quote.workspace = true
+rustx-core.workspace = true
+syn.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

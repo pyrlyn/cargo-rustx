@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/rustx-core", "crates/rustx-macros", "crates/rustx"]
+members = ["crates/rustx-core", "crates/rustx-macros", "crates/rustx", "crates/rustx-cli"]
 resolver = "3"
 
 [workspace.package]
@@ -15,9 +15,11 @@ proc-macro2 = "1"
 quote = "1"
 # `full` parses whole items (the `sugar!` body is a file of items); `visit-mut` drives the AST passes.
 syn = { version = "3", features = ["full", "visit-mut", "extra-traits"] }
+# rustx-cli
+clap = { version = "4.6", features = ["derive"] }
+prettyplease = "0.3"
 # tests
 insta = { version = "1", features = ["glob"] }
-prettyplease = "0.3"
 trybuild = "1"
 
 [workspace.lints.rust]

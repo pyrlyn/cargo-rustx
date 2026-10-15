@@ -27,6 +27,8 @@ pub enum LoadError {
 
 An attribute macro runs the one sugar item it names on the item it sits on, and sees nothing else. `#[sugared]` on an inline module runs every sugar item that is valid Rust (`#[data]`, `#[delegate(..)]` fields, `#[display("..")]`, `#[from]`, `#[newtype]`, `#[borrows]`) across the module, so `#[delegate]` can use the module's traits and `except(..)`, and `#[newtype(validate = f)]` its functions. It is not called `#[sugar]` because `sugar!` holds that name.
 
+To see the plain Rust that sugar turns into, run `cargo run -p rustx-cli -- expand <file>`: a `.rustx` file is desugared as a whole, and in a Rust file every `sugar! { .. }` invocation is replaced by its expansion. The output is formatted with `prettyplease` (comments other than doc comments are dropped); errors are printed as `file:line:column: message` with a non-zero exit code.
+
 ## Catalog
 
 Each file shows the problem in short form, then a detailed example in valid Rust and the same code with sugar.

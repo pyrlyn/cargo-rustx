@@ -1,0 +1,56 @@
+---
+source: crates/rustx-cli/tests/expand.rs
+expression: "expand(\"tests/fixtures/server.rs\")"
+---
+//! Problem 17 in a Rust file: `sugar!` as an item and inside a function body.
+use rustx::sugar;
+mod server {
+    #[derive(Debug, Clone)]
+    pub struct ServerConfig {
+        pub host: String,
+        pub port: u16,
+        pub workers: usize,
+    }
+    impl ::core::default::Default for ServerConfig {
+        fn default() -> Self {
+            Self {
+                host: String::from("127.0.0.1"),
+                port: 8080,
+                workers: 4,
+            }
+        }
+    }
+    pub fn dev() -> ServerConfig {
+        ServerConfig {
+            port: 3000,
+            ..::core::default::Default::default()
+        }
+    }
+    pub fn connect(
+        host: &str,
+        port: ::core::option::Option<u16>,
+        timeout_ms: ::core::option::Option<u64>,
+    ) -> String {
+        let port: u16 = port.unwrap_or(5432);
+        let timeout_ms: u64 = timeout_ms.unwrap_or(5_000);
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+    pub fn demo() -> Vec<String> {
+        vec![
+            connect("db", ::core::option::Option::None, ::core::option::Option::None),
+            connect("db", ::core::option::Option::Some(6432),
+            ::core::option::Option::None), connect("db", ::core::option::Option::None,
+            ::core::option::Option::Some(100))
+        ]
+    }
+}
+fn main() {
+    fn total(xs: &[u32]) -> u32 {
+        let mut sum = 0;
+        for x in xs {
+            sum += x;
+        }
+        sum
+    }
+    println!("{} {:?}", total(& [1, 2, 3]), server::dev());
+}

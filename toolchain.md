@@ -10,9 +10,10 @@
 
 | Package | Where | Source | Why here |
 | --- | --- | --- | --- |
-| proc-macro2 | local | https://github.com/dtolnay/proc-macro2 | Tokens outside the compiler, so the core is testable |
+| proc-macro2 | local | https://github.com/dtolnay/proc-macro2 | Tokens outside the compiler, so the core is testable; `span-locations` in `rustx-cli` for error lines and columns |
 | quote | local | https://github.com/dtolnay/quote | Building output tokens |
 | syn | local | https://github.com/dtolnay/syn | Parsing the desugared body and AST passes |
+| clap | local | https://github.com/clap-rs/clap | `rustx-cli` arguments and subcommands (derive) |
+| prettyplease | local | https://github.com/dtolnay/prettyplease | Formatting `rustx-cli expand` output and readable expansions in snapshots |
 | insta | local (dev) | https://github.com/mitsuhiko/insta | Snapshot tests of expansions |
-| prettyplease | local (dev) | https://github.com/dtolnay/prettyplease | Readable expansions in snapshots |
 | trybuild | local (dev) | https://github.com/dtolnay/trybuild | Compile-pass and compile-fail tests |
