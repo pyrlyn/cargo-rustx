@@ -2,7 +2,6 @@
 
 Approved milestones from `ARCHITECTURE.md` (g), not yet in `plan.md`.
 
-- M3 signatures: inline bounds (03), `bound` presets (21), `&from(x) T` lifetimes (01), `#[borrows]` (19), `from` with `iter`, `into T` parameters (15), parameter defaults (17).
 - M4 derives: `#[data]` (08), `from` variants and `#[display]` (05), `#[delegate]` (07), `derive` presets (18), `#[newtype]` (20), field defaults (17); also as standalone attribute macros.
 - M5 errors: `T throws`, `throw`, tail `Ok(..)` (10).
 - M6 closures and sharing: `move[..]` (11), `shared` and `Shared<T>` (12), `rc e` and `rc` field access (16).
