@@ -11,7 +11,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.4 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.5 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.6 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
-| T19.7 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
+| T19.7 | in progress | P2 | 4 | 100% | Claude / opus-5.5 |
 | T19.8 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
@@ -80,7 +80,7 @@ Plan: read `passes/prefix_types.rs` (which positions it reads, the `__rustx_rc` 
 
 Two limits found by T19.6 and T19.9. First, code formatted by rustfmt never converts when a rule spans a list rustfmt ends with a trailing comma (a multi-line `where`, generics, parameters), because the check compares tokens exactly; a trailing comma before a closing delimiter or before the body brace of a `where` list never changes meaning outside macro calls, so the check should ignore it there (never inside a macro invocation's tokens, never the comma of a one-element tuple). Second, the driver has no edit groups, so multi-place rules (T19.6, T19.9) emit one edit spanning the whole signature, and other rules' edits inside that span are dropped. Done when the check accepts rustfmt's trailing commas, the driver keeps or drops a group of edits as one unit (including in its one-at-a-time fallback), and a test shows `into T` and inline bounds converting in the same fn.
 
-Plan: in `crates/rustx-core/src/sugar/mod.rs`, extend the token comparison (next to the `std_paths` normaliser) with the trailing comma rule above, and add an edit group to `ReverseRule` output (e.g. `Vec<Vec<Edit>>` or an `Edit` group id) with the fallback adding whole groups. Keep the existing rules working unchanged; moving T19.6/T19.9 onto groups is done when their branches merge, not here. Verify: unit tests for the comparison (where, generics, params, 1-tuple, macro tokens), a driver test for group atomicity in the fallback, `just check`.
+Plan: in `crates/rustx-core/src/sugar/mod.rs`, extend the token comparison (next to the `std_paths` normaliser) with the trailing comma rule above, and add an edit group to `ReverseRule` output (e.g. `Vec<Vec<Edit>>` or an `Edit` group id) with the fallback adding whole groups. Keep the existing rules working unchanged; moving T19.6/T19.9 onto groups is done when their branches merge, not here. Edit groups already landed with T19.7 (`ReverseRule::edit_groups`, commit `be71ac6`): merge that commit and build on it instead of a second mechanism. Also fix a `std_paths` gap T19.7 found: enum variants are not recorded as declarations, so `use self::Outcome::Ok;` does not shadow the prelude `Ok`. Verify: unit tests for the comparison (where, generics, params, 1-tuple, macro tokens), a failing-first test for the enum variant gap, `just check`.
 
 ### T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
 
