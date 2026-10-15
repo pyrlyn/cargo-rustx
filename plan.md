@@ -15,7 +15,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
-| T19.11 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.11 | in progress | P2 | 3 | 70% | Claude / opus-5.5 |
 | T19.12 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T19.13 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
