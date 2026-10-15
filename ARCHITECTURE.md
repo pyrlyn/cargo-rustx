@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: M0–M2 are implemented; M3 is in progress (all signature sugar is in except default and named arguments at call sites); M4–M9 are planned.
+Status: M0–M3 are implemented; M4–M9 are planned.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
@@ -92,7 +92,7 @@ Therefore:
 1. **M0 skeleton:** workspace, `rustx-core`, `rustx-macros`, `sugar!` that passes valid Rust through unchanged; insta + trybuild wired; CI.
 2. **M1 statements:** `var` → `let mut` (item 2). Establishes the custom parser for statements and span plumbing.
 3. **M2 types (purely syntactic):** `~Trait` (4), `iter T` (9), turbofish `.m<T>()` (6), `rc T`/`weak T` (16).
-4. **M3 signatures:** inline bounds (3), `bound` presets (21), `&from(x) T` lifetimes (1), `#[borrows]` (19), `from` combined with `iter`, `into T` parameters (15), parameter defaults (17).
+4. **M3 signatures:** inline bounds (3), `bound` presets (21), `&from(x) T` lifetimes (1), `#[borrows]` (19), `from` combined with `iter`, `into T` parameters (15), parameter defaults with call-site defaults and named arguments (17).
 5. **M4 derives:** `#[data]` (8), `from` variants + `#[display]` (5), `#[delegate]` (7), `derive` presets (18), `#[newtype]` (20), field defaults (17). Also usable as standalone attribute macros.
 6. **M5 errors:** `T throws` + `throw` + tail `Ok(..)` (10).
 7. **M6 closures and sharing:** `move[..]` (11), `shared` + `Shared<T>` runtime type (12), `rc` field access (16).

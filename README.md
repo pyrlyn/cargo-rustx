@@ -2,7 +2,7 @@
 
 cargo-rustx is a syntax layer over Rust. It stays as close to Rust as possible and only simplifies the places people find hardest to read and write. Everything desugars into ordinary Rust through procedural macros built on `syn`; there is no custom compiler. There are two entry points: `sugar! { .. }` for the full vocabulary and `#[sugar]` for code that is already valid Rust.
 
-Status: early implementation. M0–M2 and most of M3 are in: `sugar!` handles `var` (02), `~Trait` (04), method generics without turbofish (06), `iter T` (09), `rc T`/`weak T` types (16), inline bounds (03), `bound` presets (21), `&from(x) T` lifetimes (01), `#[borrows]` types (19), `into T` parameters (15) and parameter defaults (17); valid Rust passes through unchanged. Later milestones are in [roadmap.md](roadmap.md).
+Status: early implementation. M0–M3 are in: `sugar!` handles `var` (02), `~Trait` (04), method generics without turbofish (06), `iter T` (09), `rc T`/`weak T` types (16), inline bounds (03), `bound` presets (21), `&from(x) T` lifetimes (01), `#[borrows]` types (19), `into T` parameters (15) and parameter defaults with default and named arguments at call sites (17); valid Rust passes through unchanged. Later milestones are in [roadmap.md](roadmap.md).
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it will be built.
 - [research.md](research.md): why these items were chosen, with sources, and what upstream Rust already fixes.

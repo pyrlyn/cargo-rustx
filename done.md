@@ -58,6 +58,18 @@ Problem 17 (parameters only; field defaults belong to M4). `port: u16 = 8080` be
 
 Done: the token half turns `x: T = e` into a `#[__rustx_default(e)]` marker (the contract T10.2 reads through `param_defaults::default_of`); the AST half makes the type `Option<T>` and prepends `unwrap_or` for constant defaults or `unwrap_or_else(|| ..)` otherwise, so a default can use earlier parameters. Patterns move into the `let` behind a generated name. Defaults must be trailing; a default on `self`, an empty default and a default on a fn without a body are errors. Limits: a bare `<` in a default needs parentheses; `?`/`return`/`.await` in a lazy default act on the closure.
 
+### T10.2. M3: default arguments at call sites
+
+Problem 17. Calls inside the same `sugar!` input to a fn with parameter defaults: omitted trailing arguments become `None`, given ones at defaulted positions `Some(..)`. Callers elsewhere see the real `Option<T>` signature. Split from the original T10.2 to fit the task size; depends on T10.1.
+
+Done: AST pass `passes/call_defaults.rs` (before `param_defaults::lower`) records every signature, then rewrites calls: given arguments at defaulted positions become `Some(..)`, omitted ones `None`. Path calls resolve by last segment (and qualifying type or module, `Self` included), `.m(..)` calls by method name; same-named fns that would read a call differently are an ambiguity error. Calls inside parameter defaults and inside macro bodies that parse as `a, b` or `x; n` are rewritten too. Too many arguments and a missing required argument are errors.
+
+### T10.3. M3: named arguments at call sites
+
+Problem 17. `connect("db", port: 6432)` inside the same input names a defaulted parameter; arguments are reordered to the declaration and the rest filled as in T10.2. Named arguments are allowed only for defaulted parameters. Depends on T10.2.
+
+Done: the token half turns `name: value` at the start of a call argument into a reserved `__rustx_named!(name = value)` marker (never in fn parameter lists, fn-pointer types, macro groups, struct literals or closure parameters); the AST half places it by parameter name. Errors: unknown name, a name for a parameter without a default, a duplicate, a positional argument after a named one, a named argument to a call with no defaulted fn. Markers in attribute arguments or opaque macro bodies are restored to `name: value`. Limits: named arguments are evaluated in declaration order; calls with generic arguments take none.
+
 ### T11. Shared token helpers for passes
 
 The mandatory no-duplication rule: after T2–T7 several passes carry private copies of the same token logic — punct checks (`is_punct`, joint/alone), statement/item-start detection (`var`, `bound_presets`), outer-attribute and visibility skipping, angle-bracket depth and matching `>` (with `->` handling) in `turbofish`, `prefix_types` and `inline_bounds`, and error accumulation (`syn::Error::combine` helpers). Move one copy of each into `tokens.rs` (or a `tokens/` module), switch every pass to it, change no behaviour. Blocks T8–T10 so they start on the shared helpers.

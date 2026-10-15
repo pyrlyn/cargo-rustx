@@ -1,2 +1,0 @@
-- T10.2. M3: default arguments at call sites
-- T10.3. M3: named arguments at call sites
