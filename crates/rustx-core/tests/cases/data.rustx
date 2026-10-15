@@ -1,4 +1,4 @@
-// Problem 08 in full, plus a generic struct and a `#[borrows]` struct.
+// Problem 08 in full, plus a generic struct with a builder and a `#[borrows]` struct.
 mod users {
     #[data(setters, with)]
     #[derive(Debug, Clone, PartialEq)]
@@ -23,7 +23,7 @@ mod users {
 }
 
 mod cache {
-    #[data]
+    #[data(builder)]
     pub struct Cache<K: std::hash::Hash + Eq, V> where V: Clone {
         map: std::collections::HashMap<K, V>,
         #[default(16)]
@@ -32,5 +32,5 @@ mod cache {
 }
 
 #[borrows]
-#[data(setters)]
+#[data(setters, builder)]
 pub struct Line { text: &str, number: usize }

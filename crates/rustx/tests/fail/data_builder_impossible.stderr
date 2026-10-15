@@ -1,0 +1,11 @@
+error: a field named `build` collides with the `build` method `#[data(builder)]` adds
+ --> tests/fail/data_builder_impossible.rs:3:22
+  |
+3 |     pub struct Job { build: u32 }
+  |                      ^^^^^
+
+error: `UserBuilder` is already declared next to `User`, so `#[data(builder)]` cannot add it
+ --> tests/fail/data_builder_impossible.rs:5:12
+  |
+5 |     #[data(builder)]
+  |            ^^^^^^^

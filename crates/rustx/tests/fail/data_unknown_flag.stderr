@@ -1,4 +1,4 @@
-error: unknown `#[data]` flag; expected `setters` or `with`
+error: unknown `#[data]` flag; expected `setters`, `with` or `builder`
  --> tests/fail/data_unknown_flag.rs:2:21
   |
 2 |     #[data(setters, getters)]

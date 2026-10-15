@@ -1,4 +1,4 @@
-//! `#[data]` structs: constructor and getters (problem 08).
+//! `#[data]` structs: constructor, getters and an optional builder (problem 08).
 //!
 //! An AST pass: the struct is valid Rust, so it only needs the parsed fields. It runs before
 //! `inline_bounds` and `borrows`, so the impls it generates are extended like hand-written ones.
@@ -14,13 +14,18 @@
 //! Flags in `#[data(..)]` add more:
 //!
 //! - `setters`: `pub fn set_<field>(&mut self, <field>: T)` per field;
-//! - `with`: `pub fn with_<field>(mut self, <field>: T) -> Self` per field.
+//! - `with`: `pub fn with_<field>(mut self, <field>: T) -> Self` per field;
+//! - `builder`: `pub fn builder() -> <Name>Builder`, a builder struct with the struct's
+//!   visibility and generics, one `fn <field>(mut self, v: T) -> Self` per field, and
+//!   `fn build(self) -> Result<Name, &'static str>`, which fails on a missing field that has no
+//!   `#[default(..)]`.
 //!
 //! Generated methods are `pub`, as in the problem file, and carry `#[allow(dead_code)]` on their
 //! `impl`: the user asked for the set, not for each method, so unused ones are not warnings.
 //!
 //! On a `#[borrows]` struct the parameters and by-value getters name the struct's lifetime
 //! instead of eliding it, because an elided parameter lifetime could not be stored in the struct.
+//! The builder struct takes `#[borrows]` too.
 //!
 //! # Limitations
 //!
@@ -29,6 +34,7 @@
 //! - Field defaults written as `field: T = e` (problem 17) are not read: they are lowered
 //!   before this pass, so `new` still takes such a field.
 
+mod builder;
 mod methods;
 
 use std::collections::HashSet;
@@ -56,6 +62,8 @@ pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
 struct Flags {
     setters: bool,
     with: bool,
+    /// The `builder` token, which names the builder.
+    builder: Option<Span>,
 }
 
 /// One field of a `#[data]` struct.
@@ -100,9 +108,15 @@ impl Lower {
         as_item: fn(&mut T) -> Option<&mut Item>,
         wrap: fn(Item) -> T,
     ) {
+        // A builder must not collide with a type declared next to the struct.
+        let declared: HashSet<String> = list
+            .iter_mut()
+            .filter_map(as_item)
+            .filter_map(|item| type_name(item))
+            .collect();
         let mut out = Vec::with_capacity(list.len());
         for mut entry in mem::take(list) {
-            let generated = match as_item(&mut entry).map(expand) {
+            let generated = match as_item(&mut entry).map(|item| expand(item, &declared)) {
                 Some(Ok(generated)) => generated,
                 Some(Err(err)) => {
                     combine(&mut self.errors, err);
@@ -151,10 +165,23 @@ fn item_of_stmt(stmt: &mut Stmt) -> Option<&mut Item> {
     }
 }
 
+fn type_name(item: &Item) -> Option<String> {
+    let ident = match item {
+        Item::Struct(item) => &item.ident,
+        Item::Enum(item) => &item.ident,
+        Item::Union(item) => &item.ident,
+        Item::Type(item) => &item.ident,
+        Item::Trait(item) => &item.ident,
+        Item::TraitAlias(item) => &item.ident,
+        _ => return None,
+    };
+    Some(ident.to_string())
+}
+
 /// The items `#[data]` on `item` generates, after taking the markers off.
-fn expand(item: &mut Item) -> syn::Result<Vec<Item>> {
+fn expand(item: &mut Item, declared: &HashSet<String>) -> syn::Result<Vec<Item>> {
     let (attrs, kind) = match item {
-        Item::Struct(item) => return expand_struct(item),
+        Item::Struct(item) => return expand_struct(item, declared),
         Item::Enum(item) => (&mut item.attrs, "an enum"),
         Item::Union(item) => (&mut item.attrs, "a union"),
         _ => return Ok(Vec::new()),
@@ -168,7 +195,7 @@ fn expand(item: &mut Item) -> syn::Result<Vec<Item>> {
     }
 }
 
-fn expand_struct(item: &mut ItemStruct) -> syn::Result<Vec<Item>> {
+fn expand_struct(item: &mut ItemStruct, declared: &HashSet<String>) -> syn::Result<Vec<Item>> {
     let Some(attr) = take_attr(&mut item.attrs, ATTR) else {
         return Ok(Vec::new());
     };
@@ -205,6 +232,11 @@ fn expand_struct(item: &mut ItemStruct) -> syn::Result<Vec<Item>> {
             })
         })
         .collect();
+    if let Some(at) = flags.builder
+        && let Err(err) = builder::check(&item.ident, &fields, at, declared)
+    {
+        combine(&mut errors, err);
+    }
     if let Some(errors) = errors {
         return Err(errors);
     }
@@ -220,7 +252,9 @@ fn expand_struct(item: &mut ItemStruct) -> syn::Result<Vec<Item>> {
         fields,
         lifetime,
     };
-    Ok(vec![methods::generate(&data)?])
+    let mut items = vec![methods::generate(&data)?];
+    items.extend(builder::generate(&data)?);
+    Ok(items)
 }
 
 fn flags(attr: &Attribute) -> syn::Result<Flags> {
@@ -228,7 +262,7 @@ fn flags(attr: &Attribute) -> syn::Result<Flags> {
     match &attr.meta {
         Meta::Path(_) => return Ok(flags),
         Meta::NameValue(meta) => {
-            let msg = "`#[data]` takes flags in parentheses: `#[data(setters, with)]`";
+            let msg = "`#[data]` takes flags in parentheses: `#[data(setters, with, builder)]`";
             return Err(syn::Error::new_spanned(&meta.value, msg));
         }
         Meta::List(_) => {}
@@ -238,8 +272,9 @@ fn flags(attr: &Attribute) -> syn::Result<Flags> {
         let given = match name.as_deref() {
             Some("setters") => mem::replace(&mut flags.setters, true),
             Some("with") => mem::replace(&mut flags.with, true),
+            Some("builder") => flags.builder.replace(meta.path.span()).is_some(),
             _ => {
-                let msg = "unknown `#[data]` flag; expected `setters` or `with`";
+                let msg = "unknown `#[data]` flag; expected `setters`, `with` or `builder`";
                 return Err(meta.error(msg));
             }
         };
@@ -362,7 +397,7 @@ mod tests {
                 "`#[data]` needs a struct with named fields, not a unit struct",
                 "`#[data]` needs a struct with named fields, not an enum",
                 "`#[data]` needs a struct with named fields, not a union",
-                "unknown `#[data]` flag; expected `setters` or `with`",
+                "unknown `#[data]` flag; expected `setters`, `with` or `builder`",
             ]
         );
     }
@@ -377,11 +412,11 @@ mod tests {
             (quote!((with = true)), "a `#[data]` flag takes no value"),
             (
                 quote!((a::b)),
-                "unknown `#[data]` flag; expected `setters` or `with`",
+                "unknown `#[data]` flag; expected `setters`, `with` or `builder`",
             ),
             (
                 quote!(= "x"),
-                "`#[data]` takes flags in parentheses: `#[data(setters, with)]`",
+                "`#[data]` takes flags in parentheses: `#[data(setters, with, builder)]`",
             ),
         ] {
             assert_eq!(errors(quote! { #[data #flags] struct S { a: u8 } }), [msg]);
@@ -398,7 +433,7 @@ mod tests {
             }),
             [
                 "`#[data]` is given twice",
-                "unknown `#[data]` flag; expected `setters` or `with`",
+                "unknown `#[data]` flag; expected `setters`, `with` or `builder`",
                 "`#[default]` on a `#[data]` field needs a value: `#[default(expr)]`",
                 "a field takes one `#[default(..)]`",
             ]

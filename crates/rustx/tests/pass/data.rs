@@ -1,4 +1,4 @@
-// Problem 08 in full, plus a generic struct and a `#[borrows]` struct.
+// Problem 08 in full, plus a generic struct with a builder and a `#[borrows]` struct.
 rustx::sugar! {
     mod users {
         #[data(setters, with)]
@@ -27,7 +27,7 @@ rustx::sugar! {
         use std::collections::HashMap;
         use std::hash::Hash;
 
-        #[data]
+        #[data(builder)]
         #[derive(Debug)]
         pub struct Cache<K: Hash + Eq, V> where V: Clone {
             map: HashMap<K, V>,
@@ -43,7 +43,7 @@ rustx::sugar! {
     }
 
     #[borrows]
-    #[data(setters)]
+    #[data(setters, builder)]
     pub struct Line { text: &str, number: usize }
 
     fn local() -> u8 {
@@ -69,19 +69,24 @@ fn main() {
     all[0].set_name("Anna".to_string());
     assert_eq!(all[0].name(), "Anna");
 
-    let cache = Cache::new([("a", 1)].into_iter().collect());
+    let cache = Cache::builder().map([("a", 1)].into_iter().collect()).build().unwrap();
     assert_eq!((cache.capacity(), cache.get(&"a"), cache.get(&"b")), (16, Some(1), None));
+    let made = Cache::<u8, u8>::new(Default::default());
+    assert_eq!(made.capacity(), 16);
+    let missing = Cache::<u8, u8>::builder().capacity(4).build().unwrap_err();
+    assert_eq!(missing, "`Cache` builder is missing `map`");
 
     // The text borrows from the source, so it outlives the line.
     let src = String::from("first line");
     let text = {
-        let mut line = Line::new("", 1);
-        line.set_text(&src);
+        let line = Line::builder().text(&src).number(1).build().unwrap();
         assert_eq!(line.number(), 1);
         line.text()
     };
     assert_eq!(text, "first line");
-    assert_eq!(Line::new(&src, 2).text(), "first line");
+    let mut line = Line::new("", 2);
+    line.set_text(&src);
+    assert_eq!(line.text(), "first line");
 
     assert_eq!(local(), 7);
 }

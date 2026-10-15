@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote_spanned};
 use syn::{Item, Type};
 
-use super::{Data, DataField};
+use super::{Data, DataField, builder};
 
 /// Primitive types whose getters return the value.
 const COPY: &[&str] = &[
@@ -44,6 +44,7 @@ pub(super) fn generate(data: &Data) -> syn::Result<Item> {
         .then(|| data.fields.iter().map(|field| with(data, field)))
         .into_iter()
         .flatten();
+    let builder = builder::entry(data);
     syn::parse2(quote_spanned! {data.span=>
         #[allow(dead_code)]
         impl #impl_generics #ident #ty_generics #where_clause {
@@ -53,6 +54,7 @@ pub(super) fn generate(data: &Data) -> syn::Result<Item> {
             #(#getters)*
             #(#setters)*
             #(#withs)*
+            #builder
         }
     })
 }
