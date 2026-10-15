@@ -40,6 +40,24 @@ Problems 01 and 09 (`from` combined with `iter T`). `-> &from(xs) Item` introduc
 
 Done: `&from(a, b) T` becomes a marker lifetime, then the AST pass gives the named parameters one shared `'__rustx_from_*` lifetime (references, `self` receivers, `impl Trait` and bare type parameters with reference bounds) and replaces `'_` of a return `impl Trait` that contains it, so `iter &from(x) T` works. Unknown names, non-reference parameters and `from` outside a return type are errors. Limits: `from(Self)` belongs to T8; destructured parameters cannot be named; only the outer reference of `&Vec<&str>` is tied.
 
+### T8. M3: `#[borrows]` structs and `&from(Self)`
+
+Problem 19. `#[borrows] struct Lexer { src: &str }` adds one lifetime to the type, its fields and its `impl` headers; `&from(Self) T` / `&from(Type) T` resolve to that lifetime. Depends on T7.
+
+Done: `#[borrows]` on a struct or enum adds `'__rustx_borrows` first in its generics and puts it on every elided `&`/`'_` in fields and on nested `#[borrows]` types; impls naming such a type get it in their header and signatures (elided `&` in signatures stays elided). `from(Self)` uses the impl's lifetime; `from(Type)` in other fns adds the lifetime and ties every `Type` parameter. Errors: arguments to `#[borrows]`, a type with nothing to fill or with its own lifetime, `from(Self)` outside a borrowing impl, `from(Type)` with no such parameter, `from(Self, x)`. Limits: types match by last path segment; fn bodies are not rewritten; `fn(&T)` keeps its own elision.
+
+### T9. M3: `into T` parameters
+
+Problem 15. `name: into String` becomes `name: impl Into<String>` plus `let name: String = name.into();` at the top of the body.
+
+Done: the token half marks `x: into T` parameters; the AST half gives them `impl ::core::convert::Into<T>` and prepends a fully qualified conversion in parameter order, moving `mut`/`ref` to the `let` and copying `cfg`/lint attributes. Declarations without a body (trait items, `extern` fns) only get the type. `into` on `self`, on a pattern or without a type is an error.
+
+### T10.1. M3: parameter defaults in signatures
+
+Problem 17 (parameters only; field defaults belong to M4). `port: u16 = 8080` becomes `port: Option<u16>` with `let port = port.unwrap_or(8080);` (or `unwrap_or_else` when the default is not a literal) at the top of the body.
+
+Done: the token half turns `x: T = e` into a `#[__rustx_default(e)]` marker (the contract T10.2 reads through `param_defaults::default_of`); the AST half makes the type `Option<T>` and prepends `unwrap_or` for constant defaults or `unwrap_or_else(|| ..)` otherwise, so a default can use earlier parameters. Patterns move into the `let` behind a generated name. Defaults must be trailing; a default on `self`, an empty default and a default on a fn without a body are errors. Limits: a bare `<` in a default needs parentheses; `?`/`return`/`.await` in a lazy default act on the closure.
+
 ### T11. Shared token helpers for passes
 
 The mandatory no-duplication rule: after T2–T7 several passes carry private copies of the same token logic — punct checks (`is_punct`, joint/alone), statement/item-start detection (`var`, `bound_presets`), outer-attribute and visibility skipping, angle-bracket depth and matching `>` (with `->` handling) in `turbofish`, `prefix_types` and `inline_bounds`, and error accumulation (`syn::Error::combine` helpers). Move one copy of each into `tokens.rs` (or a `tokens/` module), switch every pass to it, change no behaviour. Blocks T8–T10 so they start on the shared helpers.

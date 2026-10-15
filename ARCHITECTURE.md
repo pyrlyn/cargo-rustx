@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: M0–M2 are implemented; M3 is in progress (inline bounds, `bound` presets and `from` lifetimes are in); M4–M9 are planned.
+Status: M0–M2 are implemented; M3 is in progress (all signature sugar is in except default and named arguments at call sites); M4–M9 are planned.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
@@ -108,7 +108,8 @@ Therefore:
 - **`shared` field access** inserting `.lock().unwrap()` per access is not atomic across statements; needs a `with(|m| ..)` form and clear docs.
 - **`rc` field access** picks `.borrow_mut()` from a built-in list of `&mut self` std methods; user methods need `with_mut(|n| ..)`. `RefCell` still panics at run time on conflicting borrows.
 - **Parameter defaults and named arguments** only work for calls inside the same `sugar!` input. Callers elsewhere see the real `Option<T>` signature.
-- **`#[borrows]`** adds exactly one lifetime. Types with two independent lifetimes keep explicit parameters.
+- **`#[borrows]`** adds exactly one lifetime. Types with two independent lifetimes keep explicit parameters. Borrowing types are matched by their last path segment across the whole input, ignoring modules.
+- **A bare `<` in a parameter default** reads as the start of generics, so `ok: bool = a < b` needs parentheses: `ok: bool = (a < b)`. A non-constant default runs in a closure, so `?`, `return` and `.await` inside it act on that closure.
 - **`derive` and `bound` presets** are visible only inside the input that declares them (`bound` produces a real trait, so it can be exported; `derive` presets cannot).
 - **Edition differences:** on edition 2024, `-> impl Trait` already captures all lifetimes, so `iter T` mainly saves typing there. The expansion keeps `+ '_` to work on both editions.
 - **Upstream overlap:** default field values, trait aliases and capture expressions exist on nightly (see [research.md](research.md)). Each pass must be able to switch to the native form once it is stable, without changing user code.
