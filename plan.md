@@ -7,7 +7,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T29 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
 | T31 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
 | T33 | todo | P3 | 2 | 0% | |
 
@@ -18,12 +17,6 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
-
-### T29. M8: string literals into `String`
-
-Problem 15. A string literal gets `.to_string()` where the target type is written as `String` in the same input (struct fields, `Option<String>`, `Vec<String>`, `let x: String`), on the machinery of T28 and the shared `is_string`. Depends on T28. Done when the problem's `Contact` example compiles, with unit tests, a snapshot case and `pass/` tests, and positions whose type is not written stay unchanged.
-
-Plan: always on, without an opt-in: a string literal in a position whose type is written `String` does not compile as plain Rust, so the rewrite cannot change the meaning of valid Rust. AST pass `passes/string_literals.rs::lower` (pre-registered before `widen::lower`) implements `typed_positions::Convert`: a literal, `Some(lit)` or `vec![lit, ..]` meeting `String`, `Option<String>` or `Vec<String>` (the shared `is_string`) gets `::std::string::String::from(lit)`; it adds the struct-literal field position to `typed_positions` (shorthand fields get their `:` back). Verify: unit tests, `tests/cases/string_literals.rustx`, `pass/string_literals.rs` with the problem's `Contact` example, `just check`.
 
 ### T31. M9: `rustx-cli fmt`
 
