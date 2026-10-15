@@ -1,0 +1,79 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/shared.rustx
+---
+mod metrics {
+    use std::collections::HashMap;
+    use std::thread;
+    #[derive(Default)]
+    pub struct Metrics {
+        requests: u64,
+        errors: u64,
+        by_path: HashMap<String, u64>,
+    }
+    pub fn simulate(paths: Vec<String>, threads: usize) -> (u64, u64, usize) {
+        let metrics = ::rustx::Shared::new(Metrics::default());
+        let paths = ::std::sync::Arc::new(paths);
+        let mut handles = Vec::new();
+        for t in 0..threads {
+            handles
+                .push(
+                    thread::spawn({
+                        let metrics = metrics.clone();
+                        let paths = paths.clone();
+                        move || {
+                            for (i, p) in paths.iter().enumerate() {
+                                metrics.lock().requests += 1;
+                                if (i + t) % 7 == 0 {
+                                    metrics.lock().errors += 1;
+                                }
+                                *metrics.lock().by_path.entry(p.clone()).or_insert(0) += 1;
+                            }
+                        }
+                    }),
+                );
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        {
+            let __rustx_metrics = &mut *metrics.lock();
+            (
+                __rustx_metrics.requests,
+                __rustx_metrics.errors,
+                __rustx_metrics.by_path.len(),
+            )
+        }
+    }
+}
+pub struct Server {
+    hits: ::rustx::Shared<Vec<u64>>,
+}
+pub fn units(log: Vec<String>) -> u64 {
+    let state: ::rustx::Shared<State> = ::rustx::Shared::new(State::default());
+    while state.lock().pending < 3 {
+        state.lock().pending += 1;
+    }
+    {
+        let __rustx_state = &mut *state.lock();
+        match __rustx_state.mode {
+            Mode::Idle => __rustx_state.pending = 0,
+            Mode::Busy => {}
+        }
+    }
+    println!("{} {}", state.lock().pending, log.len());
+    {
+        let __rustx_state = &mut *state.lock();
+        __rustx_state.log.push(format!("{}", __rustx_state.pending))
+    };
+    let copy = state.with(|s| s.pending);
+    let worker = state.clone();
+    std::thread::spawn(move || worker.with_mut(|s| s.pending += 1));
+    let state = copy;
+    state
+}
+fn shared(shared: u64) -> u64 {
+    let shared = shared + 1;
+    shared
+}

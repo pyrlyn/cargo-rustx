@@ -1,0 +1,57 @@
+// Problem 12's detailed example.
+mod metrics {
+    use std::collections::HashMap;
+    use std::thread;
+
+    #[derive(Default)]
+    pub struct Metrics { requests: u64, errors: u64, by_path: HashMap<String, u64> }
+
+    pub fn simulate(paths: Vec<String>, threads: usize) -> (u64, u64, usize) {
+        shared metrics = Metrics::default();
+        shared paths = paths;   // read-only: becomes Arc<Vec<String>>
+        var handles = Vec::new();
+        for t in 0..threads {
+            handles.push(thread::spawn(move[metrics.clone(), paths.clone()] || {
+                for (i, p) in paths.iter().enumerate() {
+                    metrics.requests += 1;
+                    if (i + t) % 7 == 0 { metrics.errors += 1; }
+                    *metrics.by_path.entry(p.clone()).or_insert(0) += 1;
+                }
+            }));
+        }
+        for h in handles { h.join().unwrap(); }
+        (metrics.requests, metrics.errors, metrics.by_path.len())
+    }
+}
+
+pub struct Server {
+    hits: shared Vec<u64>,
+}
+
+pub fn units(log: Vec<String>) -> u64 {
+    shared state: State = State::default();
+    // A condition is a unit of its own: its lock is released before the body runs.
+    while state.pending < 3 {
+        state.pending += 1;
+    }
+    // A scrutinee lives through its arms, so the whole `match` shares one guard.
+    match state.mode {
+        Mode::Idle => state.pending = 0,
+        Mode::Busy => {}
+    }
+    // Macro arguments are part of the statement.
+    println!("{} {}", state.pending, log.len());
+    state.log.push(format!("{}", state.pending));
+    // Methods of the handle stay on the handle.
+    let copy = state.with(|s| s.pending);
+    let worker = state.clone();
+    std::thread::spawn(move || worker.with_mut(|s| s.pending += 1));
+    // Shadowing ends the scope.
+    let state = copy;
+    state
+}
+
+fn shared(shared: u64) -> u64 {
+    let shared = shared + 1;
+    shared
+}
