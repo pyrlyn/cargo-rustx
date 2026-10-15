@@ -9,5 +9,6 @@
 - T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
 - T19.11. Sugar driver: trailing commas and edit groups
 - T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
+- T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
 - T31.2. M9: `rustx-cli fmt` for the remaining sugar
 - T33. M9: user documentation

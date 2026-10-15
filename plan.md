@@ -17,6 +17,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.11 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T19.12 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.13 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
 | T33 | in progress | P3 | 2 | 100% | Claude / opus-5.5 |
 
@@ -87,6 +88,12 @@ Plan: in `crates/rustx-core/src/sugar/mod.rs`, extend the token comparison (next
 Inverts the field half of problem 17 (`field_defaults`): a struct followed by the exact `impl Default` the pass generates becomes the struct with `field: T = e` defaults and no impl, and struct expressions ending in `..Default::default()` for such a struct become a bare `..`. Done when the pass output turns back into the sugar on ordinary code, and an `impl Default` the pass would not generate (other statements, a field not set, a `derive(Default)`) is left alone.
 
 Plan: read `passes/field_defaults.rs` for the emitted shapes (generics, `where`, `cfg`, the `Into::into` on `String` literal defaults); `sugar/field_defaults.rs` implementing `ReverseRule`, the struct edit and the impl removal as one unit (an edit group once T19.11 lands, else one spanning edit); the `..` rewrite of struct expressions only for structs whose defaults are in the same file. Register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
+
+### T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
+
+Inverts the other two type prefixes of `prefix_types` (problems 04 and 09): `Box<dyn Trait + Send + Sync>` becomes `~Trait`, and `impl Iterator<Item = T> + '_` becomes `iter T`, in any spelling the normaliser equates and in the positions `prefix_types` reads. Done when both convert on ordinary code and shapes the pass does not write (other bounds, bound order the pass does not emit, a missing `+ '_`, `dyn Trait` without both markers) are left alone.
+
+Plan: build on T19.10 (`sugar/rc_types.rs`): reuse its position logic and single-candidate expansion check, extending it to the two other prefixes rather than adding a parallel walker; register in `RULES` if it is a separate rule; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T31.2. M9: `rustx-cli fmt` for the remaining sugar
 
