@@ -233,9 +233,14 @@ mod tests {
     fn a_directory_expands_every_rustx_file_and_collects_the_errors() {
         let out = scratch("dir");
         let err = expand_dir_into(Path::new("tests/fixtures"), &out).unwrap_err();
+        // The walk joins with the platform separator, so Windows reports `tests/fixtures\bad\..`.
+        let bad = Path::new("tests/fixtures").join("bad").join("tilde.rustx");
         assert_eq!(
             err.to_string(),
-            "tests/fixtures/bad/tilde.rustx:3:22: expected a trait after `~`, as in `~Trait` or `~Fn(T) -> U`"
+            format!(
+                "{}:3:22: expected a trait after `~`, as in `~Trait` or `~Fn(T) -> U`",
+                bad.display()
+            )
         );
         assert!(out.join("tests/fixtures/ok/counter.rs").is_file());
         assert!(out.join("tests/fixtures/ok/nested/greet.rs").is_file());
