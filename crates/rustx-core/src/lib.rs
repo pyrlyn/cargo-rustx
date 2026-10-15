@@ -1,7 +1,7 @@
 //! Desugaring core of cargo-rustx: turns the body of `sugar! { .. }` into plain Rust.
 //!
 //! Kept apart from the proc-macro crate so every pass runs on `proc_macro2` tokens and can be
-//! unit- and snapshot-tested without a compiler. A future CLI (`rustx expand`) reuses it as is.
+//! unit- and snapshot-tested without a compiler. The CLI (`rustx-cli expand`) reuses it as is.
 //!
 //! Pipeline: token passes rewrite sugar that `syn` cannot parse into valid Rust, the result is
 //! parsed as a [`syn::File`], then AST passes rewrite sugar that needs syntactic context.
