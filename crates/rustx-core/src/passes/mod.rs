@@ -31,6 +31,7 @@ mod signatures;
 mod throws;
 mod turbofish;
 mod var;
+mod widen;
 
 use proc_macro2::TokenStream;
 
@@ -87,6 +88,7 @@ const AST_PASSES: &[AstPass] = &[
     from_lifetimes::lower,
     dyn_traits::lower,
     shared::lower,
+    widen::lower,
     throws::lower,
 ];
 

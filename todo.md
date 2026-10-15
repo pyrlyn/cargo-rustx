@@ -2,7 +2,6 @@
 - T19.1. Sugar conversion driver and `rustx-cli sugar`
 - T21. M5: `throw e`
 - T24. M6: `shared` bindings and `shared T` types
-- T25. M6: `rc e` expressions
 - T26. M6: borrows on `rc T` field access
 - T27. M7: `async fn` in traits for `dyn` use
 - T28. M8: implicit lossless `into()`

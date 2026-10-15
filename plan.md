@@ -10,10 +10,9 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.1 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T21 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
-| T25 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T26 | todo | P2 | 4 | 0% | |
 | T27 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
-| T28 | todo | P3 | 4 | 0% | |
+| T28 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T29 | todo | P3 | 3 | 0% | |
 | T31 | todo | P3 | 3 | 0% | |
 | T32 | todo | P3 | 4 | 0% | |
@@ -45,12 +44,6 @@ Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type po
 
 Plan: token pass `passes/shared.rs::rewrite` (pre-registered after `capture_lists`) turns the statement `shared s = e;` into a binding of `::rustx::Shared::new(e)` marked for the AST pass, and `shared T` in type positions into `::rustx::Shared<T>`; AST pass `shared::lower` (pre-registered before `throws::lower`) rewrites field access on marked bindings to go through `lock()`, giving each statement one guard so two accesses in one statement cannot deadlock, and makes never-mutated data a plain `Arc` as the problem file shows. Verify: unit tests, `tests/cases/shared.rustx`, `pass/shared.rs` running the problem's detailed example, `fail/shared_*.rs`, `just check`.
 
-### T25. M6: `rc e` expressions
-
-Problem 16. `rc e` in expression position becomes `Rc::new(RefCell::new(e))` (the `rc T` / `weak T` types landed in M2). Expression position is told apart from type position as ARCHITECTURE h describes. Done when unit tests, a snapshot case and `pass/` tests cover arguments, `let` values and struct field values, and valid Rust using `rc` as an identifier still passes through unchanged.
-
-Plan: token pass `passes/rc_values.rs` (pre-registered in `TOKEN_PASSES` right after `prefix_types`, so every `rc` left is outside a type position) that rewrites `rc <expr>` into `::std::rc::Rc::new(::std::cell::RefCell::new(<expr>))` only where `rc` is a whole identifier followed by an expression start that would not be valid Rust after it (`rc(x)`, `rc[0]`, `rc.f`, `rc { .. }` stay). The expression extends to the next `,` or `;` at the same depth or the end of its group. Verify: unit tests including pass-through of `rc` as an identifier, `tests/cases/rc_values.rustx`, `pass/rc_values.rs`, `just check`.
-
 ### T26. M6: borrows on `rc T` field access
 
 Problem 16. On a binding whose type is written `rc T` or `&rc T`, field access gets `.borrow_mut()` when the field is assigned, compound-assigned or receives a known `&mut self` std method call, and `.borrow()` otherwise, plus `with` / `with_mut` helpers in `rustx`. Reuses T24's access rewriting. Depends on T24 and T25. Done when the problem's tree example runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.
@@ -68,6 +61,8 @@ Plan: `#[dyn]` / `#[dyn(DynName)]` on a trait inside `sugar!` (a token pass `pas
 Problem 13. Where the target type is written in the input (a `let` annotation, a field of a struct declared in the input, a parameter of a fn declared in the input), a lossless widening (`u32` to `u64`, `u16` to `u32`, ...) gets `.into()`; lossy conversions stay explicit `as`. Explicit opt-in, as ARCHITECTURE g says; the opt-in form is settled with the creator when the task is claimed. Done when unit tests, a snapshot case and `pass/` tests cover each position, and nothing changes without the opt-in.
 
 Decided with the creator: opt-in through a `#[widen]` attribute on a fn, impl or module, or `#![widen]` at the start of the `sugar!` input; it applies only inside what is marked.
+
+Plan: AST pass `passes/widen.rs::lower` (pre-registered before `throws::lower`) that, inside a fn, impl or module marked `#[widen]` or in a `sugar!` input starting with `#![widen]`, removes the attribute and inserts `.into()` (as `::core::convert::Into::into(..)`) where the source type and the target type are both written in the input and the conversion is a lossless widening from the problem file's table: `let x: T = e`, `s.f = e` / `s.f += e` into a field of a struct declared in the input, and arguments of a fn declared in the input; the source type comes from a `let` annotation, a parameter or a field. Anything not provably widening stays as written. Verify: unit tests, `tests/cases/widen.rustx`, `pass/widen.rs`, `fail/widen_*.rs` for misplaced attributes, `just check`.
 
 ### T29. M8: string literals into `String`
 
