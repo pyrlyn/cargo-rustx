@@ -16,6 +16,7 @@ mod from_lifetimes;
 mod inline_bounds;
 mod into_params;
 mod macro_args;
+mod newtype;
 mod param_defaults;
 mod prefix_types;
 mod signatures;
@@ -56,6 +57,7 @@ const AST_PASSES: &[AstPass] = &[
     field_defaults::lower,
     data::lower,
     from_display::lower,
+    newtype::lower,
     delegate::lower,
     inline_bounds::lower,
     into_params::lower,
