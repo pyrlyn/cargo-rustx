@@ -322,6 +322,36 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_set_whose_edits_keep_the_meaning_only_together_is_kept_one_at_a_time() {
+        let source = "fn f() { let a = 1; let b = 2; }\n";
+        // Either edit alone drops or repeats `let a`; together they only move a line break.
+        let moved = Together(&[
+            ("let a = 1; ", ""),
+            ("let b = 2;", "let a = 1;\n    let b = 2;"),
+        ]);
+        // The renamed fn fails the whole-file check, so every set is checked on its own.
+        let out = convert(source, &[&moved, &Replace("f()", "h()")]);
+        assert_eq!(out.unwrap(), "fn f() { let a = 1;\n    let b = 2; }\n");
+    }
+
+    #[test]
+    fn two_sets_of_edits_in_one_fn_both_apply_over_rustfmt_commas() {
+        let source = "fn f<T>(\n    t: T,\n) -> u8\nwhere\n    T: Clone,\n{\n    let mut a = 1;\n    \
+                      let mut b = 2;\n    a + b\n}\n";
+        let expected = "fn f<T>(\n    t: T\n) -> u8\nwhere\n    T: Clone\n{\n    var a = 1;\n    \
+                        var b = 2;\n    a + b\n}\n";
+        // Each set edits two places, the sets interleave, and each drops one of rustfmt's
+        // trailing commas, which the check must not count as a change.
+        let first = Together(&[("t: T,\n)", "t: T\n)"), ("let mut a", "var a")]);
+        let second = Together(&[("T: Clone,\n{", "T: Clone\n{"), ("let mut b", "var b")]);
+        assert_eq!(convert(source, &[&first, &second]).unwrap(), expected);
+        // A set between them that changes the return type sends the driver to its
+        // one-at-a-time check; it goes whole, its harmless edit too, and both sets stay.
+        let bad = Together(&[("-> u8", "-> i8"), ("a + b", "a+b")]);
+        assert_eq!(convert(source, &[&first, &bad, &second]).unwrap(), expected);
+    }
+
+    #[test]
     fn of_overlapping_edits_the_earlier_rule_wins() {
         let source = "fn f() {}\n";
         let first = Replace("fn f", "fn  f");
