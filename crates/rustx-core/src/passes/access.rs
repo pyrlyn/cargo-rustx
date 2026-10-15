@@ -1,6 +1,6 @@
 //! Accesses to a binding that must go through an opener first, such as a lock or a borrow.
 //!
-//! Shared by `shared` bindings (problem 12, `s.lock()`) and, later, `rc` bindings (problem 16,
+//! Shared by `shared` bindings (problem 12, `s.lock()`) and `rc` bindings (problem 16,
 //! `borrow()` / `borrow_mut()`): they differ only in how the value is opened ([`Opening`]), so
 //! the scope rules, the guard grouping and the write detection live here once.
 //!

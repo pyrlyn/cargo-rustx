@@ -5,7 +5,8 @@
 //!
 //! - `~T` → `::std::boxed::Box<dyn T + ::core::marker::Send + ::core::marker::Sync>`
 //! - `iter T` → `impl ::core::iter::Iterator<Item = T> + '_`
-//! - `rc T` → `::std::rc::Rc<::core::cell::RefCell<T>>`
+//! - `rc T` → `::std::rc::Rc<::core::cell::RefCell<T>>`, marked for `rc_borrows`, which tracks
+//!   bindings of that type and removes the marker
 //! - `weak T` → `::std::rc::Weak<::core::cell::RefCell<T>>`
 //! - `shared T` → `::rustx::Shared<T>`
 //!
@@ -59,6 +60,7 @@ use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
 use syn::{Token, TraitBound, Type, TypeParamBound};
 
+use super::rc_borrows;
 use crate::tokens::map_sequences;
 use crate::tokens::punct::{alone, follows_arrow, is_arrow, is_punct, is_single_colon, loosen_end};
 
@@ -247,7 +249,10 @@ fn expand(
             ::std::boxed::Box<dyn #inner + ::core::marker::Send + ::core::marker::Sync>
         ),
         Prefix::Iter => quote_spanned!(span=> impl ::core::iter::Iterator<Item = #inner> + '_),
-        Prefix::Rc => quote_spanned!(span=> ::std::rc::Rc<::core::cell::RefCell<#inner>>),
+        Prefix::Rc => {
+            let marker = rc_borrows::marker(span);
+            quote_spanned!(span=> #marker::std::rc::Rc<::core::cell::RefCell<#inner>>)
+        }
         Prefix::Weak => quote_spanned!(span=> ::std::rc::Weak<::core::cell::RefCell<#inner>>),
         Prefix::Shared => quote_spanned!(span=> ::rustx::Shared<#inner>),
     };
@@ -319,10 +324,11 @@ mod tests {
     use super::*;
     use quote::{ToTokens, quote};
 
-    /// Both sides re-printed through `syn`, so token spacing does not matter.
+    /// Both sides re-printed through `syn`, so token spacing does not matter, and without the
+    /// `rc` marker, which `rc_borrows` removes.
     fn expands_to(sugar: TokenStream, plain: TokenStream) {
         let normalize = |tokens: TokenStream| {
-            syn::parse2::<syn::File>(tokens)
+            syn::parse2::<syn::File>(rc_borrows::unmark(tokens))
                 .unwrap()
                 .into_token_stream()
                 .to_string()

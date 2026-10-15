@@ -1,0 +1,55 @@
+mod tree {
+    use std::rc::Rc;
+
+    pub struct Node {
+        pub name: String,
+        pub size: u64,
+        pub parent: Option<weak Node>,
+        pub children: Vec<rc Node>,
+    }
+
+    pub fn new_node(name: &str, size: u64) -> rc Node {
+        rc Node { name: name.to_string(), size, parent: None, children: Vec::new() }
+    }
+
+    pub fn add_child(parent: &rc Node, child: rc Node) {
+        child.parent = Some(Rc::downgrade(parent));
+        parent.size += child.size;
+        parent.children.push(child);
+    }
+
+    pub fn path(node: &rc Node) -> String {
+        var parts = vec![node.name.clone()];
+        var cur = node.parent.as_ref().and_then(|w| w.upgrade());
+        while let Some(p) = cur {
+            // `p` has no written type, so its borrows stay explicit
+            parts.push(p.borrow().name.clone());
+            cur = p.borrow().parent.as_ref().and_then(|w| w.upgrade());
+        }
+        parts.reverse();
+        parts.join("/")
+    }
+
+    pub fn count(node: &rc Node) -> usize {
+        1 + node.children.iter().map(count).sum<usize>()
+    }
+
+    // Two accesses in one statement share one borrow, mutable because one of them writes.
+    pub fn double(node: &rc Node) -> u64 {
+        node.size = node.size * 2;
+        node.size
+    }
+
+    pub fn totals(nodes: Vec<rc Node>) -> Vec<u64> {
+        let seen = rc Vec::new();
+        for n in &nodes {
+            seen.push(n.borrow().size);
+        }
+        nodes.iter().map(|n: &rc Node| n.size + seen.len() as u64).collect()
+    }
+
+    // A hand-written `Rc<RefCell<T>>` is plain Rust: `replace` stays `RefCell::replace`.
+    pub fn reset(n: &::std::rc::Rc<::core::cell::RefCell<u64>>) -> u64 {
+        n.replace(0)
+    }
+}

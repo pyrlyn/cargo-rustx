@@ -1,4 +1,5 @@
-//! `rc e` expressions (problem 16): `rc e` → `::std::rc::Rc::new(::std::cell::RefCell::new(e))`.
+//! `rc e` expressions (problem 16): `rc e` → `::std::rc::Rc::new(::std::cell::RefCell::new(e))`,
+//! marked for `rc_borrows`, which tracks `let` bindings of such a value and removes the marker.
 //!
 //! A token pass: a name followed by an expression is not valid Rust, so it is rewritten before
 //! parsing. It runs right after `prefix_types`, which has already turned every `rc T` in a type
@@ -34,6 +35,7 @@
 use proc_macro2::{Spacing, Span, TokenStream, TokenTree};
 use quote::quote_spanned;
 
+use super::rc_borrows;
 use crate::tokens::angle::matching_close;
 use crate::tokens::map_sequences_reporting;
 use crate::tokens::punct::{is_alone, is_punct, is_single_colon};
@@ -69,7 +71,9 @@ fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<T
         let end = value_end(&out, i + 1);
         let value: TokenStream = out[i + 1..end].iter().cloned().collect();
         let span = out[i].span();
-        let wrapped = quote_spanned!(span=> ::std::rc::Rc::new(::std::cell::RefCell::new(#value)));
+        let marker = rc_borrows::marker(span);
+        let wrapped =
+            quote_spanned!(span=> #marker::std::rc::Rc::new(::std::cell::RefCell::new(#value)));
         out.splice(i..end, wrapped);
     }
     out
@@ -151,8 +155,10 @@ mod tests {
     use super::*;
     use quote::quote;
 
+    /// Compared without the marker, which `rc_borrows` removes.
     fn expands_to(sugar: TokenStream, plain: &TokenStream) {
-        assert_eq!(rewrite(sugar).unwrap().to_string(), plain.to_string());
+        let out = rc_borrows::unmark(rewrite(sugar).unwrap());
+        assert_eq!(out.to_string(), plain.to_string());
     }
 
     fn unchanged(valid: &TokenStream) {
