@@ -1,0 +1,5 @@
+error: `bound` presets take no generic parameters; write a generic trait with a blanket impl instead
+ --> tests/fail/bound_presets_generic.rs:2:14
+  |
+2 |     bound Num<Rhs> = Copy + std::ops::Add<Rhs, Output = Self>;
+  |              ^

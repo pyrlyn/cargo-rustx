@@ -1,0 +1,5 @@
+error: expected `;` after the bound list
+ --> tests/fail/bound_presets_missing_semicolon.rs:4:5
+  |
+4 |     fn same<K: Key>(a: &K, b: &K) -> bool {
+  |     ^^
