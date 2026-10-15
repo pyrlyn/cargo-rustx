@@ -7,6 +7,11 @@
 mod borrows;
 mod bound_presets;
 mod call_defaults;
+mod data;
+mod delegate;
+mod derive_presets;
+mod field_defaults;
+mod from_display;
 mod from_lifetimes;
 mod inline_bounds;
 mod into_params;
@@ -24,11 +29,15 @@ type TokenPass = fn(TokenStream) -> syn::Result<TokenStream>;
 type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 
 // `bound` presets first so later passes see ordinary traits; inline bounds and `from` lifetimes
-// before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Named
+// before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Item-level
+// M4 sugar (`derive` presets, field defaults, `from` variants) right after `bound` presets. Named
 // arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     bound_presets::rewrite,
+    derive_presets::rewrite,
+    field_defaults::rewrite,
+    from_display::rewrite,
     inline_bounds::rewrite,
     into_params::rewrite,
     param_defaults::rewrite,
@@ -38,9 +47,16 @@ const TOKEN_PASSES: &[TokenPass] = &[
     turbofish::rewrite,
 ];
 
-// `#[borrows]` before `from` lifetimes, so `from(Self)` finds the type's lifetime. Call-site
-// defaults before `param_defaults::lower`, which takes off the markers they read.
+// Derive-like M4 passes first, so the impls they generate get generics and lifetimes from
+// `inline_bounds` and `#[borrows]`. `#[borrows]` before `from` lifetimes, so `from(Self)` finds
+// the type's lifetime. Call-site defaults before `param_defaults::lower`, which takes off the
+// markers they read.
 const AST_PASSES: &[AstPass] = &[
+    derive_presets::lower,
+    field_defaults::lower,
+    data::lower,
+    from_display::lower,
+    delegate::lower,
     inline_bounds::lower,
     into_params::lower,
     call_defaults::lower,
