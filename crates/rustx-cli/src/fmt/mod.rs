@@ -14,7 +14,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
 use rustx_build::Kind;
 
 use mapped::Mapped;
@@ -49,13 +49,49 @@ fn format(path: &Path, source: &str) -> Result<String, String> {
     let mapped = Mapped::new(source, find::find(source, tokens, &mut file));
     let formatted = rustfmt(&mapped, at)?;
     let restored = mapped.restore(&formatted).map_err(at)?;
-    let expands_the_same =
-        rustx_build::expand_source(&restored, Kind::Sugar).ok() == Some(expanded);
-    if !expands_the_same {
+    let after = rustx_build::expand_source(&restored, Kind::Sugar).ok();
+    if !after.is_some_and(|after| same_expansion(&expanded, &after)) {
         let message = "formatting would change what the file expands to, so it is left as it is";
         return Err(format!("{}: {message}", path.display()));
     }
     Ok(restored)
+}
+
+/// Whether two expansions mean the same, up to a trailing comma before a closing delimiter.
+///
+/// prettyplease settles trailing commas in syntax it knows, but prints macro arguments as they
+/// are written, and rustfmt adds a trailing comma when it breaks `vec![..]` over lines. A comma
+/// that makes a one-element tuple, `(x,)`, is kept, because without it the meaning changes.
+fn same_expansion(before: &str, after: &str) -> bool {
+    let tokens = |text: &str| {
+        text.parse::<TokenStream>()
+            .ok()
+            .map(|t| without_trailing_commas(t, Delimiter::None))
+    };
+    match (tokens(before), tokens(after)) {
+        (Some(before), Some(after)) => before.to_string() == after.to_string(),
+        _ => before == after,
+    }
+}
+
+fn without_trailing_commas(stream: TokenStream, delimiter: Delimiter) -> TokenStream {
+    let mut trees: Vec<TokenTree> = stream
+        .into_iter()
+        .map(|tree| match tree {
+            TokenTree::Group(group) => {
+                let stream = without_trailing_commas(group.stream(), group.delimiter());
+                TokenTree::Group(Group::new(group.delimiter(), stream))
+            }
+            tree => tree,
+        })
+        .collect();
+    let comma = |tree: &TokenTree| matches!(tree, TokenTree::Punct(p) if p.as_char() == ',');
+    let tuple =
+        delimiter == Delimiter::Parenthesis && trees.iter().filter(|t| comma(t)).count() == 1;
+    if trees.last().is_some_and(comma) && !tuple {
+        trees.pop();
+    }
+    trees.into_iter().collect()
 }
 
 /// rustfmt's output for the mapped text, or why there is none, located with `at`.
@@ -126,4 +162,29 @@ fn located(path: &Path, source: &str, offset: usize, message: &str) -> String {
     let line = before.matches('\n').count() + 1;
     let column = before.chars().rev().take_while(|&c| c != '\n').count() + 1;
     format!("{}:{line}:{column}: {message}", path.display())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expansion(source: &str) -> String {
+        rustx_build::expand_source(source, Kind::Sugar).unwrap()
+    }
+
+    #[test]
+    fn a_trailing_comma_rustfmt_adds_to_vec_arguments_keeps_the_expansion() {
+        let before = expansion("fn f() { let v: Vec<String> = vec![\"a\", \"b\"]; }");
+        let after = expansion("fn f() { let v: Vec<String> = vec![\"a\", \"b\",]; }");
+        assert_ne!(before, after);
+        assert!(same_expansion(&before, &after));
+    }
+
+    #[test]
+    fn a_comma_that_makes_a_tuple_or_any_other_token_still_differs() {
+        let tuple = |source| expansion(&format!("fn f() {{ m!({source}); }}"));
+        assert!(!same_expansion(&tuple("x"), &tuple("x,")));
+        assert!(same_expansion(&tuple("x, y"), &tuple("x, y,")));
+        assert!(!same_expansion(&tuple("x, y"), &tuple("x, z")));
+    }
 }
