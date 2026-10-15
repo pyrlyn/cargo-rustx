@@ -29,15 +29,16 @@
 
 mod impls;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::{
-    Attribute, Fields, GenericArgument, Ident, Item, ItemStruct, LitStr, Meta, Path, PathArguments,
+    Attribute, Fields, GenericArgument, Ident, Item, ItemStruct, LitStr, Path, PathArguments,
     ReturnType, Token, Type,
 };
 
+use super::attr_flags::parse_flags;
 use super::from_display::format;
 use super::item_lists::{Entry, ExpandList, for_each_list, insert_after};
 use crate::tokens::syntax::{combine, take_attr};
@@ -208,27 +209,15 @@ fn expand_struct(
 
 fn flags(attr: &Attribute, name: &Ident) -> syn::Result<Flags> {
     let mut flags = Flags::default();
-    match &attr.meta {
-        Meta::Path(_) => return Ok(flags),
-        Meta::NameValue(meta) => {
-            let msg = "`#[newtype]` takes flags in parentheses: `#[newtype(deref, display)]`";
-            return Err(syn::Error::new_spanned(&meta.value, msg));
-        }
-        Meta::List(_) => {}
-    }
-    let mut seen = HashSet::new();
-    attr.parse_nested_meta(|meta| {
+    parse_flags(attr, "#[newtype(deref, display)]", |meta| {
         let flag = meta.path.get_ident().ok_or_else(|| meta.error(UNKNOWN))?;
-        if !seen.insert(flag.to_string()) {
-            return Err(meta.error("this `#[newtype]` flag is given twice"));
-        }
         let has_value = meta.input.peek(Token![=]);
         if flag == "validate" {
             if !has_value {
                 return Err(meta.error(VALIDATE_VALUE));
             }
             flags.validate = Some(meta.value()?.parse()?);
-            return Ok(());
+            return Ok(true);
         }
         let Some(&(_, kind)) = FLAGS.iter().find(|(known, _)| flag == known) else {
             return Err(meta.error(UNKNOWN));
@@ -239,17 +228,16 @@ fn flags(attr: &Attribute, name: &Ident) -> syn::Result<Flags> {
                 .parse()
                 .map_err(|err| syn::Error::new(err.span(), DISPLAY_VALUE))?;
             Some(display_format(&lit, name)?)
-        } else if !meta.input.is_empty() && !meta.input.peek(Token![,]) {
-            return Err(meta.error(format!("the `#[newtype]` flag `{flag}` takes no value")));
         } else {
             None
         };
+        let read_value = format.is_some();
         flags.list.push(Flag {
             kind,
             name: flag.clone(),
             format,
         });
-        Ok(())
+        Ok(read_value)
     })?;
     Ok(flags)
 }

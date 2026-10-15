@@ -4,6 +4,7 @@
 //! Token passes run first, in list order, because their output must parse as Rust.
 //! AST passes then run on the parsed file; all of them run so errors are reported together.
 
+mod attr_flags;
 mod borrows;
 mod bound_presets;
 mod call_defaults;

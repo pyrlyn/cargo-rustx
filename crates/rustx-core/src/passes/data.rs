@@ -36,13 +36,13 @@ mod builder;
 mod methods;
 
 use std::collections::HashSet;
-use std::mem;
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit_mut::VisitMut;
 use syn::{Attribute, Expr, Fields, Ident, Item, ItemStruct, Lifetime, Meta};
 
+use super::attr_flags::parse_flags;
 use super::item_lists::{Entry, ExpandList, for_each_list, insert_after};
 use super::{borrows, field_defaults};
 use crate::tokens::syntax::{combine, take_attr};
@@ -219,32 +219,18 @@ fn expand_struct(item: &mut ItemStruct, declared: &HashSet<String>) -> syn::Resu
 
 fn flags(attr: &Attribute) -> syn::Result<Flags> {
     let mut flags = Flags::default();
-    match &attr.meta {
-        Meta::Path(_) => return Ok(flags),
-        Meta::NameValue(meta) => {
-            let msg = "`#[data]` takes flags in parentheses: `#[data(setters, with, builder)]`";
-            return Err(syn::Error::new_spanned(&meta.value, msg));
-        }
-        Meta::List(_) => {}
-    }
-    attr.parse_nested_meta(|meta| {
+    parse_flags(attr, "#[data(setters, with, builder)]", |meta| {
         let name = meta.path.get_ident().map(ToString::to_string);
-        let given = match name.as_deref() {
-            Some("setters") => mem::replace(&mut flags.setters, true),
-            Some("with") => mem::replace(&mut flags.with, true),
-            Some("builder") => flags.builder.replace(meta.path.span()).is_some(),
+        match name.as_deref() {
+            Some("setters") => flags.setters = true,
+            Some("with") => flags.with = true,
+            Some("builder") => flags.builder = Some(meta.path.span()),
             _ => {
                 let msg = "unknown `#[data]` flag; expected `setters`, `with` or `builder`";
                 return Err(meta.error(msg));
             }
-        };
-        if given {
-            return Err(meta.error("this `#[data]` flag is given twice"));
         }
-        if !meta.input.is_empty() && !meta.input.peek(syn::Token![,]) {
-            return Err(meta.error("a `#[data]` flag takes no value"));
-        }
-        Ok(())
+        Ok(false)
     })?;
     Ok(flags)
 }
@@ -393,7 +379,10 @@ mod tests {
                 quote!((setters, setters)),
                 "this `#[data]` flag is given twice",
             ),
-            (quote!((with = true)), "a `#[data]` flag takes no value"),
+            (
+                quote!((with = true)),
+                "the `#[data]` flag `with` takes no value",
+            ),
             (
                 quote!((a::b)),
                 "unknown `#[data]` flag; expected `setters`, `with` or `builder`",
