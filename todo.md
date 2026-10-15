@@ -1,3 +1,4 @@
 - T19. Convert plain Rust into rustx sugar
-- T31. M9: `rustx-cli fmt`
+- T19.3. Std path equivalence in the sugar check, with the `rc e` rule
+- T31.2. M9: `rustx-cli fmt` for the remaining sugar
 - T33. M9: user documentation

@@ -400,6 +400,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
+ "proc-macro2",
  "rustx-build",
  "rustx-core",
  "syn 3.0.9",

@@ -1,0 +1,22 @@
+// Laid out badly on purpose: `rustx-cli fmt` must give it the layout rustfmt gives Rust.
+use std::num::ParseIntError;
+
+#[dyn]
+pub trait Sink { fn write(&self, line: &str); }
+
+#[derive(Debug)] pub enum Error{ Parse( from ParseIntError ),
+    Empty }
+
+/// Sums the numbers in `text`.
+pub fn sum(text:&str)->u64 throws Error{
+  var total=0;   // running total
+    for word in text.split_whitespace(){ total+=word.parse<u64>()?; }
+  if total==0{throw Error::Empty}
+      total
+}
+
+fn first(xs:&[String])->&from(xs) str{ &xs[0] }
+
+/* Prefix types and values. */
+fn count(n:   into u64)->rc u64 { rc n.into() }
+fn log(sink: ~Sink,lines:iter String){ for line in lines{ sink.write(&line) } }

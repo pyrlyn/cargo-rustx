@@ -7,7 +7,8 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T31 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
+| T19.3 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T31.2 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
 | T33 | in progress | P3 | 2 | 0% | Claude / opus-5.5 |
 
 ### T19. Convert plain Rust into rustx sugar
@@ -18,13 +19,17 @@ Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first)
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
 
-### T31. M9: `rustx-cli fmt`
+### T19.3. Std path equivalence in the sugar check, with the `rc e` rule
 
-Formatting for sugar sources, so `.rustx` files and `sugar!` bodies get a consistent layout without rustfmt (which rejects the sugar). Scope (round-trip through the parser or a token-level formatter, which constructs) is settled with the creator when the task is claimed. Depends on T30. Done when `fmt` is idempotent on every snapshot case and keeps comments.
+Passes emit fully qualified std paths (`::std::rc::Rc::new`, `::core::option::Option`), so the T19.1 check `expand(sugar(x)) == x` never matches ordinary code. Decided with the creator: the check treats a short std name (`Rc`, `RefCell`, `Option`, `Some`, `String`, `Vec`, `Box`, `Arc`, `Mutex`, `Result`, `Ok`, `Err`, `Into`, `From`, `Default`, ...) as equal to its fully qualified path when the file declares no item or `use` that shadows that name. Done when the shared driver applies this normalisation, a test shows a shadowing `use`/item turns it off, and the first rule that needs it, `Rc::new(RefCell::new(e))` back to `rc e`, works on ordinary code.
 
-Decided with the creator: format through rustfmt: replace the sugar with reversible placeholders that are valid Rust, run rustfmt, then restore the sugar, so the layout matches ordinary Rust and comments survive. Split into subtasks at claim time if it exceeds the task size.
+Plan: in `crates/rustx-core/src/sugar/`, add a normaliser used only by the equivalence check (never by rewriting): it rewrites known std paths in both token streams to one canonical spelling, after collecting the names the file shadows (items, `use` trees, generic parameters). The rule `sugar/rc_values.rs` implements `ReverseRule` for `Rc::new(RefCell::new(e))` in any of its spellings, but only where the result type is not written by hand in a way `rc e` cannot express. Register it in `sugar::RULES`. Verify: unit tests for the normaliser (equal, shadowed, partially qualified), `assert_sugar` cases for the rule, a `rustx-cli sugar` snapshot, `just check`.
 
-Plan: `rustx-cli fmt <file>` (with `--check`) in a module of its own: a reversible mapping replaces every sugar token sequence with a placeholder that is valid Rust of the same syntactic role and carries a unique id (e.g. `var x` as `let __rustx_fmt_N x`-like forms chosen per sugar item), runs `rustfmt` from the toolchain on the result through stdin, then maps the placeholders back; a sugar item it cannot map leaves the file unformatted with an error, never a changed meaning. Works on `.rustx` files and on `sugar!` bodies inside `.rs` files. Verify: `fmt` is idempotent on every snapshot case, keeps comments, and `expand(fmt(x))` equals `expand(x)` token for token; CLI integration tests; `just check`. If it exceeds the task size, split into T31.1 (mapping for the token-level sugar, CLI) and T31.2 (remaining items).
+### T31.2. M9: `rustx-cli fmt` for the remaining sugar
+
+The rest of T31 after T31.1: placeholders for `bound`/`derive` presets, inline bounds `x: T: Bound`, parameter defaults `x: T = v`, call defaults and named arguments `f(name: v)`, capture lists `move[..] |x|`, and formatting `sugar!` bodies inside `.rs` files. Done when the `NOT_YET` list in `crates/rustx-cli/tests/fmt.rs` holds only the cases that do not expand, and `.rs` files with `sugar!` bodies format with the same guarantees as `.rustx` files.
+
+Plan: extend `crates/rustx-cli/src/fmt/find.rs` with the four remaining spellings (presets as an item kept verbatim behind an `<id>!();` macro-call item; inline bounds and parameter defaults as a `#[<id>]` attribute on the parameter with the suffix cut and restored at the parameter end; named and default call arguments as `<id>name = v` only after a non-`fn` ident; capture lists as `move |<id>, x|`), porting the working draft from T31.1 onto the current code instead of copying it. Then format `sugar! { .. }` bodies in `.rs` files: find each invocation, format its body as a `.rustx` source at the invocation's indentation, and splice it back; the rest of the file goes through plain rustfmt only if the user asks (not by default). Verify: unit tests per spelling, the integration test with a shrunk `NOT_YET` list, a `.rs` fixture with two `sugar!` bodies, `just check`. Split again if it exceeds the task size.
 
 ### T33. M9: user documentation
 
