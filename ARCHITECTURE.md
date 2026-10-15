@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: M0–M4 are implemented; M5–M9 are planned.
+Status: M0–M9 are implemented; the reverse `sugar` conversion (T19) is growing one rule at a time. [plan.md](plan.md) has what is open.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
