@@ -4,8 +4,12 @@
 //! Rules find generated shapes in the parsed file and return text edits as byte ranges of the
 //! original source, so everything they do not touch (comments, layout) survives byte for byte.
 //! The driver never trusts a rule: the edited text must expand back to the original tokens, and
-//! an edit for which it does not is dropped.
+//! an edit for which it does not is dropped. Tokens are compared with paths to std items written
+//! in any spelling the file gives one meaning (`std_paths`), since passes emit full paths.
 
+mod rc_types;
+mod rc_values;
+mod std_paths;
 mod turbofish;
 mod var;
 
@@ -23,8 +27,15 @@ pub(crate) trait ReverseRule {
 
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
-// overlap and their order does not matter.
-const RULES: &[&dyn ReverseRule] = &[&var::LetMut, &turbofish::Turbofish];
+// overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
+// it and is dropped whatever the order: such a value keeps its plain spelling.
+// `rc_types` edits types and `rc_values` expressions, so their edits never overlap.
+const RULES: &[&dyn ReverseRule] = &[
+    &var::LetMut,
+    &turbofish::Turbofish,
+    &rc_values::RcValues,
+    &rc_types::RcTypes,
+];
 
 /// Replaces the bytes `range` of the source with `text`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,9 +76,8 @@ fn convert(source: &str, rules: &[&dyn ReverseRule]) -> syn::Result<String> {
     };
     let file: syn::File = syn::parse_str(text)?;
     let original = file.to_token_stream();
-    let expected = original.to_string();
     let expanded = crate::try_expand(text.parse()?)?.into_token_stream();
-    if expanded.to_string() != expected {
+    if expanded.to_string() != original.to_string() {
         return Err(syn::Error::new(
             first_difference(original, expanded),
             "expansion already changes this code as written, so it would mean something else as \
@@ -75,8 +85,17 @@ fn convert(source: &str, rules: &[&dyn ReverseRule]) -> syn::Result<String> {
         ));
     }
 
+    let paths = std_paths::StdPaths::of(&file);
+    let expected = paths.normalise(original);
+    let round_trips = |sugar: &str| {
+        sugar
+            .parse::<TokenStream>()
+            .ok()
+            .and_then(|tokens| crate::try_expand(tokens).ok())
+            .is_some_and(|file| paths.normalise(file.into_token_stream()) == expected)
+    };
     let edits = non_overlapping(text, rules.iter().flat_map(|rule| rule.edits(&file, text)));
-    let accepted = if round_trips(&apply(text, &edits), &expected) {
+    let accepted = if round_trips(&apply(text, &edits)) {
         edits
     } else {
         // Some edit changes the meaning; keep each edit only if it does not, together with the
@@ -84,7 +103,7 @@ fn convert(source: &str, rules: &[&dyn ReverseRule]) -> syn::Result<String> {
         let mut kept = Vec::new();
         for edit in edits {
             kept.push(edit);
-            if !round_trips(&apply(text, &kept), &expected) {
+            if !round_trips(&apply(text, &kept)) {
                 kept.pop();
             }
         }
@@ -126,15 +145,6 @@ fn apply(text: &str, edits: &[Edit]) -> String {
     out
 }
 
-/// Whether `sugar` expands to tokens printing as `expected`; printing drops spans and layout.
-fn round_trips(sugar: &str, expected: &str) -> bool {
-    sugar
-        .parse::<TokenStream>()
-        .ok()
-        .and_then(|tokens| crate::try_expand(tokens).ok())
-        .is_some_and(|file| file.into_token_stream().to_string() == expected)
-}
-
 /// The span of the first token of `original` that `expanded` does not have.
 fn first_difference(original: TokenStream, expanded: TokenStream) -> Span {
     let (mut a, mut b) = (Vec::new(), Vec::new());
@@ -173,16 +183,18 @@ pub(crate) mod tests {
     use super::*;
 
     /// The round-trip property every rule must hold: `plain` converts to `expected`, and
-    /// expanding that gives back the tokens of `plain`. Checked here on its own rather than
-    /// trusting the driver's check, so a driver bug cannot hide a rule bug.
+    /// expanding that gives back the tokens of `plain`, std paths compared by the item they name.
+    /// Checked here on its own rather than trusting the driver's check, so a driver bug cannot
+    /// hide a rule bug.
     pub(crate) fn assert_sugar(plain: &str, expected: &str) {
         let out = sugar(plain).unwrap();
         assert_eq!(out, expected);
-        let original = syn::parse_file(plain).unwrap().into_token_stream();
+        let original = syn::parse_file(plain).unwrap();
+        let paths = std_paths::StdPaths::of(&original);
         let expanded = crate::try_expand(out.parse().unwrap()).unwrap();
         assert_eq!(
-            expanded.into_token_stream().to_string(),
-            original.to_string(),
+            paths.normalise(expanded.into_token_stream()),
+            paths.normalise(original.into_token_stream()),
             "`{out}` does not expand back to the input"
         );
     }
