@@ -17,6 +17,8 @@ proc-macro2 = "1"
 quote = "1"
 # `full` parses whole items (the `sugar!` body is a file of items); `visit-mut` drives the AST passes.
 syn = { version = "3", features = ["full", "visit-mut", "extra-traits"] }
+# rustx: `#[dyn]` traits expand to its attribute (problem 14).
+dynosaur = "0.3"
 # rustx-cli
 clap = { version = "4.6", features = ["derive"] }
 prettyplease = "0.3"

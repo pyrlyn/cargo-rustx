@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+dynosaur.workspace = true
 rustx-macros.workspace = true
 
 [dev-dependencies]

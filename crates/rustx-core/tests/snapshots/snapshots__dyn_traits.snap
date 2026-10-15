@@ -1,0 +1,30 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/dyn_traits.rustx
+---
+mod store {
+    /// A key-value store used both statically and as `DynStore`.
+    #[::rustx::dynosaur::dynosaur(pub DynStore = dyn(box)Store)]
+    pub trait Store: Send + Sync {
+        async fn get(&self, key: &str) -> Option<Vec<u8>>;
+        async fn put(&self, key: &str, value: Vec<u8>) -> Result<(), String>;
+    }
+    #[::rustx::dynosaur::dynosaur(pub(crate)AnyCounter = dyn(box)Counter)]
+    pub(crate) trait Counter {
+        async fn next(&mut self) -> u32;
+    }
+    pub trait Native {
+        async fn native(&self) -> u32;
+    }
+    pub async fn copy_key(
+        src: &DynStore<'_>,
+        dst: &DynStore<'_>,
+        key: &str,
+    ) -> Result<bool, String> {
+        match src.get(key).await {
+            Some(v) => dst.put(key, v).await.map(|_| true),
+            None => Ok(false),
+        }
+    }
+}

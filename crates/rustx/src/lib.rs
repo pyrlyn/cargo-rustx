@@ -5,6 +5,9 @@
 
 mod shared;
 
+/// The crate `#[dyn]` traits expand to, reached as `::rustx::dynosaur` so user crates need no
+/// dependency of their own on it.
+pub use dynosaur;
 pub use rustx_macros::{data, delegate, display, newtype, sugar, sugared};
 pub use shared::Shared;
 
