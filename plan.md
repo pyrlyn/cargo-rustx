@@ -8,7 +8,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
 | T31 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
-| T33 | todo | P3 | 2 | 0% | |
+| T33 | in progress | P3 | 2 | 0% | Claude / opus-5.5 |
 
 ### T19. Convert plain Rust into rustx sugar
 
@@ -29,3 +29,5 @@ Plan: `rustx-cli fmt <file>` (with `--check`) in a module of its own: a reversib
 ### T33. M9: user documentation
 
 A user guide: one page per sugar item with the plain Rust it desugars to, the entry points (`sugar!`, the attribute macros, `#[sugared]`, the CLI, `build.rs`) and the limits from ARCHITECTURE h, built from the problem files without duplicating them. Done when the guide builds, every example in it is compiled by a doc test or a `pass/` test, and README links to it.
+
+Plan: an mdBook-free guide in `docs/guide/` (plain Markdown, rendered by GitHub): `README.md` index, one page per sugar item (what it is, a short sugar example, the plain Rust it becomes, its limits from ARCHITECTURE h, a link to the problem file instead of repeating its motivation), and pages for the entry points (`sugar!`, attribute macros, `#[sugared]`, `rustx-cli expand`/`sugar`, `build.rs` via `rustx-build`). Every example is compiled: each page is included into a `rustx` doc-test module through `#[doc = include_str!(..)]` under `cfg(doctest)`, so `rust` blocks run as doc tests (expansions that are not standalone use `ignore` only when the same code is already a `pass/` test, named next to the block). README links to the guide. Also fixes the stale "string literals into `String` fields are M8" comments in `tests/pass/into_params.rs` and `tests/cases/into_params.rustx` (re-blessed; only the comment line changes). The `rustx-cli fmt` page is added when T31 merges. Verify: `just check` runs every guide example; every sugar item in `passes/mod.rs` has a page.
