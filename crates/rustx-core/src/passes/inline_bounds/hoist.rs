@@ -46,13 +46,21 @@ pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
 /// What the input declares: type names, and the type parameters of its structs, enums and
 /// unions (`None` for a const parameter, which lends no bounds).
 #[derive(Default)]
-struct Known {
+pub(crate) struct Known {
     types: HashSet<String>,
     adts: HashMap<String, Vec<Option<(Ident, Bounds)>>>,
 }
 
 impl Known {
-    fn is_type(&self, name: &Ident) -> bool {
+    /// What `file` declares, collected as [`lower`] does, for the reverse rule (T19.9).
+    #[cfg(feature = "sugar")]
+    pub(crate) fn of(file: &syn::File) -> Self {
+        let mut known = Self::default();
+        known.visit_file_mut(&mut file.clone());
+        known
+    }
+
+    pub(crate) fn is_type(&self, name: &Ident) -> bool {
         let name = name.to_string();
         BUILTIN.contains(&name.as_str()) || self.types.contains(&name)
     }

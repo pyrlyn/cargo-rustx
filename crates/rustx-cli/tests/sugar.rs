@@ -57,6 +57,18 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn generics_bounded_in_where_become_inline_bounds() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_bounds.rs"]);
+    insta::assert_snapshot!("sugar_bounds_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_bounds.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    assert_eq!(
+        success(&["expand", rustx.to_str().unwrap()]),
+        success(&["expand", "tests/fixtures/sugar_bounds.rs"])
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =
