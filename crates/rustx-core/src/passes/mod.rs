@@ -44,9 +44,10 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 // before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Item-level
 // M4 sugar (`derive` presets, `from` variants) right after `bound` presets. Named
 // arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
+// Capture lists last: they read the closure after them with `syn`, which needs every other
+// sugar in it gone.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
-    capture_lists::rewrite,
     shared::rewrite,
     bound_presets::rewrite,
     derive_presets::rewrite,
@@ -61,6 +62,7 @@ const TOKEN_PASSES: &[TokenPass] = &[
     prefix_types::rewrite,
     rc_values::rewrite,
     turbofish::rewrite,
+    capture_lists::rewrite,
 ];
 
 // Derive-like M4 passes first, so the impls they generate get generics and lifetimes from

@@ -1,0 +1,5 @@
+error: `move[..]` must be followed by a closure: `move[..] |args| body`, or `async move[..] |args| body` for an async closure
+ --> tests/fail/capture_lists_no_closure.rs:3:15
+  |
+3 |         async move[name.clone()] { name.len() }.await
+  |               ^^^^

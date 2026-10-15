@@ -1,0 +1,39 @@
+mod pool {
+    use std::sync::mpsc;
+    use std::sync::Arc;
+    use std::thread;
+
+    #[data]
+    pub struct Job { id: usize, input: String }
+
+    pub fn run_pool(jobs: Vec<Job>, prefix: String, workers: usize) -> Vec<String> {
+        let jobs = Arc::new(jobs);
+        let (tx, rx) = mpsc::channel();
+        var handles = Vec::new();
+        for w in 0..workers {
+            handles.push(thread::spawn(move[jobs.clone(), tx.clone(), prefix.clone()] || {
+                for job in jobs.iter().filter(|j| j.id % workers == w) {
+                    let out = format!("{}[{}] {}", prefix, w, job.input.to_uppercase());
+                    tx.send(out).unwrap();
+                }
+            }));
+        }
+        drop(tx);
+
+        let reporter = thread::spawn(move[prefix.clone()] || {
+            var all = rx.iter().collect<Vec<String>>();
+            all.sort();
+            all.insert(0, format!("{} report", prefix));
+            all
+        });
+
+        for h in handles { h.join().unwrap(); }
+        reporter.join().unwrap()
+    }
+}
+
+pub fn adders(base: Vec<u32>) -> (impl Fn(u32) -> usize, impl AsyncFn(u32) -> u32) {
+    let count = move[base.clone()] |x: u32| base.iter().filter(|&&b| b < x).count();
+    let sum = async move[base.iter().sum<u32>()] |x| base + x;
+    (count, sum)
+}
