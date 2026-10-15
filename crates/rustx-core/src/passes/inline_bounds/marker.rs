@@ -1,72 +1,22 @@
 //! Token half of inline bounds: `x: T: B` in a fn parameter list becomes
 //! `#[__rustx_bound(B)] x: T`.
 //!
-//! Only the parenthesised group right after `fn name` or `fn name<..>` is a parameter list, so
-//! closures, struct fields and fn-pointer types are never touched. Parameters are split at
-//! commas outside `<..>`; a second `:` outside `<..>` and outside `::` starts the bounds, which
-//! run to the end of the parameter. Every generated token takes the span of that `:`.
+//! Parameter lists come from `tokens::params`. In a parameter, a second `:` outside `<..>` and
+//! outside `::` starts the bounds, which run to the end of the parameter. Every generated token
+//! takes the span of that `:`.
 
-use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
+use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use quote::quote_spanned;
 
-use crate::tokens::angle::{angle_depth, matching_close};
-use crate::tokens::map_sequences;
-use crate::tokens::punct::{is_punct, is_single_colon};
+use crate::tokens::angle::angle_depth;
+use crate::tokens::params::map_fn_parameters;
+use crate::tokens::punct::is_single_colon;
 
 /// Name of the marker attribute; the AST half removes every one it finds.
 pub(super) const MARKER: &str = "__rustx_bound";
 
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
-    map_sequences(tokens, &mut rewrite_sequence)
-}
-
-fn rewrite_sequence(mut seq: Vec<TokenTree>) -> syn::Result<Vec<TokenTree>> {
-    for i in 0..seq.len() {
-        let Some(at) = parameter_list(&seq, i) else {
-            continue;
-        };
-        if let TokenTree::Group(group) = &seq[at] {
-            let mut rebuilt = Group::new(Delimiter::Parenthesis, rewrite_parameters(group)?);
-            rebuilt.set_span(group.span());
-            seq[at] = TokenTree::Group(rebuilt);
-        }
-    }
-    Ok(seq)
-}
-
-/// Index of the parameter group when `fn` stands at `i`: `fn name(..)` or `fn name<..>(..)`.
-fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
-    if !matches!(&seq[i], TokenTree::Ident(word) if word == "fn")
-        || !matches!(seq.get(i + 1)?, TokenTree::Ident(_))
-    {
-        return None;
-    }
-    let mut at = i + 2;
-    if is_punct(seq.get(at)?, '<') {
-        at = matching_close(seq, at)? + 1;
-    }
-    match seq.get(at)? {
-        TokenTree::Group(group) if group.delimiter() == Delimiter::Parenthesis => Some(at),
-        _ => None,
-    }
-}
-
-fn rewrite_parameters(group: &Group) -> syn::Result<TokenStream> {
-    let seq: Vec<TokenTree> = group.stream().into_iter().collect();
-    let mut out = Vec::with_capacity(seq.len());
-    let mut start = 0;
-    let mut depth = 0;
-    for at in 0..=seq.len() {
-        let comma = seq.get(at).is_some_and(|tree| is_punct(tree, ','));
-        if at == seq.len() || (comma && depth == 0) {
-            out.extend(rewrite_parameter(&seq[start..at])?);
-            out.extend(seq.get(at).cloned());
-            start = at + 1;
-        } else {
-            depth = angle_depth(&seq, at, depth);
-        }
-    }
-    Ok(out.into_iter().collect())
+    map_fn_parameters(tokens, &mut rewrite_parameter)
 }
 
 /// `x: T: B` → `#[__rustx_bound(B)] x: T`; any other parameter is returned as written.

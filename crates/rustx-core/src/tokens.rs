@@ -4,6 +4,7 @@
 //! detection, angle-bracket matching or error bookkeeping.
 
 pub(crate) mod angle;
+pub(crate) mod params;
 pub(crate) mod position;
 pub(crate) mod punct;
 pub(crate) mod syntax;
