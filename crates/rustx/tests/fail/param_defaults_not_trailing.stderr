@@ -1,0 +1,5 @@
+error: a parameter without a default cannot follow one with a default; move it before the defaulted parameters
+ --> tests/fail/param_defaults_not_trailing.rs:2:34
+  |
+2 |     fn connect(port: u16 = 5432, host: &str) {}
+  |                                  ^^^^

@@ -1,0 +1,5 @@
+error: `self` takes no default value
+ --> tests/fail/param_defaults_self.rs:5:22
+  |
+5 |         fn copy(self = Point) -> Self {
+  |                      ^

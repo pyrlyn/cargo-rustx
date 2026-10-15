@@ -4,18 +4,50 @@
 //! Token passes run first, in list order, because their output must parse as Rust.
 //! AST passes then run on the parsed file; all of them run so errors are reported together.
 
+mod borrows;
+mod bound_presets;
+mod call_defaults;
+mod from_lifetimes;
+mod inline_bounds;
+mod into_params;
+mod param_defaults;
 mod prefix_types;
+mod signatures;
 mod turbofish;
 mod var;
 
 use proc_macro2::TokenStream;
 
+use crate::tokens::syntax::combine;
+
 type TokenPass = fn(TokenStream) -> syn::Result<TokenStream>;
 type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 
-const TOKEN_PASSES: &[TokenPass] = &[var::rewrite, prefix_types::rewrite, turbofish::rewrite];
+// `bound` presets first so later passes see ordinary traits; inline bounds and `from` lifetimes
+// before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Named
+// arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
+const TOKEN_PASSES: &[TokenPass] = &[
+    var::rewrite,
+    bound_presets::rewrite,
+    inline_bounds::rewrite,
+    into_params::rewrite,
+    param_defaults::rewrite,
+    call_defaults::rewrite,
+    from_lifetimes::rewrite,
+    prefix_types::rewrite,
+    turbofish::rewrite,
+];
 
-const AST_PASSES: &[AstPass] = &[];
+// `#[borrows]` before `from` lifetimes, so `from(Self)` finds the type's lifetime. Call-site
+// defaults before `param_defaults::lower`, which takes off the markers they read.
+const AST_PASSES: &[AstPass] = &[
+    inline_bounds::lower,
+    into_params::lower,
+    call_defaults::lower,
+    param_defaults::lower,
+    borrows::lower,
+    from_lifetimes::lower,
+];
 
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {
@@ -28,10 +60,7 @@ pub(crate) fn rewrite_ast(file: &mut syn::File) -> syn::Result<()> {
     let mut errors: Option<syn::Error> = None;
     for pass in AST_PASSES {
         if let Err(err) = pass(file) {
-            match &mut errors {
-                Some(all) => all.combine(err),
-                None => errors = Some(err),
-            }
+            combine(&mut errors, err);
         }
     }
     errors.map_or(Ok(()), Err)

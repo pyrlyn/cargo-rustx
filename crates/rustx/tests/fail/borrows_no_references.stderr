@@ -1,0 +1,5 @@
+error: `Counter` holds no reference without a lifetime, so `#[borrows]` has nothing to add
+ --> tests/fail/borrows_no_references.rs:2:7
+  |
+2 |     #[borrows]
+  |       ^^^^^^^

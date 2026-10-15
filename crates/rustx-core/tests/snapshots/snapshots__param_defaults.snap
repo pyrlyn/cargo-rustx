@@ -1,0 +1,40 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/param_defaults.rustx
+---
+mod server {
+    pub fn connect(
+        host: &str,
+        port: ::core::option::Option<u16>,
+        timeout_ms: ::core::option::Option<u64>,
+    ) -> String {
+        let port: u16 = port.unwrap_or(5432);
+        let timeout_ms: u64 = timeout_ms.unwrap_or(5_000);
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+    pub fn greet(
+        name: &str,
+        greeting: ::core::option::Option<String>,
+        times: ::core::option::Option<usize>,
+    ) -> String {
+        let greeting: String = greeting.unwrap_or_else(|| format!("Hello, {name}"));
+        let mut times: usize = times.unwrap_or(1);
+        let mut out = String::new();
+        while times > 0 {
+            out.push_str(&greeting);
+            times -= 1;
+        }
+        out
+    }
+    pub struct Pool;
+    impl Pool {
+        pub fn spawn(
+            &self,
+            __rustx_default_1: ::core::option::Option<(usize, usize)>,
+        ) -> usize {
+            let (min, max): (usize, usize) = __rustx_default_1.unwrap_or((1, 4));
+            max - min
+        }
+    }
+}

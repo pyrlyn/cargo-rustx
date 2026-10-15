@@ -1,0 +1,61 @@
+// Problem 15, `into T` parameters only: string literals into `String` fields are M8, so the
+// literals keep their explicit conversions. The second module mixes `into` with inline bounds
+// and a `from` lifetime in one signature.
+mod contacts {
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone)]
+    pub struct Contact {
+        pub name: String,
+        pub email: Option<String>,
+        pub tags: Vec<String>,
+    }
+
+    impl Contact {
+        pub fn new(name: into String) -> Self {
+            Contact { name, email: None, tags: Vec::new() }
+        }
+
+        pub fn with_email(mut self, email: into String) -> Self {
+            self.email = Some(email);
+            self
+        }
+
+        pub fn tag(mut self, tag: into String) -> Self {
+            self.tags.push(tag);
+            self
+        }
+
+        pub fn email_domain(&self) -> Option<&str> {
+            self.email.as_deref().and_then(|e| e.split_once('@')).map(|(_, d)| d)
+        }
+    }
+
+    pub fn demo() -> HashMap<String, Contact> {
+        var book = HashMap::new();
+        let ann = Contact {
+            name: "Ann".to_string(),
+            email: Some("ann@example.com".to_owned()),
+            tags: vec!["work".to_string(), String::from("vip")],
+        };
+        book.insert("ann".into(), ann);
+        let bob = Contact::new("Bob").with_email("bob@example.org").tag("home");
+        book.insert("bob".into(), bob);
+        book
+    }
+}
+
+mod mixed {
+    pub trait Rename {
+        fn rename(&mut self, name: into String);
+    }
+
+    pub fn tagged(value: T: Clone, mut label: into String) -> (T, String) {
+        label.push('!');
+        (value.clone(), label)
+    }
+
+    pub fn strip(text: &str, prefix: into String) -> &from(text) str {
+        text.strip_prefix(prefix.as_str()).unwrap_or(text)
+    }
+}

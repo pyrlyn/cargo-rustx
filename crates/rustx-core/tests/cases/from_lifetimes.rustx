@@ -1,0 +1,47 @@
+// Problem 01 (`#[data]` dropped until its pass exists) and the `from` parts of problem 09
+// (`numbered` with a plain generic instead of the inline bound of problem 03).
+mod config {
+    use std::collections::HashMap;
+
+    pub struct Config {
+        entries: HashMap<String, String>,
+    }
+
+    impl Config {
+        pub fn get(&self, key: &str) -> Option<&from(self) str> {
+            self.entries.get(key).map(|s| s.as_str())
+        }
+    }
+
+    pub fn first(xs: &[Item], key: &str) -> &from(xs) Item {
+        &xs[0]
+    }
+
+    pub fn longest_value(cfg: &Config, keys: &[&str]) -> Option<&from(cfg) str> {
+        var best = None;
+        for k in keys {
+            if let Some(v) = cfg.get(k) {
+                if best.map_or(true, |b: &str| v.len() > b.len()) {
+                    best = Some(v);
+                }
+            }
+        }
+        best
+    }
+
+    pub fn section(name: &str, _sep: &str) -> &from(name) str {
+        name.split('.').next().unwrap_or(name)
+    }
+}
+
+mod log {
+    impl Log {
+        pub fn grep(&self, needle: &str) -> iter &from(self, needle) Entry {
+            self.entries.iter().filter(move |e| e.msg.contains(needle))
+        }
+    }
+
+    pub fn numbered<I: Iterator<Item = &Entry>>(it: I) -> iter (usize, &from(it) Entry) {
+        it.enumerate().map(|(i, e)| (i + 1, e))
+    }
+}

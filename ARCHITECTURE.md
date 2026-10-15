@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: M0–M2 are implemented; M3–M9 are planned (see roadmap.md).
+Status: M0–M3 are implemented; M4–M9 are planned.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
@@ -92,7 +92,7 @@ Therefore:
 1. **M0 skeleton:** workspace, `rustx-core`, `rustx-macros`, `sugar!` that passes valid Rust through unchanged; insta + trybuild wired; CI.
 2. **M1 statements:** `var` → `let mut` (item 2). Establishes the custom parser for statements and span plumbing.
 3. **M2 types (purely syntactic):** `~Trait` (4), `iter T` (9), turbofish `.m<T>()` (6), `rc T`/`weak T` (16).
-4. **M3 signatures:** inline bounds (3), `bound` presets (21), `&from(x) T` lifetimes (1), `#[borrows]` (19), `from` combined with `iter`, `into T` parameters (15), parameter defaults (17).
+4. **M3 signatures:** inline bounds (3), `bound` presets (21), `&from(x) T` lifetimes (1), `#[borrows]` (19), `from` combined with `iter`, `into T` parameters (15), parameter defaults with call-site defaults and named arguments (17).
 5. **M4 derives:** `#[data]` (8), `from` variants + `#[display]` (5), `#[delegate]` (7), `derive` presets (18), `#[newtype]` (20), field defaults (17). Also usable as standalone attribute macros.
 6. **M5 errors:** `T throws` + `throw` + tail `Ok(..)` (10).
 7. **M6 closures and sharing:** `move[..]` (11), `shared` + `Shared<T>` runtime type (12), `rc` field access (16).
@@ -108,7 +108,9 @@ Therefore:
 - **`shared` field access** inserting `.lock().unwrap()` per access is not atomic across statements; needs a `with(|m| ..)` form and clear docs.
 - **`rc` field access** picks `.borrow_mut()` from a built-in list of `&mut self` std methods; user methods need `with_mut(|n| ..)`. `RefCell` still panics at run time on conflicting borrows.
 - **Parameter defaults and named arguments** only work for calls inside the same `sugar!` input. Callers elsewhere see the real `Option<T>` signature.
-- **`#[borrows]`** adds exactly one lifetime. Types with two independent lifetimes keep explicit parameters.
+- **Call-site defaults match calls by name.** A path call resolves by its last segment (and the qualifying type, when it is one declared in the input), a method call by its name alone, so a defaulted method `len` also rewrites `vec.len()`. Same-named fns that would read a call differently make it an error; `<T as Trait>::f(..)` is not resolved. Named arguments are evaluated in declaration order, not in the order written, and a call with generic arguments (`f::<T>(..)`) takes none.
+- **`#[borrows]`** adds exactly one lifetime. Types with two independent lifetimes keep explicit parameters. Borrowing types are matched by their last path segment across the whole input, ignoring modules.
+- **A bare `<` in a parameter default** reads as the start of generics, so `ok: bool = a < b` needs parentheses: `ok: bool = (a < b)`. A non-constant default runs in a closure, so `?`, `return` and `.await` inside it act on that closure.
 - **`derive` and `bound` presets** are visible only inside the input that declares them (`bound` produces a real trait, so it can be exported; `derive` presets cannot).
 - **Edition differences:** on edition 2024, `-> impl Trait` already captures all lifetimes, so `iter T` mainly saves typing there. The expansion keeps `+ '_` to work on both editions.
 - **Upstream overlap:** default field values, trait aliases and capture expressions exist on nightly (see [research.md](research.md)). Each pass must be able to switch to the native form once it is stable, without changing user code.
@@ -117,6 +119,7 @@ Therefore:
 - **Sugar inside macro arguments is expanded too.** Token passes also rewrite the argument groups of macro calls (`vec![..]`, `assert_eq!(..)`), because users expect sugar there. A user macro that itself accepts tokens like `var x` receives the desugared form instead.
 - **`.m<T>(` inside a comma list.** `(a.b < c, d > (e))` is valid Rust (two comparisons) but reads as the turbofish sugar `a.b::<c, d>(e)`. Parenthesise the comparison: `((a.b < c), d > (e))`.
 - **Type prefixes need a recognisable type position.** `iter`, `rc` and `weak` are ordinary identifiers, so they are sugar only after `->`, `:`, `<`, `,` inside `<..>`, `&` and similar. At the start of a group or after `,` outside `<..>` (tuple types, fn-pointer parameters) the plain Rust spelling is needed, because `f(rc x)` there is the expression sugar of item 16.
+- **Inline bounds decide "new generic or existing type" from the input only.** A name in scope gets the bound, a type declared or imported in the same input is an error, anything else becomes a new generic, so a glob-imported type is shadowed by a fresh generic.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
 - **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
 - **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.

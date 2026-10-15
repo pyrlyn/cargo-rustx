@@ -1,0 +1,5 @@
+error: a `<` in a parameter default must be inside parentheses, as in `ok: bool = (a < b)`
+ --> tests/fail/param_defaults_less_than.rs:2:27
+  |
+2 |     fn check(ok: bool = 1 < 2, port: u16) {}
+  |                           ^

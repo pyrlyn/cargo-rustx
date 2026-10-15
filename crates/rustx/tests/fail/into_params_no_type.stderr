@@ -1,0 +1,5 @@
+error: expected a type after `into`, as in `name: into String`
+ --> tests/fail/into_params_no_type.rs:2:20
+  |
+2 |     fn greet(name: into) -> String {
+  |                    ^^^^

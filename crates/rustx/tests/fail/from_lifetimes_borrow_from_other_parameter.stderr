@@ -1,0 +1,10 @@
+error[E0621]: explicit lifetime required in the type of `xs`
+ --> tests/fail/from_lifetimes_borrow_from_other_parameter.rs:4:9
+  |
+4 |         &xs[key.len()]
+  |         ^^^^^^^^^^^^^^ lifetime `'__rustx_from_key` required
+  |
+help: add explicit lifetime `'__rustx_from_key` to the type of `xs`
+  |
+3 |     fn first(xs: &'__rustx_from_key [String], key: &str) -> &from(key) str {
+  |                   +++++++++++++++++

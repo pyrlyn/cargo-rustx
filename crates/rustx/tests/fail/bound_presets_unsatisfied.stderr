@@ -1,0 +1,29 @@
+error[E0277]: the trait bound `Plain: Label` is not satisfied
+  --> tests/fail/bound_presets_unsatisfied.rs:26:14
+   |
+26 |         show(&Plain)
+   |         ---- ^^^^^^ unsatisfied trait bound
+   |         |
+   |         required by a bound introduced by this call
+   |
+help: the trait `Tagged` is not implemented for `Plain`
+  --> tests/fail/bound_presets_unsatisfied.rs:17:5
+   |
+17 |     struct Plain;
+   |     ^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+  --> tests/fail/bound_presets_unsatisfied.rs:9:5
+   |
+ 9 |     trait Tagged {}
+   |     ^^^^^^^^^^^^
+note: required for `Plain` to implement `Label`
+  --> tests/fail/bound_presets_unsatisfied.rs:11:5
+   |
+11 |     bound Label = Named + Tagged;
+   |     ^^^^^ ^^^^^           ------ unsatisfied trait bound introduced here
+note: required by a bound in `show`
+  --> tests/fail/bound_presets_unsatisfied.rs:13:16
+   |
+13 |     fn show<L: Label>(item: &L) -> String {
+   |                ^^^^^ required by this bound in `show`
+   = note: this error originates in the macro `rustx::sugar` (in Nightly builds, run with -Z macro-backtrace for more info)

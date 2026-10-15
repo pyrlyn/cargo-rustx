@@ -1,0 +1,5 @@
+error: expected at least one bound after `=`, as in `bound Name = A + B;`
+ --> tests/fail/bound_presets_empty.rs:2:15
+  |
+2 |     bound Key = ;
+  |               ^

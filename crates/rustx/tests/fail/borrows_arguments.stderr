@@ -1,0 +1,5 @@
+error: `#[borrows]` takes no arguments
+ --> tests/fail/borrows_arguments.rs:2:7
+  |
+2 |     #[borrows('a)]
+  |       ^^^^^^^^^^^

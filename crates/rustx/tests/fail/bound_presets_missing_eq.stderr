@@ -1,0 +1,5 @@
+error: expected `=` after the preset name, as in `bound Name = A + B;`
+ --> tests/fail/bound_presets_missing_eq.rs:2:15
+  |
+2 |     bound Key Clone + Eq;
+  |               ^^^^^

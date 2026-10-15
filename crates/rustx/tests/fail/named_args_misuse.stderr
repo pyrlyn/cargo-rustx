@@ -1,0 +1,29 @@
+error: `connect` has no parameter named `prot`
+ --> tests/fail/named_args_misuse.rs:8:27
+  |
+8 |             connect("db", prot: 1),
+  |                           ^^^^
+
+error: `port` is given more than once
+ --> tests/fail/named_args_misuse.rs:9:30
+  |
+9 |             connect("db", 1, port: 2),
+  |                              ^^^^
+
+error: a positional argument cannot follow a named one
+  --> tests/fail/named_args_misuse.rs:10:36
+   |
+10 |             connect("db", port: 1, 2),
+   |                                    ^
+
+error: `host` has no default, so it is passed by position, not by name
+  --> tests/fail/named_args_misuse.rs:11:21
+   |
+11 |             connect(host: "db"),
+   |                     ^^^^
+
+error: missing argument `host` of `connect`; only parameters with a default can be left out
+  --> tests/fail/named_args_misuse.rs:11:20
+   |
+11 |             connect(host: "db"),
+   |                    ^^^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: a parameter default needs a fn body to apply it; declarations without a body take `Option<T>` instead
+ --> tests/fail/param_defaults_no_body.rs:3:37
+  |
+3 |         fn connect(&self, port: u16 = 5432);
+  |                                     ^

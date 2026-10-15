@@ -1,0 +1,5 @@
+error: `from(..)` names `ys`, which is not a parameter here
+ --> tests/fail/from_lifetimes_unknown_param.rs:2:40
+  |
+2 |     fn first(xs: &[u8], key: &str) -> &from(ys) u8 {
+  |                                        ^^^^^^^^

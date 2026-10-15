@@ -1,0 +1,5 @@
+error: `self` takes no inline bound; bound `Self` in `where`
+ --> tests/fail/inline_bounds_self.rs:5:27
+  |
+5 |         fn copy(self: Self: Clone) -> Self {
+  |                           ^

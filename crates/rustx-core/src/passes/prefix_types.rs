@@ -48,13 +48,14 @@
 //! - Macro bodies are token trees like any other, so the rules above apply inside them too.
 //! - `iter T` always adds `+ '_`, which needs an elided lifetime in the signature.
 
-use proc_macro2::{Delimiter, Punct, Spacing, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use quote::quote_spanned;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
 use syn::{Token, TraitBound, Type, TypeParamBound};
 
 use crate::tokens::map_sequences;
+use crate::tokens::punct::{alone, follows_arrow, is_arrow, is_punct, is_single_colon, loosen_end};
 
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
     map_sequences(tokens, &mut rewrite_sequence)
@@ -119,8 +120,8 @@ fn in_type_position(seq: &[TokenTree], i: usize) -> bool {
     };
     match &seq[p] {
         TokenTree::Punct(punct) => match punct.as_char() {
-            '>' => is_arrow(seq, p),
-            ':' => !p.checked_sub(1).is_some_and(|q| is_joint(&seq[q], ':')),
+            '>' => follows_arrow(seq, i),
+            ':' => is_single_colon(seq, p),
             '<' => true,
             ',' => inside_generics(seq, p),
             '=' => binds_type(seq, p),
@@ -151,23 +152,10 @@ fn in_type_position(seq: &[TokenTree], i: usize) -> bool {
 /// After `->` or another prefix, an identifier cannot be a call, an index or an operand.
 fn strong_position(seq: &[TokenTree], i: usize) -> bool {
     i.checked_sub(1).is_some_and(|p| match &seq[p] {
-        TokenTree::Punct(_) => is_arrow(seq, p),
+        TokenTree::Punct(_) => follows_arrow(seq, i),
         TokenTree::Ident(_) => sugar_at(seq, p).is_some(),
         _ => false,
     })
-}
-
-fn is_arrow(seq: &[TokenTree], gt: usize) -> bool {
-    matches!(&seq[gt], TokenTree::Punct(p) if p.as_char() == '>')
-        && gt.checked_sub(1).is_some_and(|m| is_joint(&seq[m], '-'))
-}
-
-fn is_joint(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch && p.spacing() == Spacing::Joint)
-}
-
-fn is_punct(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch)
 }
 
 /// Whether the identifier at `i` is the name part of a lifetime (`'a`), not a plain identifier.
@@ -176,6 +164,9 @@ fn is_lifetime_name(seq: &[TokenTree], i: usize) -> bool {
 }
 
 /// Whether the token at `i` sits inside an unclosed `<`, scanning back to the statement start.
+///
+/// Not `tokens::angle`: that counts forward from a known `<`, while this scans backward from an
+/// arbitrary token, where `>` opens a level and `<` closes one.
 fn inside_generics(seq: &[TokenTree], i: usize) -> bool {
     let mut depth = 0usize;
     for k in (0..i).rev() {
@@ -285,21 +276,6 @@ fn unparen(ty: &Type, written: &[TokenTree]) -> TokenStream {
         (Type::Paren(_), [TokenTree::Group(group)]) => loosen_end(group.stream()),
         _ => loosen_end(written.iter().cloned()),
     }
-}
-
-/// Copies `tokens`, making the last one alone so it cannot glue onto the `>` that follows it.
-fn loosen_end(tokens: impl IntoIterator<Item = TokenTree>) -> TokenStream {
-    let mut trees: Vec<TokenTree> = tokens.into_iter().collect();
-    if let Some(TokenTree::Punct(last)) = trees.last_mut() {
-        *last = alone(last);
-    }
-    trees.into_iter().collect()
-}
-
-fn alone(punct: &Punct) -> Punct {
-    let mut fresh = Punct::new(punct.as_char(), Spacing::Alone);
-    fresh.set_span(punct.span());
-    fresh
 }
 
 fn not_a_trait(span: proc_macro2::Span) -> syn::Error {

@@ -1,0 +1,63 @@
+// Problem 19 in full.
+mod lex {
+    use std::iter::Peekable;
+
+    #[borrows]
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum Token { Ident(&str), Number(&str), Punct(char) }
+
+    #[borrows]
+    pub struct Lexer { src: &str, pos: usize }
+
+    impl Lexer {
+        pub fn new(src: &from(Self) str) -> Lexer {
+            Lexer { src, pos: 0 }
+        }
+
+        pub fn next_token(&mut self) -> Option<Token> {
+            let src = self.src;
+            let rest = src[self.pos..].trim_start();
+            let c = rest.chars().next()?;
+            let len = if c.is_alphanumeric() {
+                rest.find(|ch: char| !ch.is_alphanumeric()).unwrap_or(rest.len())
+            } else {
+                c.len_utf8()
+            };
+            self.pos = src.len() - rest.len() + len;
+            let text = &rest[..len];
+            Some(if c.is_ascii_digit() {
+                Token::Number(text)
+            } else if c.is_alphabetic() {
+                Token::Ident(text)
+            } else {
+                Token::Punct(c)
+            })
+        }
+    }
+
+    impl Iterator for Lexer {
+        type Item = Token;
+        fn next(&mut self) -> Option<Token> { self.next_token() }
+    }
+
+    #[borrows]
+    pub struct Parser { tokens: Peekable<Lexer> }
+
+    impl Parser {
+        pub fn new(src: &from(Self) str) -> Parser {
+            Parser { tokens: Lexer::new(src).peekable() }
+        }
+
+        pub fn idents(&mut self) -> Vec<&from(Self) str> {
+            var out = Vec::new();
+            while let Some(t) = self.tokens.next() {
+                if let Token::Ident(name) = t { out.push(name); }
+            }
+            out
+        }
+    }
+
+    pub fn first_ident(p: &mut Parser) -> Option<&from(Parser) str> {
+        p.idents().into_iter().next()
+    }
+}

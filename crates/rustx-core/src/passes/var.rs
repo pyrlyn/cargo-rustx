@@ -22,16 +22,15 @@
 //! users expect it there. Limitation: a user macro that itself takes `var <name>` tokens
 //! receives `let mut <name>`.
 
-use proc_macro2::{Delimiter, Ident, Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
 
-use crate::tokens::map_sequences;
+use crate::tokens::map_sequences_reporting;
+use crate::tokens::position::{at_statement_start, outer_attributes_start};
+use crate::tokens::punct::{is_alone, is_joint};
+use crate::tokens::syntax::combine;
 
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
-    // Collected here instead of returned from the closure so one run reports every misuse,
-    // not just the first one `map_sequences` would stop at.
-    let mut errors: Option<syn::Error> = None;
-    let out = map_sequences(tokens, &mut |seq| Ok(rewrite_sequence(&seq, &mut errors)))?;
-    errors.map_or(Ok(out), Err)
+    map_sequences_reporting(tokens, rewrite_sequence)
 }
 
 /// What a `var` at statement start turns out to be, judged by the tokens after it.
@@ -46,7 +45,7 @@ fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<T
     for (i, tree) in seq.iter().enumerate() {
         if let TokenTree::Ident(var) = tree
             && var == "var"
-            && starts_statement(&seq[..i])
+            && starts_statement(seq, i)
         {
             match classify(var.span(), &seq[i + 1..]) {
                 Use::Binding => {
@@ -54,10 +53,7 @@ fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<T
                     out.push(TokenTree::Ident(Ident::new("mut", var.span())));
                     continue;
                 }
-                Use::Misuse(err) => match errors {
-                    Some(all) => all.combine(err),
-                    None => *errors = Some(err),
-                },
+                Use::Misuse(err) => combine(errors, err),
                 Use::Identifier => {}
             }
         }
@@ -66,24 +62,13 @@ fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<T
     out
 }
 
-fn starts_statement(before: &[TokenTree]) -> bool {
-    match before {
-        [] => true,
-        [.., TokenTree::Punct(p)] => p.as_char() == ';',
-        [.., TokenTree::Group(g)] if g.delimiter() == Delimiter::Brace => true,
-        // The inner-attribute arm comes first: `#![..]` also ends in `<punct> [..]`.
-        [.., hash, bang, TokenTree::Group(g)]
-            if g.delimiter() == Delimiter::Bracket
-                && is_punct(hash, '#')
-                && is_punct(bang, '!') =>
-        {
-            true
-        }
-        [.., hash, TokenTree::Group(g)] if g.delimiter() == Delimiter::Bracket => {
-            is_punct(hash, '#')
-        }
-        _ => false,
-    }
+/// Whether the token at `i` starts a statement, as the module header defines it.
+///
+/// An outer attribute right before counts on its own, without checking what precedes it the
+/// way `bound_presets` does for items; that is the detection rule `var` is specified and
+/// tested with, so the shared helper is not reused as is.
+fn starts_statement(seq: &[TokenTree], i: usize) -> bool {
+    at_statement_start(&seq[..i]) || outer_attributes_start(seq, i) < i
 }
 
 fn classify(var: Span, after: &[TokenTree]) -> Use {
@@ -101,7 +86,7 @@ fn classify(var: Span, after: &[TokenTree]) -> Use {
         }
         [TokenTree::Group(g), next, ..]
             if g.delimiter() == Delimiter::Parenthesis
-                && (is_lone(next, '=') || is_lone(next, ':')) =>
+                && (is_alone(next, '=') || is_alone(next, ':')) =>
         {
             destructuring(var)
         }
@@ -115,8 +100,8 @@ fn destructures(rest: &[TokenTree]) -> bool {
         Some(TokenTree::Group(g)) => {
             matches!(g.delimiter(), Delimiter::Parenthesis | Delimiter::Brace)
         }
-        Some(TokenTree::Punct(p)) => p.as_char() == ':' && p.spacing() == Spacing::Joint,
-        _ => false,
+        Some(tree) => is_joint(tree, ':'),
+        None => false,
     }
 }
 
@@ -126,15 +111,6 @@ fn destructuring(var: Span) -> Use {
         "`var` takes a single name; to destructure, write `let` and mark each binding \
          (`let (mut a, mut b) = ..`)",
     ))
-}
-
-fn is_punct(tree: &TokenTree, c: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == c)
-}
-
-/// Whether `tree` is the punctuation `c` on its own, so `=` is not part of `==` or `=>`.
-fn is_lone(tree: &TokenTree, c: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == c && p.spacing() == Spacing::Alone)
 }
 
 #[cfg(test)]

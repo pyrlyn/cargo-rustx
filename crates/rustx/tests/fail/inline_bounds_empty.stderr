@@ -1,0 +1,5 @@
+error: expected bounds after `:`, as in `x: T: Clone`
+ --> tests/fail/inline_bounds_empty.rs:2:17
+  |
+2 |     fn show(x: T:) {}
+  |                 ^

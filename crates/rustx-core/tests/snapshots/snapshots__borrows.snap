@@ -1,0 +1,74 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/borrows.rustx
+---
+mod lex {
+    use std::iter::Peekable;
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum Token<'__rustx_borrows> {
+        Ident(&'__rustx_borrows str),
+        Number(&'__rustx_borrows str),
+        Punct(char),
+    }
+    pub struct Lexer<'__rustx_borrows> {
+        src: &'__rustx_borrows str,
+        pos: usize,
+    }
+    impl<'__rustx_borrows> Lexer<'__rustx_borrows> {
+        pub fn new(src: &'__rustx_borrows str) -> Lexer<'__rustx_borrows> {
+            Lexer { src, pos: 0 }
+        }
+        pub fn next_token(&mut self) -> Option<Token<'__rustx_borrows>> {
+            let src = self.src;
+            let rest = src[self.pos..].trim_start();
+            let c = rest.chars().next()?;
+            let len = if c.is_alphanumeric() {
+                rest.find(|ch: char| !ch.is_alphanumeric()).unwrap_or(rest.len())
+            } else {
+                c.len_utf8()
+            };
+            self.pos = src.len() - rest.len() + len;
+            let text = &rest[..len];
+            Some(
+                if c.is_ascii_digit() {
+                    Token::Number(text)
+                } else if c.is_alphabetic() {
+                    Token::Ident(text)
+                } else {
+                    Token::Punct(c)
+                },
+            )
+        }
+    }
+    impl<'__rustx_borrows> Iterator for Lexer<'__rustx_borrows> {
+        type Item = Token<'__rustx_borrows>;
+        fn next(&mut self) -> Option<Token<'__rustx_borrows>> {
+            self.next_token()
+        }
+    }
+    pub struct Parser<'__rustx_borrows> {
+        tokens: Peekable<Lexer<'__rustx_borrows>>,
+    }
+    impl<'__rustx_borrows> Parser<'__rustx_borrows> {
+        pub fn new(src: &'__rustx_borrows str) -> Parser<'__rustx_borrows> {
+            Parser {
+                tokens: Lexer::new(src).peekable(),
+            }
+        }
+        pub fn idents(&mut self) -> Vec<&'__rustx_borrows str> {
+            let mut out = Vec::new();
+            while let Some(t) = self.tokens.next() {
+                if let Token::Ident(name) = t {
+                    out.push(name);
+                }
+            }
+            out
+        }
+    }
+    pub fn first_ident<'__rustx_borrows>(
+        p: &mut Parser<'__rustx_borrows>,
+    ) -> Option<&'__rustx_borrows str> {
+        p.idents().into_iter().next()
+    }
+}

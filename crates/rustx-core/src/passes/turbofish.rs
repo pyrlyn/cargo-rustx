@@ -19,12 +19,14 @@
 //! `a.b::<c, d>(e)`. This is the one place the sugar changes the meaning of valid Rust; the
 //! comparisons need parentheses inside `sugar!`, for example `((a.b < c), d > (e))`.
 
-use proc_macro2::{Delimiter, Punct, Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::punctuated::Punctuated;
 use syn::{AngleBracketedGenericArguments, GenericArgument, PathArguments, Type, TypeInfer};
 
+use crate::tokens::angle::matching_close;
 use crate::tokens::map_sequences;
+use crate::tokens::punct::{is_joint, is_punct};
 
 /// Std collections whose arity is fixed, with the number of `_` they need when written bare.
 const COLLECTIONS: &[(&str, usize)] = &[
@@ -69,7 +71,7 @@ fn method_generics(
         return None;
     }
     // The second `.` of `..` / `..=` starts no method call: `0..n<T>(x)` is a range.
-    if dot > 0 && is_joint_punct(&seq[dot - 1], '.') {
+    if dot > 0 && is_joint(&seq[dot - 1], '.') {
         return None;
     }
     let open = dot + 2;
@@ -79,7 +81,12 @@ fn method_generics(
     if lt.as_char() != '<' {
         return None;
     }
-    let close = matching_close(seq, open)?;
+    // A statement end means this `<` was a comparison; stop there instead of scanning on.
+    let statement_end = seq[open..]
+        .iter()
+        .position(|tree| is_punct(tree, ';'))
+        .map_or(seq.len(), |at| open + at);
+    let close = matching_close(&seq[..statement_end], open)?;
     match seq.get(close + 1)? {
         TokenTree::Group(group) if group.delimiter() == Delimiter::Parenthesis => {}
         _ => return None,
@@ -94,30 +101,6 @@ fn method_generics(
         fill_collection(arg);
     }
     Some((close, args))
-}
-
-/// Index of the `>` that closes the `<` at `open`, or `None` if the sequence ends first.
-fn matching_close(seq: &[TokenTree], open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for (index, tree) in seq.iter().enumerate().skip(open) {
-        let TokenTree::Punct(punct) = tree else {
-            continue;
-        };
-        match punct.as_char() {
-            '<' => depth += 1,
-            // The `>` of `->` (as in `Box<dyn Fn() -> u8>`) closes nothing.
-            '>' if !is_joint_punct(&seq[index - 1], '-') => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(index);
-                }
-            }
-            // A statement end means this `<` was a comparison; stop instead of scanning on.
-            ';' => return None,
-            _ => {}
-        }
-    }
-    None
 }
 
 /// Turns a bare known collection such as `Vec` into `Vec<_>`, spans taken from its name.
@@ -158,18 +141,6 @@ fn infer_args(arity: usize, span: Span) -> Punctuated<GenericArgument, syn::Toke
         })));
     }
     args
-}
-
-fn is_punct(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(punct) if punct.as_char() == ch)
-}
-
-fn is_joint_punct(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(punct) if is_joint(punct, ch))
-}
-
-fn is_joint(punct: &Punct, ch: char) -> bool {
-    punct.as_char() == ch && punct.spacing() == Spacing::Joint
 }
 
 #[cfg(test)]

@@ -1,0 +1,5 @@
+struct Meters(u32);
+
+fn twice(m: Meters: Clone) -> (Meters, Meters) {
+    (m.clone(), m)
+}

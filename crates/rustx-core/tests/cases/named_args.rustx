@@ -1,0 +1,31 @@
+mod server {
+    pub fn connect(host: &str, port: u16 = 5432, timeout_ms: u64 = 5_000) -> String {
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+
+    pub struct Pool;
+
+    impl Pool {
+        pub fn new(size: usize = 4, name: &str = "pool") -> Self {
+            Pool
+        }
+
+        pub fn spawn(&self, times: usize = 1, wait: bool = false) {}
+    }
+
+    pub fn demo() -> Vec<String> {
+        Pool::new(name: "db").spawn(wait: true);
+        vec![
+            connect("db"),
+            connect("db", port: 6432),
+            connect("db", timeout_ms: 100),
+            connect("db", timeout_ms: 100, port: 6432),
+        ]
+    }
+
+    pub fn untouched() {
+        let add = |a: u8, b: u8| a + b;
+        let point = Point { x: 1, y: 2 };
+        dsl!(div(class: "x"));
+    }
+}

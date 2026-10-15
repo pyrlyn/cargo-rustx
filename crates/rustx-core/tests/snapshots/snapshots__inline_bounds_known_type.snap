@@ -1,0 +1,6 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/inline_bounds_known_type.rustx
+---
+error: `Meters` names a type here, not a new generic; bound it in `where`

@@ -1,0 +1,11 @@
+error: too many arguments: `connect` takes at most 2
+ --> tests/fail/call_defaults_arguments.rs:7:31
+  |
+7 |         vec![connect("db", 1, 2), connect()]
+  |                               ^
+
+error: missing argument `host` of `connect`; only parameters with a default can be left out
+ --> tests/fail/call_defaults_arguments.rs:7:42
+  |
+7 |         vec![connect("db", 1, 2), connect()]
+  |                                          ^^
