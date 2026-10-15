@@ -1,0 +1,5 @@
+error: `#[sugared]` takes no arguments
+ --> tests/fail/attr_sugared_arguments.rs:1:18
+  |
+1 | #[rustx::sugared(all)]
+  |                  ^^^

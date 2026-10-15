@@ -5,9 +5,13 @@
 //!
 //! Pipeline: token passes rewrite sugar that `syn` cannot parse into valid Rust, the result is
 //! parsed as a [`syn::File`], then AST passes rewrite sugar that needs syntactic context.
+//! Attribute macros ([`expand_attribute`]) get valid Rust and run AST passes only.
 
+mod attribute;
 mod passes;
 mod tokens;
+
+pub use attribute::{AttributeMacro, expand_attribute};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;

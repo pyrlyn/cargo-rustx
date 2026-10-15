@@ -42,7 +42,7 @@ use crate::tokens::punct::{is_punct, is_single_colon};
 use crate::tokens::syntax::combine;
 
 /// The variant attribute the token half leaves on every `from` variant for [`lower`].
-const FROM_MARKER: &str = "__rustx_from";
+pub(super) const FROM_MARKER: &str = "__rustx_from";
 
 const FROM_SHAPE: &str =
     "`from` needs a tuple variant with exactly one field, as in `Io(from io::Error)`";

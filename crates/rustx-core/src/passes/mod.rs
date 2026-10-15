@@ -12,6 +12,7 @@ mod data;
 mod delegate;
 mod derive_presets;
 mod field_defaults;
+mod from_attribute;
 mod from_display;
 mod from_lifetimes;
 mod impl_header;
@@ -28,6 +29,7 @@ mod var;
 
 use proc_macro2::TokenStream;
 
+use crate::AttributeMacro;
 use crate::tokens::syntax::combine;
 
 type TokenPass = fn(TokenStream) -> syn::Result<TokenStream>;
@@ -79,8 +81,30 @@ pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream
 }
 
 pub(crate) fn rewrite_ast(file: &mut syn::File) -> syn::Result<()> {
+    run_ast(AST_PASSES, file)
+}
+
+/// Runs the AST passes behind one attribute macro on the item it sits on, rebuilt as a file.
+///
+/// `#[from]` is read only by the attribute macros: inside `sugar!` the spelling is `from T`, and a
+/// `#[from]` there stays valid Rust for whatever derive owns it. It runs first, so that
+/// `from_display` finds its marker.
+pub(crate) fn rewrite_attribute(kind: AttributeMacro, file: &mut syn::File) -> syn::Result<()> {
+    let (first, passes): (&[AstPass], &[AstPass]) = match kind {
+        AttributeMacro::Data => (&[], &[data::lower]),
+        AttributeMacro::Display => (&[from_attribute::lower], &[from_display::lower]),
+        AttributeMacro::Delegate => (&[], &[delegate::lower]),
+        AttributeMacro::Sugared => (&[from_attribute::lower], AST_PASSES),
+    };
+    run_ast(first.iter().chain(passes), file)
+}
+
+fn run_ast<'a>(
+    passes: impl IntoIterator<Item = &'a AstPass>,
+    file: &mut syn::File,
+) -> syn::Result<()> {
     let mut errors: Option<syn::Error> = None;
-    for pass in AST_PASSES {
+    for pass in passes {
         if let Err(err) = pass(file) {
             combine(&mut errors, err);
         }

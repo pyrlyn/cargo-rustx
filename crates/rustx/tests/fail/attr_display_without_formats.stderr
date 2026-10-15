@@ -1,0 +1,7 @@
+error: `#[display]` needs an enum whose variants carry `#[display("..")]`; for `#[from]` alone, use `#[sugared]`
+ --> tests/fail/attr_display_without_formats.rs:1:1
+  |
+1 | #[rustx::display]
+  | ^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `rustx::display` (in Nightly builds, run with -Z macro-backtrace for more info)
