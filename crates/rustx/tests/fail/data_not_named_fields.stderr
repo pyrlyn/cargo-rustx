@@ -1,0 +1,11 @@
+error: `#[data]` needs a struct with named fields, not a tuple struct
+ --> tests/fail/data_not_named_fields.rs:2:7
+  |
+2 |     #[data]
+  |       ^^^^
+
+error: `#[data]` needs a struct with named fields, not an enum
+ --> tests/fail/data_not_named_fields.rs:5:7
+  |
+5 |     #[data]
+  |       ^^^^

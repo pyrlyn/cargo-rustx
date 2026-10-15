@@ -1,0 +1,36 @@
+// Problem 08 in full, plus a generic struct and a `#[borrows]` struct.
+mod users {
+    #[data(setters, with)]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct User {
+        id: u64,
+        name: String,
+        email: String,
+        #[default(true)]
+        active: bool,
+    }
+
+    pub fn deactivate_by_domain(users: &mut [User], domain: &str) -> usize {
+        var n = 0;
+        for u in users.iter_mut() {
+            if u.email().ends_with(domain) && u.active() {
+                u.set_active(false);
+                n += 1;
+            }
+        }
+        n
+    }
+}
+
+mod cache {
+    #[data]
+    pub struct Cache<K: std::hash::Hash + Eq, V> where V: Clone {
+        map: std::collections::HashMap<K, V>,
+        #[default(16)]
+        capacity: usize,
+    }
+}
+
+#[borrows]
+#[data(setters)]
+pub struct Line { text: &str, number: usize }
