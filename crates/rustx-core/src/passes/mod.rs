@@ -13,6 +13,8 @@ mod var;
 
 use proc_macro2::TokenStream;
 
+use crate::tokens::syntax::combine;
+
 type TokenPass = fn(TokenStream) -> syn::Result<TokenStream>;
 type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 
@@ -40,10 +42,7 @@ pub(crate) fn rewrite_ast(file: &mut syn::File) -> syn::Result<()> {
     let mut errors: Option<syn::Error> = None;
     for pass in AST_PASSES {
         if let Err(err) = pass(file) {
-            match &mut errors {
-                Some(all) => all.combine(err),
-                None => errors = Some(err),
-            }
+            combine(&mut errors, err);
         }
     }
     errors.map_or(Ok(()), Err)

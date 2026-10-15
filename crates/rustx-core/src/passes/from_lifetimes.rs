@@ -36,6 +36,7 @@ use syn::parse::{ParseStream, Parser};
 use syn::punctuated::Punctuated;
 
 use crate::tokens::map_sequences;
+use crate::tokens::punct::{follows_arrow, is_punct};
 
 /// Prefix of the marker lifetimes the token pass leaves for [`lower`].
 const MARK: &str = "__rustx_mark_";
@@ -89,9 +90,9 @@ fn sugar_at(seq: &[TokenTree], amp: usize) -> Option<usize> {
             matches!(
                 group.delimiter(),
                 Delimiter::Parenthesis | Delimiter::Bracket
-            ) && after_arrow(seq, amp)
+            ) && follows_arrow(seq, amp)
         }
-        TokenTree::Punct(p) => matches!(p.as_char(), '&' | '*') && after_arrow(seq, amp),
+        TokenTree::Punct(p) => matches!(p.as_char(), '&' | '*') && follows_arrow(seq, amp),
         TokenTree::Literal(_) => false,
     };
     starts_type.then_some(from)
@@ -100,16 +101,6 @@ fn sugar_at(seq: &[TokenTree], amp: usize) -> Option<usize> {
 fn can_start_type(ident: &Ident) -> bool {
     TYPE_KEYWORDS.iter().any(|keyword| ident == keyword)
         || syn::parse2::<Ident>(ident.to_token_stream()).is_ok()
-}
-
-fn after_arrow(seq: &[TokenTree], i: usize) -> bool {
-    i >= 2
-        && is_punct(&seq[i - 1], '>')
-        && matches!(&seq[i - 2], TokenTree::Punct(p) if p.as_char() == '-' && p.spacing() == Spacing::Joint)
-}
-
-fn is_punct(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch)
 }
 
 /// The marker lifetime for `from` and its `(..)` group, spanned on the user's tokens.

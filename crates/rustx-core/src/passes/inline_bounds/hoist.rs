@@ -18,6 +18,7 @@ use syn::{
 };
 
 use super::marker::MARKER;
+use crate::tokens::syntax::{bare_name, combine};
 
 type Bounds = Punctuated<TypeParamBound, Token![+]>;
 
@@ -407,20 +408,6 @@ fn param_names(generics: &Generics) -> Vec<Ident> {
     types
         .chain(generics.const_params().map(|c| c.ident.clone()))
         .collect()
-}
-
-fn bare_name(ty: &Type) -> Option<&Ident> {
-    match ty {
-        Type::Path(path) if path.qself.is_none() => path.path.get_ident(),
-        _ => None,
-    }
-}
-
-fn combine(errors: &mut Option<syn::Error>, err: syn::Error) {
-    match errors {
-        Some(all) => all.combine(err),
-        None => *errors = Some(err),
-    }
 }
 
 fn name_type(name: &Ident) -> Type {

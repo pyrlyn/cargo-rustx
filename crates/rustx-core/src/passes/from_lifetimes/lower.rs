@@ -40,18 +40,12 @@ use syn::{
 };
 
 use super::{decode, introduced_span};
+use crate::tokens::syntax::{bare_name, combine};
 
 pub(in crate::passes) fn lower(file: &mut syn::File) -> syn::Result<()> {
     let mut pass = Lower { errors: None };
     pass.visit_file_mut(file);
     pass.errors.map_or(Ok(()), Err)
-}
-
-fn push(errors: &mut Option<syn::Error>, err: syn::Error) {
-    match errors {
-        Some(all) => all.combine(err),
-        None => *errors = Some(err),
-    }
 }
 
 struct Lower {
@@ -61,7 +55,7 @@ struct Lower {
 impl VisitMut for Lower {
     fn visit_signature_mut(&mut self, sig: &mut Signature) {
         if let Err(err) = lower_signature(sig) {
-            push(&mut self.errors, err);
+            combine(&mut self.errors, err);
         }
         // The return type is resolved or already reported; a marker anywhere else is misplaced.
         self.visit_generics_mut(&mut sig.generics);
@@ -73,7 +67,7 @@ impl VisitMut for Lower {
     fn visit_lifetime_mut(&mut self, lifetime: &mut Lifetime) {
         if decode(&lifetime.ident).is_some() {
             let msg = "`&from(..)` only works in the return type of a function";
-            push(&mut self.errors, syn::Error::new_spanned(&*lifetime, msg));
+            combine(&mut self.errors, syn::Error::new_spanned(&*lifetime, msg));
         }
     }
 }
@@ -119,7 +113,7 @@ fn lower_signature(sig: &mut Signature) -> syn::Result<()> {
         for name in &marker.names {
             let Some(index) = params.iter().position(|p| p.as_deref() == Some(name)) else {
                 let msg = format!("`from(..)` names `{name}`, which is not a parameter here");
-                push(&mut errors, syn::Error::new_spanned(&marker.written, msg));
+                combine(&mut errors, syn::Error::new_spanned(&marker.written, msg));
                 continue;
             };
             named_by[index].get_or_insert(marker);
@@ -153,7 +147,7 @@ fn lower_signature(sig: &mut Signature) -> syn::Result<()> {
             .clone();
         if !tie(sig, index, &lifetime) {
             let msg = format!("`{name}` is not a reference, so `from(..)` cannot borrow from it");
-            push(&mut errors, syn::Error::new_spanned(&marker.written, msg));
+            combine(&mut errors, syn::Error::new_spanned(&marker.written, msg));
         }
     }
     if let Some(err) = errors {
@@ -229,9 +223,7 @@ fn tie(sig: &mut Signature, index: usize, lifetime: &Lifetime) -> bool {
         },
         FnArg::Typed(typed) => &mut *typed.ty,
     };
-    if let Type::Path(path) = ty
-        && path.qself.is_none()
-        && let Some(ident) = path.path.get_ident()
+    if let Some(ident) = bare_name(ty)
         && generics.type_params().any(|param| param.ident == *ident)
     {
         return tie_type_param(generics, ident, lifetime);
@@ -258,7 +250,7 @@ fn tie_type_param(generics: &mut Generics, ident: &Ident, lifetime: &Lifetime) -
     if let Some(clause) = &mut generics.where_clause {
         for predicate in &mut clause.predicates {
             if let WherePredicate::Type(predicate) = predicate
-                && matches!(&predicate.bounded_ty, Type::Path(p) if p.qself.is_none() && p.path.is_ident(ident))
+                && bare_name(&predicate.bounded_ty) == Some(ident)
             {
                 filled |= fill_bounds(&mut predicate.bounds, lifetime);
             }
@@ -364,7 +356,7 @@ impl VisitMut for Resolve {
                 _ => {
                     let msg = "`'_` would borrow from several `from(..)` sources here; \
                                name them in one `from(a, b)`";
-                    push(&mut self.errors, syn::Error::new(lifetime.apostrophe, msg));
+                    combine(&mut self.errors, syn::Error::new(lifetime.apostrophe, msg));
                 }
             }
         }

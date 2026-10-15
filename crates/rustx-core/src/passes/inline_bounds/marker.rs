@@ -6,10 +6,12 @@
 //! commas outside `<..>`; a second `:` outside `<..>` and outside `::` starts the bounds, which
 //! run to the end of the parameter. Every generated token takes the span of that `:`.
 
-use proc_macro2::{Delimiter, Group, Ident, Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
 use quote::quote_spanned;
 
+use crate::tokens::angle::{angle_depth, matching_close};
 use crate::tokens::map_sequences;
+use crate::tokens::punct::{is_punct, is_single_colon};
 
 /// Name of the marker attribute; the AST half removes every one it finds.
 pub(super) const MARKER: &str = "__rustx_bound";
@@ -41,40 +43,12 @@ fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
     }
     let mut at = i + 2;
     if is_punct(seq.get(at)?, '<') {
-        at = generics_end(seq, at)? + 1;
+        at = matching_close(seq, at)? + 1;
     }
     match seq.get(at)? {
         TokenTree::Group(group) if group.delimiter() == Delimiter::Parenthesis => Some(at),
         _ => None,
     }
-}
-
-/// Index of the `>` that closes the `<` at `open`.
-fn generics_end(seq: &[TokenTree], open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for at in open..seq.len() {
-        depth = angle_depth(seq, at, depth);
-        if depth == 0 {
-            return Some(at);
-        }
-    }
-    None
-}
-
-/// Angle-bracket depth after the token at `at`; the `>` of `->` closes nothing.
-fn angle_depth(seq: &[TokenTree], at: usize, depth: usize) -> usize {
-    match &seq[at] {
-        TokenTree::Punct(p) if p.as_char() == '<' => depth + 1,
-        TokenTree::Punct(p) if p.as_char() == '>' && !arrow_head(seq, at) => {
-            depth.saturating_sub(1)
-        }
-        _ => depth,
-    }
-}
-
-fn arrow_head(seq: &[TokenTree], at: usize) -> bool {
-    at.checked_sub(1)
-        .is_some_and(|before| is_joint(&seq[before], '-'))
 }
 
 fn rewrite_parameters(group: &Group) -> syn::Result<TokenStream> {
@@ -101,7 +75,7 @@ fn rewrite_parameter(param: &[TokenTree]) -> syn::Result<Vec<TokenTree>> {
     let mut colons = 0;
     for at in 0..param.len() {
         depth = angle_depth(param, at, depth);
-        if depth > 0 || !single_colon(param, at) {
+        if depth > 0 || !is_single_colon(param, at) {
             continue;
         }
         colons += 1;
@@ -127,23 +101,6 @@ fn marker(span: Span, bounds: &[TokenTree]) -> TokenStream {
     let bounds: TokenStream = bounds.iter().cloned().collect();
     let name = Ident::new(MARKER, span);
     quote_spanned!(span=> #[#name(#bounds)])
-}
-
-/// A `:` that is not half of `::`.
-fn single_colon(seq: &[TokenTree], at: usize) -> bool {
-    is_punct(&seq[at], ':')
-        && !(is_joint(&seq[at], ':') && seq.get(at + 1).is_some_and(|next| is_punct(next, ':')))
-        && !at
-            .checked_sub(1)
-            .is_some_and(|before| is_joint(&seq[before], ':'))
-}
-
-fn is_punct(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch)
-}
-
-fn is_joint(tree: &TokenTree, ch: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch && p.spacing() == Spacing::Joint)
 }
 
 #[cfg(test)]

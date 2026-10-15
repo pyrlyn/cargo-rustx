@@ -42,23 +42,22 @@
 //! impl parameter uses `Span::mixed_site()`, but type parameters resolve at the call site even
 //! there, so it also gets a reserved `__Rustx` name that user bounds cannot mean by accident.
 
-use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
 use quote::{ToTokens, quote_spanned};
 use syn::Token;
 use syn::parse::{ParseStream, Parser};
 use syn::punctuated::Punctuated;
 
-use crate::tokens::map_sequences;
+use crate::tokens::position::{at_statement_start, outer_attributes_start};
+use crate::tokens::punct::{is_alone, is_punct, loosen_end};
+use crate::tokens::syntax::combine;
+use crate::tokens::{map_sequences, map_sequences_reporting};
 
 /// Name of the blanket impl's type parameter.
 const PARAM: &str = "__RustxSelf";
 
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
-    // Collected here instead of returned from the closure so one run reports every misuse,
-    // not just the first one `map_sequences` would stop at.
-    let mut errors: Option<syn::Error> = None;
-    let out = map_sequences(tokens, &mut |seq| Ok(rewrite_sequence(&seq, &mut errors)))?;
-    errors.map_or(Ok(out), Err)
+    map_sequences_reporting(tokens, rewrite_sequence)
 }
 
 fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<TokenTree> {
@@ -72,10 +71,7 @@ fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<T
                     i = end;
                     continue;
                 }
-                Err(err) => match errors {
-                    Some(all) => all.combine(err),
-                    None => *errors = Some(err),
-                },
+                Err(err) => combine(errors, err),
             }
         }
         out.push(seq[i].clone());
@@ -97,7 +93,7 @@ fn preset_at(seq: &[TokenTree], i: usize) -> Option<usize> {
         _ => return None,
     }
     let attrs = outer_attributes_start(seq, visibility_start(seq, i));
-    starts_item(&seq[..attrs]).then_some(attrs)
+    at_statement_start(&seq[..attrs]).then_some(attrs)
 }
 
 /// Index of the visibility in front of the token at `i`, or `i` if there is none.
@@ -113,31 +109,6 @@ fn visibility_start(seq: &[TokenTree], i: usize) -> usize {
     }
 }
 
-/// Index of the first of the outer attributes (`#[..]`) right before `end`.
-fn outer_attributes_start(seq: &[TokenTree], mut end: usize) -> usize {
-    while let [.., hash, TokenTree::Group(g)] = &seq[..end]
-        && g.delimiter() == Delimiter::Bracket
-        && is_punct(hash, '#')
-    {
-        end -= 2;
-    }
-    end
-}
-
-/// Whether an item may start right after `before`.
-fn starts_item(before: &[TokenTree]) -> bool {
-    match before {
-        [] => true,
-        [.., TokenTree::Punct(p)] => p.as_char() == ';',
-        [.., TokenTree::Group(g)] if g.delimiter() == Delimiter::Brace => true,
-        // Outer attributes were already skipped, so a bracket group here is an inner `#![..]`.
-        [.., hash, bang, TokenTree::Group(g)] if g.delimiter() == Delimiter::Bracket => {
-            is_punct(hash, '#') && is_punct(bang, '!')
-        }
-        _ => false,
-    }
-}
-
 /// Expands the preset whose `bound` keyword is at `i`; returns the index after its `;`.
 ///
 /// The attributes and visibility from `attrs` to `i` are already in the output; they are only
@@ -146,7 +117,7 @@ fn expand(seq: &[TokenTree], attrs: usize, i: usize) -> syn::Result<(usize, Toke
     let keyword = seq[i].span();
     let name = &seq[i + 1];
     let eq = match seq.get(i + 2) {
-        Some(TokenTree::Punct(p)) if p.as_char() == '=' && p.spacing() == Spacing::Alone => p,
+        Some(eq) if is_alone(eq, '=') => eq,
         Some(TokenTree::Punct(p)) if p.as_char() == '<' => {
             return Err(syn::Error::new(
                 p.span(),
@@ -194,7 +165,7 @@ fn expand(seq: &[TokenTree], attrs: usize, i: usize) -> syn::Result<(usize, Toke
     // The written tokens, not a re-print of the parsed bounds, so rustc errors in a bound
     // point at exactly what the user typed.
     let bounds: TokenStream = body[..semi].iter().cloned().collect();
-    let impl_bounds = loosen_end(replace_self(bounds.clone()));
+    let impl_bounds = loosen_end(replace_self(bounds.clone())?);
     let param = param_ident(keyword);
     let trait_keyword = Ident::new("trait", keyword);
     let cfgs = cfg_attributes(&seq[attrs..i]);
@@ -211,21 +182,18 @@ fn param_ident(located_at: Span) -> Ident {
 }
 
 /// Replaces every `Self` with the impl parameter, keeping the position of each `Self`.
-fn replace_self(tokens: TokenStream) -> TokenStream {
-    tokens
-        .into_iter()
-        .map(|tree| match tree {
-            TokenTree::Ident(ident) if ident == "Self" => {
-                TokenTree::Ident(param_ident(ident.span()))
-            }
-            TokenTree::Group(group) => {
-                let mut rebuilt = Group::new(group.delimiter(), replace_self(group.stream()));
-                rebuilt.set_span(group.span());
-                TokenTree::Group(rebuilt)
-            }
-            other => other,
-        })
-        .collect()
+fn replace_self(tokens: TokenStream) -> syn::Result<TokenStream> {
+    map_sequences(tokens, &mut |seq| {
+        Ok(seq
+            .into_iter()
+            .map(|tree| match tree {
+                TokenTree::Ident(ident) if ident == "Self" => {
+                    TokenTree::Ident(param_ident(ident.span()))
+                }
+                other => other,
+            })
+            .collect())
+    })
 }
 
 /// The `#[cfg(..)]` attributes among the outer attributes in `prefix`.
@@ -243,21 +211,6 @@ fn cfg_attributes(prefix: &[TokenTree]) -> Vec<TokenStream> {
             _ => None,
         })
         .collect()
-}
-
-/// Copies `tokens`, making the last one alone so it cannot glue onto the `>` that follows it.
-fn loosen_end(tokens: TokenStream) -> TokenStream {
-    let mut trees: Vec<TokenTree> = tokens.into_iter().collect();
-    if let Some(TokenTree::Punct(last)) = trees.last_mut() {
-        let mut fresh = Punct::new(last.as_char(), Spacing::Alone);
-        fresh.set_span(last.span());
-        *last = fresh;
-    }
-    trees.into_iter().collect()
-}
-
-fn is_punct(tree: &TokenTree, c: char) -> bool {
-    matches!(tree, TokenTree::Punct(p) if p.as_char() == c)
 }
 
 #[cfg(test)]
