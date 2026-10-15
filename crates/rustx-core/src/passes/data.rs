@@ -40,9 +40,10 @@ use std::mem;
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
-use syn::visit_mut::{self, VisitMut};
-use syn::{Attribute, Block, Expr, Fields, Ident, Item, ItemMod, ItemStruct, Lifetime, Meta, Stmt};
+use syn::visit_mut::VisitMut;
+use syn::{Attribute, Expr, Fields, Ident, Item, ItemStruct, Lifetime, Meta};
 
+use super::item_lists::{Entry, ExpandList, for_each_list, insert_after};
 use super::{borrows, field_defaults};
 use crate::tokens::syntax::{combine, take_attr};
 
@@ -51,7 +52,7 @@ const DEFAULT: &str = "default";
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
     let mut pass = Lower { errors: None };
-    pass.visit_file_mut(file);
+    for_each_list(file, &mut pass);
     pass.errors.map_or(Ok(()), Err)
 }
 
@@ -98,68 +99,20 @@ struct Lower {
     errors: Option<syn::Error>,
 }
 
-impl Lower {
-    /// Expands every `#[data]` item of one item list, putting the generated items after it.
-    fn expand_list<T>(
-        &mut self,
-        list: &mut Vec<T>,
-        as_item: fn(&mut T) -> Option<&mut Item>,
-        wrap: fn(Item) -> T,
-    ) {
+impl ExpandList for Lower {
+    fn expand_list<T: Entry>(&mut self, list: &mut Vec<T>) {
         // A builder must not collide with a type declared next to the struct.
         let declared: HashSet<String> = list
             .iter_mut()
-            .filter_map(as_item)
+            .filter_map(Entry::item_mut)
             .filter_map(|item| type_name(item))
             .collect();
-        let mut out = Vec::with_capacity(list.len());
-        for mut entry in mem::take(list) {
-            let generated = match as_item(&mut entry).map(|item| expand(item, &declared)) {
-                Some(Ok(generated)) => generated,
-                Some(Err(err)) => {
-                    combine(&mut self.errors, err);
-                    Vec::new()
-                }
-                None => Vec::new(),
-            };
-            out.push(entry);
-            out.extend(generated.into_iter().map(wrap));
-        }
-        *list = out;
-    }
-}
-
-impl VisitMut for Lower {
-    fn visit_file_mut(&mut self, file: &mut syn::File) {
-        self.expand_list(&mut file.items, item_of_item, |item| item);
-        visit_mut::visit_file_mut(self, file);
-    }
-
-    fn visit_item_mod_mut(&mut self, module: &mut ItemMod) {
-        if let Some((_, items)) = &mut module.content {
-            self.expand_list(items, item_of_item, |item| item);
-        }
-        visit_mut::visit_item_mod_mut(self, module);
-    }
-
-    fn visit_block_mut(&mut self, block: &mut Block) {
-        self.expand_list(&mut block.stmts, item_of_stmt, Stmt::Item);
-        visit_mut::visit_block_mut(self, block);
-    }
-}
-
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "shaped like `item_of_stmt`, so both fit `expand_list`"
-)]
-fn item_of_item(item: &mut Item) -> Option<&mut Item> {
-    Some(item)
-}
-
-fn item_of_stmt(stmt: &mut Stmt) -> Option<&mut Item> {
-    match stmt {
-        Stmt::Item(item) => Some(item),
-        _ => None,
+        insert_after(list, |item| {
+            expand(item, &declared).unwrap_or_else(|err| {
+                combine(&mut self.errors, err);
+                Vec::new()
+            })
+        });
     }
 }
 

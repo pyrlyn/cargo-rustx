@@ -51,20 +51,17 @@ mod spec;
 mod std_traits;
 
 use std::collections::{HashMap, HashSet};
-use std::convert::identity;
 
 use proc_macro2::Span;
 use quote::{ToTokens, quote_spanned};
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
-use syn::{
-    Block, Field, Index, Item, ItemImpl, ItemMod, ItemStruct, ItemTrait, Member, Path, Stmt,
-    TraitItem, Type,
-};
+use syn::{Field, Index, Item, ItemImpl, ItemStruct, ItemTrait, Member, Path, TraitItem, Type};
 
 use self::forward::Target;
 use self::spec::Delegation;
 use super::borrows;
+use super::item_lists::{Entry, ExpandList, for_each_list};
 use crate::tokens::syntax::{combine, take_attr};
 
 const ATTR: &str = "delegate";
@@ -76,7 +73,7 @@ pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
         traits: traits.0,
         errors: None,
     };
-    walk.visit_file_mut(file);
+    for_each_list(file, &mut walk);
     walk.errors.map_or(Ok(()), Err)
 }
 
@@ -109,22 +106,9 @@ struct Request {
     delegation: Delegation,
 }
 
-impl VisitMut for Walk {
-    fn visit_file_mut(&mut self, file: &mut syn::File) {
-        self.scope(&mut file.items, as_item, identity);
-        visit_mut::visit_file_mut(self, file);
-    }
-
-    fn visit_item_mod_mut(&mut self, module: &mut ItemMod) {
-        if let Some((_, items)) = &mut module.content {
-            self.scope(items, as_item, identity);
-        }
-        visit_mut::visit_item_mod_mut(self, module);
-    }
-
-    fn visit_block_mut(&mut self, block: &mut Block) {
-        self.scope(&mut block.stmts, stmt_item, Stmt::Item);
-        visit_mut::visit_block_mut(self, block);
+impl ExpandList for Walk {
+    fn expand_list<T: Entry>(&mut self, list: &mut Vec<T>) {
+        self.scope(list);
     }
 }
 
@@ -135,15 +119,10 @@ impl Walk {
 
     /// Lowers the structs of one item list. Each impl goes right after its struct, which keeps
     /// it before a block's tail expression.
-    fn scope<T>(
-        &mut self,
-        list: &mut Vec<T>,
-        item: fn(&mut T) -> Option<&mut Item>,
-        wrap: fn(Item) -> T,
-    ) {
+    fn scope<T: Entry>(&mut self, list: &mut Vec<T>) {
         let mut requests = Vec::new();
         for (at, entry) in list.iter_mut().enumerate() {
-            match item(entry) {
+            match entry.item_mut() {
                 Some(Item::Struct(owner)) => self.collect(at, owner, &mut requests),
                 Some(Item::Enum(owner)) => {
                     for variant in &mut owner.variants {
@@ -158,9 +137,12 @@ impl Walk {
         }
         let mut added = Vec::new();
         for request in requests {
-            let existing = list.iter_mut().filter_map(item).find_map(|item| {
-                except::hand_written(item, &request.owner.ident, &request.delegation.path)
-            });
+            let existing = list
+                .iter_mut()
+                .filter_map(Entry::item_mut)
+                .find_map(|item| {
+                    except::hand_written(item, &request.owner.ident, &request.delegation.path)
+                });
             match self.lower(&request, existing) {
                 Ok(Some(item)) => added.push((request.at, item)),
                 Ok(None) => {}
@@ -169,7 +151,7 @@ impl Walk {
         }
         // Back to front, so earlier indices stay valid and one struct's impls keep their order.
         for (at, item) in added.into_iter().rev() {
-            list.insert(at + 1, wrap(item));
+            list.insert(at + 1, T::from_item(item));
         }
     }
 
@@ -313,21 +295,6 @@ fn named_type(owner: &ItemStruct, mut ty: Type) -> Type {
         borrows::Fill::new(&lifetime, &HashSet::new(), true).visit_type_mut(&mut ty);
     }
     ty
-}
-
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "`scope` reads item lists and block statements through one accessor type"
-)]
-fn as_item(item: &mut Item) -> Option<&mut Item> {
-    Some(item)
-}
-
-fn stmt_item(stmt: &mut Stmt) -> Option<&mut Item> {
-    match stmt {
-        Stmt::Item(item) => Some(item),
-        _ => None,
-    }
 }
 
 /// Whether an impl must provide `item`: a trait item without a default.

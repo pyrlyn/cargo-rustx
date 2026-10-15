@@ -15,6 +15,7 @@ mod from_display;
 mod from_lifetimes;
 mod inline_bounds;
 mod into_params;
+mod item_lists;
 mod macro_args;
 mod newtype;
 mod param_defaults;

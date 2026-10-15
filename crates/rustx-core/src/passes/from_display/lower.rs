@@ -10,15 +10,15 @@ use quote::{ToTokens, quote, quote_spanned};
 use syn::ext::IdentExt;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::visit_mut::{self, VisitMut};
-use syn::{Attribute, Block, Fields, Generics, Item, ItemEnum, ItemMod, LitStr, Path, Stmt, Token};
+use syn::{Attribute, Fields, Generics, Item, ItemEnum, LitStr, Path, Token};
 
 use super::{FROM_MARKER, FROM_SHAPE, format};
+use crate::passes::item_lists::{Entry, ExpandList, for_each_list, insert_after};
 use crate::tokens::syntax::{combine, introduced_span, take_attr};
 
 pub(in crate::passes) fn lower(file: &mut syn::File) -> syn::Result<()> {
     let mut pass = Lower { errors: None };
-    pass.visit_file_mut(file);
+    for_each_list(file, &mut pass);
     pass.errors.map_or(Ok(()), Err)
 }
 
@@ -222,34 +222,9 @@ fn derived_names(attrs: &[Attribute]) -> Vec<String> {
         .collect()
 }
 
-/// Inserts after each element of `list` what `generate` returns for it.
-fn insert_after<T>(list: &mut Vec<T>, mut generate: impl FnMut(&mut T) -> Vec<T>) {
-    for mut element in std::mem::take(list) {
-        let extra = generate(&mut element);
-        list.push(element);
-        list.extend(extra);
-    }
-}
-
-impl VisitMut for Lower {
-    fn visit_file_mut(&mut self, file: &mut syn::File) {
-        insert_after(&mut file.items, |item| self.generate(item));
-        visit_mut::visit_file_mut(self, file);
-    }
-
-    fn visit_item_mod_mut(&mut self, module: &mut ItemMod) {
-        if let Some((_, items)) = &mut module.content {
-            insert_after(items, |item| self.generate(item));
-        }
-        visit_mut::visit_item_mod_mut(self, module);
-    }
-
-    fn visit_block_mut(&mut self, block: &mut Block) {
-        insert_after(&mut block.stmts, |stmt| match stmt {
-            Stmt::Item(item) => self.generate(item).into_iter().map(Stmt::Item).collect(),
-            _ => Vec::new(),
-        });
-        visit_mut::visit_block_mut(self, block);
+impl ExpandList for Lower {
+    fn expand_list<T: Entry>(&mut self, list: &mut Vec<T>) {
+        insert_after(list, |item| self.generate(item));
     }
 }
 

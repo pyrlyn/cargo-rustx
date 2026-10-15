@@ -62,9 +62,10 @@ use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     Attribute, Block, Expr, ExprAssign, ExprLit, ExprStruct, Field, Fields, Item, ItemMod,
-    ItemStruct, ItemUnion, Lit, Macro, Path, Stmt, Token, Type, Variant, parse_quote_spanned,
+    ItemStruct, ItemUnion, Lit, Macro, Path, Token, Type, Variant, parse_quote_spanned,
 };
 
+use crate::passes::item_lists::{Entry, insert_after};
 use crate::passes::macro_args::MacroArgs;
 use crate::tokens::syntax::combine;
 
@@ -113,23 +114,12 @@ impl Lower {
         combine(&mut self.errors, syn::Error::new(span, message));
     }
 
-    /// Takes the defaults off `struct`s in `items` and puts their `impl Default` right after them.
-    fn expand<T>(
-        &mut self,
-        items: &mut Vec<T>,
-        as_item: fn(&mut T) -> Option<&mut Item>,
-        wrap: fn(Item) -> T,
-    ) {
-        let mut at = 0;
-        while at < items.len() {
-            if let Some(Item::Struct(item)) = as_item(&mut items[at])
-                && let Some(default) = self.default_impl(item)
-            {
-                at += 1;
-                items.insert(at, wrap(default));
-            }
-            at += 1;
-        }
+    /// Takes the defaults off `struct`s in `list` and puts their `impl Default` right after them.
+    fn expand<T: Entry>(&mut self, list: &mut Vec<T>) {
+        insert_after(list, |item| match item {
+            Item::Struct(item) => self.default_impl(item).into_iter().collect(),
+            _ => Vec::new(),
+        });
     }
 
     fn default_impl(&mut self, item: &mut ItemStruct) -> Option<Item> {
@@ -177,26 +167,19 @@ impl Lower {
 
 impl VisitMut for Lower {
     fn visit_file_mut(&mut self, file: &mut syn::File) {
-        self.expand(&mut file.items, |item| Some(item), |item| item);
+        self.expand(&mut file.items);
         visit_mut::visit_file_mut(self, file);
     }
 
     fn visit_item_mod_mut(&mut self, module: &mut ItemMod) {
         if let Some((_, items)) = &mut module.content {
-            self.expand(items, |item| Some(item), |item| item);
+            self.expand(items);
         }
         visit_mut::visit_item_mod_mut(self, module);
     }
 
     fn visit_block_mut(&mut self, block: &mut Block) {
-        self.expand(
-            &mut block.stmts,
-            |stmt| match stmt {
-                Stmt::Item(item) => Some(item),
-                _ => None,
-            },
-            Stmt::Item,
-        );
+        self.expand(&mut block.stmts);
         visit_mut::visit_block_mut(self, block);
     }
 
