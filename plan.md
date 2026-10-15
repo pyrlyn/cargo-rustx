@@ -7,13 +7,14 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
+| T19.2 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T26 | todo | P2 | 4 | 0% | |
 | T27 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T28 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T29 | todo | P3 | 3 | 0% | |
 | T31 | todo | P3 | 3 | 0% | |
-| T32 | todo | P3 | 4 | 0% | |
+| T32 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T33 | todo | P3 | 2 | 0% | |
 
 ### T19. Convert plain Rust into rustx sugar
@@ -23,6 +24,12 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
+
+### T19.2. Reverse rule for the turbofish sugar
+
+The first rule on the T19.1 driver after `var`: `.m::<T>(..)` back to `.m<T>(..)` exactly where the turbofish pass would produce it, and nothing that the forward pass would read differently (comparisons in comma lists, see ARCHITECTURE h). Done when the rule is in `sugar::RULES` with `assert_sugar` unit tests, a snapshot case, and valid Rust with no matching shape unchanged.
+
+Plan: `crates/rustx-core/src/sugar/turbofish.rs` walking method calls with explicit generic arguments; the edit removes the `::` before `<`. Verify against `passes/turbofish.rs` which method-call shapes the forward pass accepts; the driver's round-trip check is the safety net, not the rule. Verify: unit tests with `assert_sugar`, `tests/sugar_cases/turbofish.rs` snapshot, `just check`.
 
 ### T24. M6: `shared` bindings and `shared T` types
 
@@ -63,6 +70,8 @@ Decided with the creator: format through rustfmt: replace the sugar with reversi
 ### T32. M9: file-level `.rustx` via `build.rs`
 
 A build helper that desugars `.rustx` files into `OUT_DIR` from `build.rs`, so a whole file can use the sugar and be `include!`d, with `rerun-if-changed` lines and errors that name the `.rustx` file and line. Done when an example crate in the workspace builds from a `.rustx` file and a test shows a sugar error pointing at the right `.rustx` line.
+
+Plan: a new crate `crates/rustx-build` with `rustx_build::expand_file(path)` (and a directory variant) for `build.rs`: it desugars a `.rustx` file into `OUT_DIR`, prints `cargo:rerun-if-changed`, and on error fails the build with `path:line:column: message` naming the `.rustx` file. The expansion and diagnostic code of `rustx-cli` (`expand::expand_source`, `diagnostic::render`) moves into a library both use instead of being copied. An example crate in the workspace builds from a `.rustx` file and `include!`s the output. Verify: unit tests, an integration test on the example crate, a test that a sugar error names the right `.rustx` line, `just check`; `toolchain.md` rows.
 
 ### T33. M9: user documentation
 
