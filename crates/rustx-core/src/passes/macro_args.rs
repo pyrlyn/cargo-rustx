@@ -12,14 +12,14 @@ use syn::{Expr, Token};
 
 /// A macro body made of expressions: `a, b, c` (`format!`, `assert_eq!`) or `value; count`
 /// (`vec![x; n]`).
-pub(super) enum MacroArgs {
+pub(crate) enum MacroArgs {
     List(Punctuated<Expr, Token![,]>),
     Repeat(Box<Expr>, Token![;], Box<Expr>),
 }
 
 impl MacroArgs {
     /// Every expression of the body, in source order.
-    pub(super) fn exprs_mut(&mut self) -> Vec<&mut Expr> {
+    pub(crate) fn exprs_mut(&mut self) -> Vec<&mut Expr> {
         match self {
             Self::List(list) => list.iter_mut().collect(),
             Self::Repeat(value, _, count) => vec![&mut **value, &mut **count],

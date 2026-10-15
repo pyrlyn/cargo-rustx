@@ -14,7 +14,7 @@ use crate::tokens::params::map_fn_parameters;
 use crate::tokens::punct::{is_joint, is_punct, loosen_end};
 
 /// Name of the marker attribute; the AST half removes every one it finds.
-pub(super) const MARKER: &str = "__rustx_default";
+pub(crate) const MARKER: &str = "__rustx_default";
 
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
     map_fn_parameters(tokens, &mut rewrite_parameter)

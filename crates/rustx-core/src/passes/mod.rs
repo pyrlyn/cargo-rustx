@@ -104,6 +104,13 @@ const AST_PASSES: &[AstPass] = &[
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
 pub(crate) use newtype::VALIDATOR_NOT_FOUND;
+// The reverse rule for parameter defaults resolves calls and reads defaults as these passes do.
+#[cfg(feature = "sugar")]
+pub(crate) use {
+    call_defaults::collect::{Fns, Shape, path_target, type_name},
+    macro_args::MacroArgs,
+    param_defaults::{MARKER as DEFAULT_MARKER, has_impl_trait, is_constant},
+};
 
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {
