@@ -7,5 +7,6 @@
 - T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
 - T19.9. Reverse rule: generic bounds back to inline bounds
 - T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
+- T19.11. Sugar driver: trailing commas and edit groups
 - T31.2. M9: `rustx-cli fmt` for the remaining sugar
 - T33. M9: user documentation

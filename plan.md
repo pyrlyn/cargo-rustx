@@ -13,8 +13,9 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.6 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.7 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T19.8 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
-| T19.9 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
+| T19.11 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
 | T33 | in progress | P3 | 2 | 100% | Claude / opus-5.5 |
 
@@ -73,6 +74,12 @@ Plan: read `passes/inline_bounds.rs` for the emitted shape (generic list positio
 Inverts the type half of problem 16 (`prefix_types`): a type written `Rc<RefCell<T>>` (any spelling the normaliser equates) becomes `rc T`, and `Weak<RefCell<T>>` becomes `weak T`, in every position where `prefix_types` reads the prefix. Done when field, return, parameter and generic-argument types convert, and positions where the conversion would change the expansion (bindings whose field accesses `rc_borrows` would rewrite, starts of groups that `prefix_types` cannot read) are left alone.
 
 Plan: read `passes/prefix_types.rs` (which positions it reads, the `__rustx_rc` marker) and `passes/rc_borrows.rs` (which bindings it tracks); `sugar/prefix_types.rs` implementing `ReverseRule`; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
+
+### T19.11. Sugar driver: trailing commas and edit groups
+
+Two limits found by T19.6 and T19.9. First, code formatted by rustfmt never converts when a rule spans a list rustfmt ends with a trailing comma (a multi-line `where`, generics, parameters), because the check compares tokens exactly; a trailing comma before a closing delimiter or before the body brace of a `where` list never changes meaning outside macro calls, so the check should ignore it there (never inside a macro invocation's tokens, never the comma of a one-element tuple). Second, the driver has no edit groups, so multi-place rules (T19.6, T19.9) emit one edit spanning the whole signature, and other rules' edits inside that span are dropped. Done when the check accepts rustfmt's trailing commas, the driver keeps or drops a group of edits as one unit (including in its one-at-a-time fallback), and a test shows `into T` and inline bounds converting in the same fn.
+
+Plan: in `crates/rustx-core/src/sugar/mod.rs`, extend the token comparison (next to the `std_paths` normaliser) with the trailing comma rule above, and add an edit group to `ReverseRule` output (e.g. `Vec<Vec<Edit>>` or an `Edit` group id) with the fallback adding whole groups. Keep the existing rules working unchanged; moving T19.6/T19.9 onto groups is done when their branches merge, not here. Verify: unit tests for the comparison (where, generics, params, 1-tuple, macro tokens), a driver test for group atomicity in the fallback, `just check`.
 
 ### T31.2. M9: `rustx-cli fmt` for the remaining sugar
 
