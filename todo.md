@@ -1,6 +1,3 @@
-- T5. M3: inline bounds in parameters
-- T6. M3: `bound` presets
-- T7. M3: `&from(x) T` return lifetimes
 - T8. M3: `#[borrows]` structs and `&from(Self)`
 - T9. M3: `into T` parameters
 - T10. M3: parameter defaults and named arguments

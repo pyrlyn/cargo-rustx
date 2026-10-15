@@ -1,6 +1,6 @@
 # Architecture (plan)
 
-Status: M0–M2 are implemented; M3–M9 are planned (see roadmap.md).
+Status: M0–M2 are implemented; M3 is in progress (inline bounds, `bound` presets and `from` lifetimes are in); M4–M9 are planned.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
@@ -117,6 +117,7 @@ Therefore:
 - **Sugar inside macro arguments is expanded too.** Token passes also rewrite the argument groups of macro calls (`vec![..]`, `assert_eq!(..)`), because users expect sugar there. A user macro that itself accepts tokens like `var x` receives the desugared form instead.
 - **`.m<T>(` inside a comma list.** `(a.b < c, d > (e))` is valid Rust (two comparisons) but reads as the turbofish sugar `a.b::<c, d>(e)`. Parenthesise the comparison: `((a.b < c), d > (e))`.
 - **Type prefixes need a recognisable type position.** `iter`, `rc` and `weak` are ordinary identifiers, so they are sugar only after `->`, `:`, `<`, `,` inside `<..>`, `&` and similar. At the start of a group or after `,` outside `<..>` (tuple types, fn-pointer parameters) the plain Rust spelling is needed, because `f(rc x)` there is the expression sugar of item 16.
+- **Inline bounds decide "new generic or existing type" from the input only.** A name in scope gets the bound, a type declared or imported in the same input is an error, anything else becomes a new generic, so a glob-imported type is shadowed by a fresh generic.
 - **Attribute path cannot carry syntax sugar** (see d); only the function-like path supports the full vocabulary.
 - **Compile time:** `syn` with `full` features plus a parser adds build time to every user crate.
 - **Semantics drift:** each sugar item must stay a pure, documented, local rewrite; anything that changes behaviour silently (e.g. lossy conversions) is out of scope.
