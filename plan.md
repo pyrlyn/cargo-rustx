@@ -10,10 +10,11 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.3 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.4 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.5 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
-| T19.6 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.6 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.7 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T19.8 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.10 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
 | T33 | in progress | P3 | 2 | 100% | Claude / opus-5.5 |
 
@@ -66,6 +67,12 @@ Plan: read `passes/param_defaults.rs` and `call_defaults` for the emitted shapes
 Inverts inline bounds (problem 3): a generic parameter used by exactly one fn parameter, declared with bounds the `inline_bounds` pass would have generated, becomes `x: T: Bound` with the generic removed. Done when the pass output turns back into the sugar and generics used elsewhere (return type, other parameters, body turbofish, where clauses the pass would not write) are left alone.
 
 Plan: read `passes/inline_bounds.rs` for the emitted shape (generic list position, naming, where clauses); `sugar/inline_bounds.rs` implementing `ReverseRule` with the generic removal and the parameter edit kept or dropped together; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
+
+### T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
+
+Inverts the type half of problem 16 (`prefix_types`): a type written `Rc<RefCell<T>>` (any spelling the normaliser equates) becomes `rc T`, and `Weak<RefCell<T>>` becomes `weak T`, in every position where `prefix_types` reads the prefix. Done when field, return, parameter and generic-argument types convert, and positions where the conversion would change the expansion (bindings whose field accesses `rc_borrows` would rewrite, starts of groups that `prefix_types` cannot read) are left alone.
+
+Plan: read `passes/prefix_types.rs` (which positions it reads, the `__rustx_rc` marker) and `passes/rc_borrows.rs` (which bindings it tracks); `sugar/prefix_types.rs` implementing `ReverseRule`; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T31.2. M9: `rustx-cli fmt` for the remaining sugar
 
