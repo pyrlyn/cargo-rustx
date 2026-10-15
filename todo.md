@@ -1,0 +1,7 @@
+- T12. M4: `derive` presets
+- T13. M4: field defaults and `S { .., .. }`
+- T14. M4: `#[data]` constructors and getters
+- T15. M4: `from` variants and `#[display]`
+- T16. M4: `#[delegate]` fields
+- T17. M4: `#[newtype]`
+- T18. M4: standalone attribute macros
