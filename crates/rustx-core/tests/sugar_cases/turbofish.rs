@@ -1,0 +1,49 @@
+// Problem 06's "As is" example, with comments that must survive the conversion.
+use std::collections::{BTreeMap, HashSet};
+
+pub struct Row {
+    pub id: u32,
+    pub tags: Vec<String>,
+    pub score: f32,
+}
+
+pub fn parse_row(line: &str) -> Option<Row> {
+    let parts = line.split(';').map(str::trim).collect::<Vec<_>>();
+    if parts.len() != 3 {
+        return None;
+    }
+    let id = parts[0].parse::<u32>().ok()?; // the first column
+    let tags = parts[1]
+        .split(',')
+        .map(|t| t.to_lowercase())
+        .collect::</* owned */ Vec<String>>();
+    let score = parts[2].parse::<f32>().ok()?;
+    Some(Row { id, tags, score })
+}
+
+pub fn all_tags(rows: &[Row]) -> Vec<String> {
+    let set = rows
+        .iter()
+        .flat_map(|r| r.tags.iter().cloned())
+        .collect::<HashSet<_>>();
+    let mut v = set.into_iter().collect::<Vec<_>>();
+    v.sort();
+    v
+}
+
+pub fn by_id(rows: Vec<Row>) -> BTreeMap<u32, Row> {
+    rows.into_iter().map(|r| (r.id, r)).collect::<BTreeMap<_, _>>()
+}
+
+pub fn total(rows: &[Row]) -> f32 {
+    rows.iter().map(|r| r.score).sum::<f32>()
+}
+
+// Path turbofish, a bare collection the pass would fill and calls inside a macro stay.
+pub fn untouched(rows: &[Row]) -> Vec<u8> {
+    let mut out = Vec::<u8>::new();
+    out.extend(std::iter::empty::<u8>());
+    let _ = rows.iter().map(|r| r.id).collect::<Vec>();
+    println!("{}", rows.iter().map(|r| r.score).sum::<f32>());
+    out
+}

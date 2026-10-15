@@ -6,6 +6,7 @@
 //! The driver never trusts a rule: the edited text must expand back to the original tokens, and
 //! an edit for which it does not is dropped.
 
+mod turbofish;
 mod var;
 
 use std::ops::Range;
@@ -21,7 +22,9 @@ pub(crate) trait ReverseRule {
 }
 
 /// Registered rules, in priority order for overlapping edits.
-const RULES: &[&dyn ReverseRule] = &[&var::LetMut];
+// `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
+// overlap and their order does not matter.
+const RULES: &[&dyn ReverseRule] = &[&var::LetMut, &turbofish::Turbofish];
 
 /// Replaces the bytes `range` of the source with `text`.
 #[derive(Clone, Debug, PartialEq, Eq)]
