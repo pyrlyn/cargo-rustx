@@ -105,6 +105,7 @@ Therefore:
 - **No type information.** Macros see tokens, not types. Implicit `into()` (13) can only fire where the target type is written in the source (`let x: u64 = ...`, struct literal of a struct declared in the same `sugar!`). Field `+=` needs the field type from the same macro input. Anything else stays explicit.
 - **No type inference.** `collect<Vec>` → `Vec<_>` works for known names only; for user generic types the arity is unknown unless declared in the same input.
 - **No cross-item info.** A macro sees only its own input. `#[delegate(Read)]` must know the trait's methods: works for a built-in list of std traits (`Read`, `Write`, `Iterator`, `Display`, ...) or traits declared in the same `sugar!`; otherwise the user lists methods explicitly.
+- **`#[delegate]` forwards required items only** (`Read::read`, not `read_exact`), so provided methods go through the wrapper's own methods, hand-written overrides included. The list form is `#[delegate(Trait { fn m(&self); })]`; a trait of the input with generic parameters needs it too.
 - **`shared` field access** inserting `.lock().unwrap()` per access is not atomic across statements; needs a `with(|m| ..)` form and clear docs.
 - **`rc` field access** picks `.borrow_mut()` from a built-in list of `&mut self` std methods; user methods need `with_mut(|n| ..)`. `RefCell` still panics at run time on conflicting borrows.
 - **Parameter defaults and named arguments** only work for calls inside the same `sugar!` input. Callers elsewhere see the real `Option<T>` signature.

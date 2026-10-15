@@ -1,0 +1,5 @@
+error: `Write` is already delegated to field `first` of `Tee`; a trait has one impl
+ --> tests/fail/delegate_same_trait_twice.rs:5:20
+  |
+5 |         #[delegate(Write)]
+  |                    ^^^^^

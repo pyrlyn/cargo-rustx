@@ -1,0 +1,38 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/delegate.rustx
+---
+mod io_wrappers {
+    use std::io::{self, Read, Write};
+    pub struct Tee<R: Read, W: Write> {
+        reader: R,
+        log: W,
+    }
+    impl<R: Read, W: Write> ::std::io::Read for Tee<R, W> {
+        #[inline]
+        fn read(&mut self, __rustx_arg0: &mut [u8]) -> ::std::io::Result<usize> {
+            ::std::io::Read::read(&mut self.reader, __rustx_arg0)
+        }
+    }
+    impl<R: Read, W: Write> ::std::io::Write for Tee<R, W> {
+        #[inline]
+        fn write(&mut self, __rustx_arg0: &[u8]) -> ::std::io::Result<usize> {
+            ::std::io::Write::write(&mut self.log, __rustx_arg0)
+        }
+        #[inline]
+        fn flush(&mut self) -> ::std::io::Result<()> {
+            ::std::io::Write::flush(&mut self.log)
+        }
+    }
+    pub fn copy_all<R, W>(t: &mut Tee<R, W>) -> io::Result<u64>
+    where
+        R: Read,
+        W: Write,
+    {
+        let mut buf = Vec::new();
+        t.read_to_end(&mut buf)?;
+        t.write_all(&buf)?;
+        Ok(buf.len() as u64)
+    }
+}

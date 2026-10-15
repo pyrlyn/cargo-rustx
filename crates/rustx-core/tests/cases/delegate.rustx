@@ -1,0 +1,19 @@
+// Problem 07, detailed example without `CountingWriter` (needs `except`).
+// `buf.len() as u64` stays explicit until implicit `into()` (13).
+mod io_wrappers {
+    use std::io::{self, Read, Write};
+
+    pub struct Tee<R: Read, W: Write> {
+        #[delegate(Read)]
+        reader: R,
+        #[delegate(Write)]
+        log: W,
+    }
+
+    pub fn copy_all(t: &mut Tee<R: Read, W: Write>) -> io::Result<u64> {
+        var buf = Vec::new();
+        t.read_to_end(&mut buf)?;
+        t.write_all(&buf)?;
+        Ok(buf.len() as u64)
+    }
+}

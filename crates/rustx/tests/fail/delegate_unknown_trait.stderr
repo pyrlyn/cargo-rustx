@@ -1,0 +1,5 @@
+error: `#[delegate]` does not know the methods of `Shape`: it is neither in the built-in list of std traits nor declared in this input; list them: `Shape { fn method(&self); }`
+ --> tests/fail/delegate_unknown_trait.rs:3:20
+  |
+3 |         #[delegate(Shape)]
+  |                    ^^^^^

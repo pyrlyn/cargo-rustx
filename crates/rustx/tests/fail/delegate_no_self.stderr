@@ -1,0 +1,5 @@
+error: `make` takes no `self`, so it cannot be forwarded to a field
+ --> tests/fail/delegate_no_self.rs:3:12
+  |
+3 |         fn make() -> Self;
+  |            ^^^^
