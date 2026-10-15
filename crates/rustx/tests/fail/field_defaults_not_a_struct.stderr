@@ -1,0 +1,11 @@
+error: enum variant fields take no defaults; only struct fields do
+ --> tests/fail/field_defaults_not_a_struct.rs:3:30
+  |
+3 |         Circle { radius: f64 = 1.0 },
+  |                              ^
+
+error: union fields take no defaults; only struct fields do
+ --> tests/fail/field_defaults_not_a_struct.rs:8:18
+  |
+8 |         int: u32 = 0,
+  |                  ^

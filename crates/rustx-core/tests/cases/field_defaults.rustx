@@ -1,0 +1,39 @@
+mod server {
+    #[derive(Debug, Clone)]
+    pub struct ServerConfig {
+        pub host: String = "127.0.0.1",
+        pub port: u16 = 8080,
+        pub workers: usize = 4,
+        pub timeout_ms: u64 = 30_000,
+        pub tls: bool = false,
+    }
+
+    pub fn dev() -> ServerConfig {
+        ServerConfig { port: 3000, .. }
+    }
+
+    pub fn prod(host: &str) -> ServerConfig {
+        ServerConfig { host: host.to_string(), workers: 16, tls: true, .. }
+    }
+
+    pub struct Pool<T> where T: Clone {
+        pub items: Vec<T>,
+        #[cfg(feature = "metrics")]
+        pub label: std::string::String = "pool",
+        pub size: usize = 8,
+    }
+
+    pub fn ports(config: &ServerConfig) -> Vec<ServerConfig> {
+        let ServerConfig { port, .. } = config;
+        let tls = !config.tls;
+        match config {
+            ServerConfig { tls: true, .. } => vec![],
+            _ if matches!(config, ServerConfig { workers: 4, .. }) => vec![ServerConfig { port: *port, .. }],
+            _ => {
+                struct Local { n: u8 = 1 }
+                let _ = Local { .. };
+                vec![ServerConfig { tls, .. }]
+            }
+        }
+    }
+}

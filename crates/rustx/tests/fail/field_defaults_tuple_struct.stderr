@@ -1,0 +1,5 @@
+error: field default value is only supported in structs with named fields
+ --> tests/fail/field_defaults_tuple_struct.rs:2:23
+  |
+2 |     struct Port(u16 = 8080);
+  |                       ^^^^

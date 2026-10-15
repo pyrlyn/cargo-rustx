@@ -1,0 +1,5 @@
+error: `Default` cannot be derived for a struct with field defaults; remove it from `#[derive(..)]`, the field defaults generate `impl Default`
+ --> tests/fail/field_defaults_derive_default.rs:2:21
+  |
+2 |     #[derive(Debug, Default)]
+  |                     ^^^^^^^
