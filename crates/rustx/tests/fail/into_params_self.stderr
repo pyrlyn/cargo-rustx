@@ -1,0 +1,5 @@
+error: `self` cannot take `into`; convert it in the body
+ --> tests/fail/into_params_self.rs:5:22
+  |
+5 |         fn get(self: into Box<Self>) -> String {
+  |                      ^^^^

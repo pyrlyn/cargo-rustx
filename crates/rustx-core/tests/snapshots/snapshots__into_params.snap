@@ -1,0 +1,69 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/into_params.rustx
+---
+mod contacts {
+    use std::collections::HashMap;
+    #[derive(Debug, Clone)]
+    pub struct Contact {
+        pub name: String,
+        pub email: Option<String>,
+        pub tags: Vec<String>,
+    }
+    impl Contact {
+        pub fn new(name: impl ::core::convert::Into<String>) -> Self {
+            let name: String = ::core::convert::Into::into(name);
+            Contact {
+                name,
+                email: None,
+                tags: Vec::new(),
+            }
+        }
+        pub fn with_email(mut self, email: impl ::core::convert::Into<String>) -> Self {
+            let email: String = ::core::convert::Into::into(email);
+            self.email = Some(email);
+            self
+        }
+        pub fn tag(mut self, tag: impl ::core::convert::Into<String>) -> Self {
+            let tag: String = ::core::convert::Into::into(tag);
+            self.tags.push(tag);
+            self
+        }
+        pub fn email_domain(&self) -> Option<&str> {
+            self.email.as_deref().and_then(|e| e.split_once('@')).map(|(_, d)| d)
+        }
+    }
+    pub fn demo() -> HashMap<String, Contact> {
+        let mut book = HashMap::new();
+        let ann = Contact {
+            name: "Ann".to_string(),
+            email: Some("ann@example.com".to_owned()),
+            tags: vec!["work".to_string(), String::from("vip")],
+        };
+        book.insert("ann".into(), ann);
+        let bob = Contact::new("Bob").with_email("bob@example.org").tag("home");
+        book.insert("bob".into(), bob);
+        book
+    }
+}
+mod mixed {
+    pub trait Rename {
+        fn rename(&mut self, name: impl ::core::convert::Into<String>);
+    }
+    pub fn tagged<T>(value: T, label: impl ::core::convert::Into<String>) -> (T, String)
+    where
+        T: Clone,
+    {
+        let mut label: String = ::core::convert::Into::into(label);
+        label.push('!');
+        (value.clone(), label)
+    }
+    pub fn strip<'__rustx_from_text>(
+        text: &'__rustx_from_text str,
+        prefix: impl ::core::convert::Into<String>,
+    ) -> &'__rustx_from_text str {
+        let prefix: String = ::core::convert::Into::into(prefix);
+        text.strip_prefix(prefix.as_str()).unwrap_or(text)
+    }
+}

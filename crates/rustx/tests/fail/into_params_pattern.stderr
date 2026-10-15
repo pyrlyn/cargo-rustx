@@ -1,0 +1,5 @@
+error: `into` needs a plain parameter name such as `name`, not a pattern
+ --> tests/fail/into_params_pattern.rs:2:12
+  |
+2 |     fn sum((a, b): into (u32, u32)) -> u32 {
+  |            ^^^^^^
