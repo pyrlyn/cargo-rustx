@@ -31,13 +31,12 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 
 // `bound` presets first so later passes see ordinary traits; inline bounds and `from` lifetimes
 // before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Item-level
-// M4 sugar (`derive` presets, field defaults, `from` variants) right after `bound` presets. Named
+// M4 sugar (`derive` presets, `from` variants) right after `bound` presets. Named
 // arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     bound_presets::rewrite,
     derive_presets::rewrite,
-    field_defaults::rewrite,
     from_display::rewrite,
     inline_bounds::rewrite,
     into_params::rewrite,

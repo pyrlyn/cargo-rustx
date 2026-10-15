@@ -3,7 +3,7 @@
 //!
 //! `syn` already parses both forms of RFC 3681: a named field keeps its default in
 //! `Field::default`, and a struct expression ending in a bare `..` has `dot2_token` without
-//! `rest`. So the token half is the identity and all the work happens on the AST, where the
+//! `rest`. So there is no token half: all the work happens on the AST, where the
 //! grammar, not a token heuristic, tells a struct expression from a struct pattern:
 //!
 //! ```text
@@ -92,15 +92,6 @@ const EXPRESSION_MACROS: &[&str] = &[
     "write",
     "writeln",
 ];
-
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "syn parses field defaults and a bare `..` natively, so this pass has no token \
-              half; the registry still lists it"
-)]
-pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
-    Ok(tokens)
-}
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
     let mut lower = Lower {
@@ -323,7 +314,7 @@ mod tests {
     use super::*;
 
     fn desugar(sugar: TokenStream) -> syn::Result<String> {
-        let mut file: syn::File = syn::parse2(rewrite(sugar)?)?;
+        let mut file: syn::File = syn::parse2(sugar)?;
         lower(&mut file)?;
         Ok(file.into_token_stream().to_string())
     }
