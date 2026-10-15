@@ -8,8 +8,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
 | T19.1 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
-| T20 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
-| T21 | todo | P2 | 2 | 0% | |
+| T21 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T25 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T26 | todo | P2 | 4 | 0% | |
@@ -34,17 +33,11 @@ The shared part of T19: a reverse-rule driver in `rustx-core` that finds code a 
 
 Plan: `crates/rustx-core/src/sugar/` with a `ReverseRule` trait (find matches in a parsed `syn::File`, return edits as byte ranges of the original text from `proc-macro2` `span-locations`), a driver that applies non-overlapping edits and rejects any rule output that does not expand back to the original tokens, and `sugar/var.rs`; `rustx-cli` gets a `Sugar { file }` command next to `Expand`. Verify: unit tests, snapshot cases, a round-trip test helper reused by later rules, CLI integration tests, `just check`.
 
-### T20. M5: `T throws` return types and tail `Ok(..)`
-
-Problem 10. `fn load() -> Config throws` returns `anyhow::Result<Config>` and its tail expression is wrapped in `Ok(..)`. `anyhow` is reached through a re-export in the `rustx` facade (the `throws` result alias of ARCHITECTURE b), so users do not add it themselves. Done when the problem's detailed example expands to its "As is" code apart from the error type, with unit tests, a snapshot case, `pass/` and `fail/` tests; which tails are left alone (one that is already `Ok(..)`/`Err(..)`, `?`-only bodies, a body ending in `return`) is settled with the creator when the task is claimed.
-
-Decided with the creator: `T throws` returns `anyhow::Result<T>` (through the `rustx` re-export) and `T throws E` returns `Result<T, E>`. The tail is wrapped in `Ok(..)` unless it already is `Ok(..)` or `Err(..)`, or does not produce a value (`return`, `panic!`, `unreachable!`, `todo!`, `unimplemented!`, `loop`); a body without a tail gets `Ok(())`.
-
-Plan: token pass `passes/throws.rs::rewrite` (pre-registered before `prefix_types`, so `iter T throws` becomes `Result<iter T>` and `prefix_types` still sees the type) turns `-> T throws [E]` into the `Result` type and leaves a marker attribute on the fn; AST pass `throws::lower` (pre-registered last in `AST_PASSES`) wraps the tail of marked fns and removes the marker. `rustx` re-exports `anyhow`. Applies to fns, methods and trait methods with bodies; closures and nested fns keep their own signature. Verify: unit tests, `tests/cases/throws.rustx`, `pass/throws.rs`, `fail/throws_*.rs`, `just check`.
-
 ### T21. M5: `throw e`
 
 Problem 10. `throw e` inside a `throws` fn becomes `return Err(::core::convert::Into::into(e))`; outside one it is an error at `throw`. Depends on T20. Done when unit tests, a snapshot case and `pass/` and `fail/` tests cover it, including `throw` inside closures and nested fns, which belong to their own signature.
+
+Plan: in a fn whose body carries the T20 marker `#![__rustx_throws]`, `throw e` at a statement or expression start becomes `return ::core::result::Result::Err(..)`: with `throws E` the error goes through `::core::convert::Into::into(e)`; with plain `throws` through `::rustx::anyhow::anyhow!(e)`, which keeps an error value as its source and turns a string or other `Display` value into a message, so the problem's `throw ".."` works. A token pass `passes/throw.rs` placed after `throws::rewrite` finds marked bodies; closures, async blocks and nested fns are not entered. `throw` outside a `throws` fn is an error at `throw`; `throw` as an identifier passes through. Verify: unit tests, `tests/cases/throw.rustx`, `pass/throw.rs` with both error forms, `fail/throw_*.rs`, `just check`.
 
 ### T24. M6: `shared` bindings and `shared T` types
 

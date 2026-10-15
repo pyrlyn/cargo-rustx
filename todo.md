@@ -1,6 +1,5 @@
 - T19. Convert plain Rust into rustx sugar
 - T19.1. Sugar conversion driver and `rustx-cli sugar`
-- T20. M5: `T throws` return types and tail `Ok(..)`
 - T21. M5: `throw e`
 - T24. M6: `shared` bindings and `shared T` types
 - T25. M6: `rc e` expressions
