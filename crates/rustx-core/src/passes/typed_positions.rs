@@ -2,8 +2,9 @@
 //! 13 and 15), which have no type information of their own.
 //!
 //! A target type counts only when it is written: a `let` annotation, a local or a field of a struct
-//! declared in the input (assigned or compound-assigned), and a parameter of a fn declared in the
-//! input, called by path (calls resolve by name, as call-site defaults do). The type of a value is known only for a name bound
+//! declared in the input (assigned or compound-assigned), a parameter of a fn declared in the
+//! input, called by path (calls resolve by name, as call-site defaults do), and, for a pass that
+//! asks for them, the fields of a literal of a declared struct. The type of a value is known only for a name bound
 //! with a written type (a `let` annotation, a parameter, a closure parameter, the element of a
 //! `for` loop over a slice, array or `Vec` of known type), a field of a declared struct reached
 //! from one, and `*` of a known reference. Any other binding of a name ends what is known about
@@ -14,27 +15,139 @@
 //! so that a wrong guess fails to compile.
 
 use std::collections::HashMap;
+use std::mem;
 
+use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    Arm, BinOp, Block, Expr, ExprCall, ExprClosure, ExprForLoop, ExprIf, ExprLet, ExprWhile, FnArg,
-    GenericArgument, ImplItemFn, Item, ItemFn, ItemImpl, ItemStruct, Local, Member, Pat, PatIdent,
-    PathArguments, ReceiverKind, Signature, Type, TypeReference, UnOp,
+    Arm, Attribute, BinOp, Block, Expr, ExprCall, ExprClosure, ExprForLoop, ExprIf, ExprLet,
+    ExprStruct, ExprWhile, FnArg, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod, ItemStruct, Local,
+    Member, Pat, PatIdent, Path, ReceiverKind, Signature, Token, TraitItemFn, Type, TypeReference,
+    UnOp,
 };
 
 use super::call_defaults::collect::{Fns, path_target, type_name};
-use crate::tokens::syntax::std_type;
+use crate::tokens::syntax::std_argument;
 
 /// A conversion pass: called at every place with a written target type, innermost first.
 pub(super) trait Convert {
+    /// Whether the fields of a struct literal are such places. Off unless a pass documents them,
+    /// since `#[widen]` leaves them explicit.
+    const STRUCT_FIELDS: bool = false;
+
+    /// Whether the right side of a compound assignment (`+=`, shifts excepted) is such a place.
+    const COMPOUND_ASSIGNMENTS: bool = true;
+
     /// Rewrites `value`, which goes where `target` is written; `source` is the type of `value`
     /// when the input writes it.
     fn convert(&mut self, target: &Type, value: &mut Expr, source: Option<&Type>);
+
+    /// Whether the fn bodies inside the item with `attrs` (first the inner attributes of the
+    /// whole input) are walked, taking the pass's marker off them; a pass without a marker walks
+    /// every body.
+    fn marks(&mut self, _attrs: &mut Vec<Attribute>) -> bool {
+        true
+    }
+
+    /// Sees each attribute `marks` left in the input, so a marker out of place can be reported.
+    fn attribute(&mut self, _attr: &Attribute) {}
+}
+
+/// Calls `convert` at every typed place in the fn bodies of `file` it marks: fns, methods and
+/// trait default methods, each walked on its own.
+pub(super) fn walk_file(file: &mut syn::File, convert: &mut impl Convert) {
+    let declared = Declared::collect(file);
+    let on = convert.marks(&mut file.attrs);
+    Bodies {
+        declared: &declared,
+        on,
+        owner: None,
+        convert,
+    }
+    .visit_file_mut(file);
+}
+
+/// The walk over the items of the input that finds the fn bodies to convert.
+struct Bodies<'a, C> {
+    declared: &'a Declared,
+    on: bool,
+    /// The type of the enclosing `impl`, for `Self` and `self`.
+    owner: Option<String>,
+    convert: &'a mut C,
+}
+
+impl<C: Convert> Bodies<'_, C> {
+    fn within(&mut self, on: bool, owner: Option<String>, visit: impl FnOnce(&mut Self)) {
+        let outer_on = self.on;
+        self.on |= on;
+        let outer_owner = mem::replace(&mut self.owner, owner);
+        visit(self);
+        self.on = outer_on;
+        self.owner = outer_owner;
+    }
+
+    fn body(&mut self, sig: &mut Signature, block: &mut Block) {
+        if self.on {
+            walk_fn(
+                self.declared,
+                self.owner.as_deref(),
+                sig,
+                block,
+                self.convert,
+            );
+        }
+    }
+}
+
+impl<C: Convert> VisitMut for Bodies<'_, C> {
+    fn visit_item_mod_mut(&mut self, item: &mut ItemMod) {
+        let on = self.convert.marks(&mut item.attrs);
+        self.within(on, None, |bodies| {
+            visit_mut::visit_item_mod_mut(bodies, item);
+        });
+    }
+
+    fn visit_item_impl_mut(&mut self, item: &mut ItemImpl) {
+        let on = self.convert.marks(&mut item.attrs);
+        self.within(on, Some(type_name(&item.self_ty)), |bodies| {
+            visit_mut::visit_item_impl_mut(bodies, item);
+        });
+    }
+
+    fn visit_item_fn_mut(&mut self, item: &mut ItemFn) {
+        let on = self.convert.marks(&mut item.attrs);
+        self.within(on, None, |bodies| {
+            bodies.body(&mut item.sig, &mut item.block);
+            visit_mut::visit_item_fn_mut(bodies, item);
+        });
+    }
+
+    fn visit_impl_item_fn_mut(&mut self, item: &mut ImplItemFn) {
+        let on = self.convert.marks(&mut item.attrs);
+        self.within(on, self.owner.clone(), |bodies| {
+            bodies.body(&mut item.sig, &mut item.block);
+            visit_mut::visit_impl_item_fn_mut(bodies, item);
+        });
+    }
+
+    fn visit_trait_item_fn_mut(&mut self, item: &mut TraitItemFn) {
+        let on = self.convert.marks(&mut item.attrs);
+        self.within(on, None, |bodies| {
+            if let Some(block) = &mut item.default {
+                bodies.body(&mut item.sig, block);
+            }
+            visit_mut::visit_trait_item_fn_mut(bodies, item);
+        });
+    }
+
+    fn visit_attribute_mut(&mut self, attr: &mut Attribute) {
+        self.convert.attribute(attr);
+    }
 }
 
 /// The structs and fns declared anywhere in the input.
 #[derive(Default)]
-pub(super) struct Declared {
+struct Declared {
     /// Field types by struct name, tuple fields by index; `None` for a name declared twice with
     /// different fields, which the name alone cannot tell apart.
     structs: HashMap<String, Option<Vec<(String, Type)>>>,
@@ -42,7 +155,7 @@ pub(super) struct Declared {
 }
 
 impl Declared {
-    pub(super) fn collect(file: &mut syn::File) -> Self {
+    fn collect(file: &mut syn::File) -> Self {
         let mut collect = Collect {
             declared: Self::default(),
             owner: None,
@@ -115,7 +228,7 @@ impl VisitMut for Collect {
 /// Calls `convert` at every typed place in the body of a fn; `owner` is the type of the
 /// enclosing `impl`, which `Self` and `self` stand for. Items nested in the body are left alone:
 /// they do not see its locals, so each is walked on its own.
-pub(super) fn walk_fn(
+fn walk_fn(
     declared: &Declared,
     owner: Option<&str>,
     sig: &mut Signature,
@@ -216,15 +329,18 @@ impl<C: Convert> Walk<'_, C> {
     fn struct_name(&self, ty: &Type) -> Option<String> {
         match ty {
             Type::Reference(reference) => self.struct_name(&reference.elem),
-            Type::Path(path) if path.qself.is_none() => {
-                let name = path.path.segments.last()?.ident.to_string();
-                if name == "Self" {
-                    self.owner.map(str::to_owned)
-                } else {
-                    Some(name)
-                }
-            }
+            Type::Path(path) if path.qself.is_none() => self.named(&path.path),
             _ => None,
+        }
+    }
+
+    /// The struct a path names, by its last segment, with `Self` standing for the owner.
+    fn named(&self, path: &Path) -> Option<String> {
+        let name = path.segments.last()?.ident.to_string();
+        if name == "Self" {
+            self.owner.map(str::to_owned)
+        } else {
+            Some(name)
         }
     }
 
@@ -262,6 +378,27 @@ impl<C: Convert> Walk<'_, C> {
             let target = &first.params[at].ty;
             if rest.iter().all(|shape| shape.params[at].ty == *target) {
                 self.convert_to(target, arg);
+            }
+        }
+    }
+
+    /// Converts each field of a literal of a declared struct. A shorthand field that changes
+    /// gets its `name:` back, since the shorthand can only name the binding.
+    fn struct_fields(&mut self, literal: &mut ExprStruct) {
+        if literal.qself.is_some() {
+            return;
+        }
+        let Some(owner) = self.named(&literal.path) else {
+            return;
+        };
+        for field in &mut literal.fields {
+            let Some(target) = self.declared.field(&owner, &field.member) else {
+                continue;
+            };
+            let shorthand = field.colon_token.is_none().then(|| field.expr.clone());
+            self.convert_to(&target, &mut field.expr);
+            if shorthand.is_some_and(|before| before != field.expr) {
+                field.colon_token = Some(Token![:](field.expr.span()));
             }
         }
     }
@@ -345,21 +482,23 @@ impl<C: Convert> VisitMut for Walk<'_, C> {
             Expr::Assign(assign) => self.assign_to(&assign.left, &mut assign.right),
             // Shifts take any integer on the right, so a conversion there would change valid code.
             Expr::Binary(binary)
-                if matches!(
-                    binary.op,
-                    BinOp::AddAssign(_)
-                        | BinOp::SubAssign(_)
-                        | BinOp::MulAssign(_)
-                        | BinOp::DivAssign(_)
-                        | BinOp::RemAssign(_)
-                        | BinOp::BitAndAssign(_)
-                        | BinOp::BitOrAssign(_)
-                        | BinOp::BitXorAssign(_)
-                ) =>
+                if C::COMPOUND_ASSIGNMENTS
+                    && matches!(
+                        binary.op,
+                        BinOp::AddAssign(_)
+                            | BinOp::SubAssign(_)
+                            | BinOp::MulAssign(_)
+                            | BinOp::DivAssign(_)
+                            | BinOp::RemAssign(_)
+                            | BinOp::BitAndAssign(_)
+                            | BinOp::BitOrAssign(_)
+                            | BinOp::BitXorAssign(_)
+                    ) =>
             {
                 self.assign_to(&binary.left, &mut binary.right);
             }
             Expr::Call(call) => self.call_arguments(call),
+            Expr::Struct(literal) if C::STRUCT_FIELDS => self.struct_fields(literal),
             _ => {}
         }
     }
@@ -387,13 +526,7 @@ fn owned_element(ty: &Type) -> Option<Type> {
     if let Type::Array(array) = ty {
         return Some((*array.elem).clone());
     }
-    match std_type(ty, "vec", "Vec")? {
-        PathArguments::AngleBracketed(args) if args.args.len() == 1 => match args.args.first()? {
-            GenericArgument::Type(elem) => Some(elem.clone()),
-            _ => None,
-        },
-        _ => None,
-    }
+    std_argument(ty, "vec", "Vec").cloned()
 }
 
 /// Every name a pattern binds, and any name that only looks like one (a unit struct, a
@@ -431,6 +564,38 @@ mod tests {
         for other in ["u8", "Option<u8>", "&str", "my::Vec<u8>", "[u8]"] {
             assert_eq!(element_of(other), None, "{other}");
         }
+    }
+
+    /// Wraps every value going into a written `u64` in parentheses.
+    struct Wrap;
+
+    impl Convert for Wrap {
+        const STRUCT_FIELDS: bool = true;
+
+        fn convert(&mut self, target: &Type, value: &mut Expr, _source: Option<&Type>) {
+            if target.to_token_stream().to_string() == "u64" {
+                *value = syn::parse_quote!((#value));
+            }
+        }
+    }
+
+    #[test]
+    fn struct_literal_fields_are_typed_places_and_a_changed_shorthand_gets_its_name_back() {
+        let mut file: syn::File = syn::parse_quote! {
+            struct S { a: u64, b: u8 }
+            impl S { fn new(a: u64, b: u8) -> Self { Self { a, b } } }
+            fn f(a: u64, b: u8) { S { a, b: b }; S { a: 1, b }; T { a }; }
+        };
+        walk_file(&mut file, &mut Wrap);
+        let expected: syn::File = syn::parse_quote! {
+            struct S { a: u64, b: u8 }
+            impl S { fn new(a: u64, b: u8) -> Self { Self { a: (a), b } } }
+            fn f(a: u64, b: u8) { S { a: (a), b: b }; S { a: (1), b }; T { a }; }
+        };
+        assert_eq!(
+            file.to_token_stream().to_string(),
+            expected.to_token_stream().to_string()
+        );
     }
 
     #[test]

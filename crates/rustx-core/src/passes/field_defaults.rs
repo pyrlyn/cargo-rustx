@@ -60,14 +60,14 @@ use quote::{ToTokens, quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    Attribute, Block, Expr, ExprAssign, ExprLit, ExprStruct, Field, Fields, Item, ItemMod,
-    ItemStruct, ItemUnion, Lit, Macro, Type, Variant, parse_quote_spanned,
+    Attribute, Block, Expr, ExprAssign, ExprStruct, Field, Fields, Item, ItemMod, ItemStruct,
+    ItemUnion, Macro, Type, Variant, parse_quote_spanned,
 };
 
 use crate::passes::impl_header::ImplHeader;
 use crate::passes::item_lists::{Entry, insert_after};
 use crate::passes::macro_args::MacroArgs;
-use crate::tokens::syntax::{combine, derived_paths, is_string};
+use crate::tokens::syntax::{combine, derived_paths, is_str_literal, is_string};
 
 /// Std macros whose arguments are all expressions, so a struct literal in them is never a
 /// pattern.
@@ -262,16 +262,6 @@ pub(super) fn default_value(expr: &Expr, ty: &Type) -> Expr {
 
 fn is_cfg(attr: &Attribute) -> bool {
     attr.path().is_ident("cfg")
-}
-
-fn is_str_literal(expr: &Expr) -> bool {
-    matches!(
-        expr,
-        Expr::Lit(ExprLit {
-            lit: Lit::Str(_),
-            ..
-        })
-    )
 }
 
 /// The span of `Default` in the struct's `#[derive(..)]`, if it derives it.

@@ -21,14 +21,9 @@ use std::mem;
 use proc_macro2::Ident;
 use quote::ToTokens;
 use syn::spanned::Spanned;
-use syn::visit_mut::{self, VisitMut};
-use syn::{
-    Attribute, Block, Expr, ImplItemFn, ItemFn, ItemImpl, ItemMod, Meta, Signature, TraitItemFn,
-    Type,
-};
+use syn::{Attribute, Expr, Meta, Type};
 
-use super::call_defaults::collect::type_name;
-use super::typed_positions::{Convert, Declared, walk_fn};
+use super::typed_positions::{Convert, walk_file};
 use crate::tokens::syntax::{bare_name, combine};
 
 const ATTRIBUTE: &str = "widen";
@@ -51,122 +46,21 @@ const WIDENINGS: &[(&str, &str)] = &[
 ];
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
-    let declared = Declared::collect(file);
-    let mut marks = Marks {
-        declared: &declared,
-        marked: false,
-        owner: None,
-        errors: None,
-    };
-    marks.marked = marks.take(&mut file.attrs);
-    marks.visit_file_mut(file);
-    marks.errors.map_or(Ok(()), Err)
+    let mut widen = Widen { errors: None };
+    walk_file(file, &mut widen);
+    widen.errors.map_or(Ok(()), Err)
 }
 
-/// The walk over the file that finds what `#[widen]` marks and takes the attribute off.
-struct Marks<'a> {
-    declared: &'a Declared,
-    marked: bool,
-    /// The type of the enclosing `impl`, for `Self` and `self`.
-    owner: Option<String>,
+/// The lossless number conversions of problem 13, in what `#[widen]` marks.
+struct Widen {
     errors: Option<syn::Error>,
 }
 
-impl Marks<'_> {
+impl Widen {
     fn error(&mut self, tokens: &impl ToTokens, message: &str) {
         combine(&mut self.errors, syn::Error::new_spanned(tokens, message));
     }
-
-    /// Takes `#[widen]` off `attrs`; whether it was there.
-    fn take(&mut self, attrs: &mut Vec<Attribute>) -> bool {
-        let mut found = false;
-        attrs.retain(|attr| {
-            if !attr.path().is_ident(ATTRIBUTE) {
-                return true;
-            }
-            if !matches!(attr.meta, Meta::Path(_)) {
-                self.error(&attr.meta, "`#[widen]` takes no arguments");
-            }
-            if found {
-                self.error(attr, "`#[widen]` is given twice");
-            }
-            found = true;
-            false
-        });
-        found
-    }
-
-    fn within(&mut self, marked: bool, owner: Option<String>, visit: impl FnOnce(&mut Self)) {
-        let outer_marked = self.marked;
-        self.marked |= marked;
-        let outer_owner = mem::replace(&mut self.owner, owner);
-        visit(self);
-        self.marked = outer_marked;
-        self.owner = outer_owner;
-    }
-
-    fn body(&self, sig: &mut Signature, block: &mut Block) {
-        if self.marked {
-            walk_fn(self.declared, self.owner.as_deref(), sig, block, &mut Widen);
-        }
-    }
 }
-
-impl VisitMut for Marks<'_> {
-    fn visit_item_mod_mut(&mut self, item: &mut ItemMod) {
-        let marked = self.take(&mut item.attrs);
-        self.within(marked, None, |marks| {
-            visit_mut::visit_item_mod_mut(marks, item);
-        });
-    }
-
-    fn visit_item_impl_mut(&mut self, item: &mut ItemImpl) {
-        let marked = self.take(&mut item.attrs);
-        self.within(marked, Some(type_name(&item.self_ty)), |marks| {
-            visit_mut::visit_item_impl_mut(marks, item);
-        });
-    }
-
-    fn visit_item_fn_mut(&mut self, item: &mut ItemFn) {
-        let marked = self.take(&mut item.attrs);
-        self.within(marked, None, |marks| {
-            marks.body(&mut item.sig, &mut item.block);
-            visit_mut::visit_item_fn_mut(marks, item);
-        });
-    }
-
-    fn visit_impl_item_fn_mut(&mut self, item: &mut ImplItemFn) {
-        let marked = self.take(&mut item.attrs);
-        self.within(marked, self.owner.clone(), |marks| {
-            marks.body(&mut item.sig, &mut item.block);
-            visit_mut::visit_impl_item_fn_mut(marks, item);
-        });
-    }
-
-    fn visit_trait_item_fn_mut(&mut self, item: &mut TraitItemFn) {
-        let marked = self.take(&mut item.attrs);
-        self.within(marked, None, |marks| {
-            if let Some(block) = &mut item.default {
-                marks.body(&mut item.sig, block);
-            }
-            visit_mut::visit_trait_item_fn_mut(marks, item);
-        });
-    }
-
-    /// Reached only by a `#[widen]` that no fn, `impl` or module took off.
-    fn visit_attribute_mut(&mut self, attr: &mut Attribute) {
-        if attr.path().is_ident(ATTRIBUTE) {
-            self.error(
-                attr,
-                "`#[widen]` goes on a fn, an `impl` or a module, or as `#![widen]` at the start \
-                 of the input",
-            );
-        }
-    }
-}
-
-/// The lossless number conversions of problem 13.
-struct Widen;
 
 impl Convert for Widen {
     fn convert(&mut self, target: &Type, value: &mut Expr, source: Option<&Type>) {
@@ -185,6 +79,36 @@ impl Convert for Widen {
         *value = syn::parse_quote_spanned! {span=>
             <::core::primitive::#to as ::core::convert::From<::core::primitive::#from>>::from(#inner)
         };
+    }
+
+    /// Takes `#[widen]` off `attrs`; whether it was there.
+    fn marks(&mut self, attrs: &mut Vec<Attribute>) -> bool {
+        let mut found = false;
+        attrs.retain(|attr| {
+            if !attr.path().is_ident(ATTRIBUTE) {
+                return true;
+            }
+            if !matches!(attr.meta, Meta::Path(_)) {
+                self.error(&attr.meta, "`#[widen]` takes no arguments");
+            }
+            if found {
+                self.error(attr, "`#[widen]` is given twice");
+            }
+            found = true;
+            false
+        });
+        found
+    }
+
+    /// Reached only by a `#[widen]` that no fn, `impl` or module took off.
+    fn attribute(&mut self, attr: &Attribute) {
+        if attr.path().is_ident(ATTRIBUTE) {
+            self.error(
+                attr,
+                "`#[widen]` goes on a fn, an `impl` or a module, or as `#![widen]` at the start \
+                 of the input",
+            );
+        }
     }
 }
 
