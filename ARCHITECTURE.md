@@ -1,10 +1,10 @@
 # Architecture (plan)
 
-Status: M0–M3 are implemented; M4–M9 are planned.
+Status: M0–M4 are implemented; M5–M9 are planned.
 
 ## a) Approach: proc-macro crate vs standalone transpiler
 
-| | Proc-macro crate (`sugar!` / `#[sugar]`) | Standalone transpiler (`.rustx` → `.rs`, build.rs or CLI) |
+| | Proc-macro crate (`sugar!` / `#[sugared]`) | Standalone transpiler (`.rustx` → `.rs`, build.rs or CLI) |
 |---|---|---|
 | Integration | `cargo add`, works in any crate, no build step | Needs build.rs / CLI, generated files, extra tooling |
 | Input | Must tokenize as Rust tokens (`TokenStream`) | Arbitrary text, own lexer, any syntax |

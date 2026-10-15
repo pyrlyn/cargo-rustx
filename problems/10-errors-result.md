@@ -65,7 +65,7 @@ pub fn load(path: &str) -> Result<Settings, Box<dyn Error + Send + Sync>> {
 ### Desired (cargo-rustx)
 
 ```rust
-// Function-like entry point: the body is not valid Rust, so #[sugar] on an item cannot be used
+// Function-like entry point: the body is not valid Rust, so #[sugared] on an item cannot be used
 sugar! {
 mod settings {
     use std::collections::HashMap;

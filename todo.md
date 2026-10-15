@@ -1,1 +1,0 @@
-- T18. M4: standalone attribute macros
