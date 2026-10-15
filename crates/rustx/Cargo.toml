@@ -9,10 +9,16 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-dynosaur.workspace = true
+dynosaur = { workspace = true, optional = true }
 rustx-macros.workspace = true
 
+[features]
+# `#[dyn]` traits: off by default, so only crates that use them compile `dynosaur` and its `syn` 2.
+dyn = ["dep:dynosaur", "rustx-macros/dyn"]
+
 [dev-dependencies]
+# The compile tests run `#[dyn]` traits; the error without the feature is a `rustx-core` unit test.
+rustx = { path = ".", features = ["dyn"] }
 trybuild.workspace = true
 
 [lints]

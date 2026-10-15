@@ -12,5 +12,9 @@ proc-macro = true
 [dependencies]
 rustx-core.workspace = true
 
+[features]
+# Set by `rustx`'s `dyn` feature, which also brings the `dynosaur` re-export `#[dyn]` expands to.
+dyn = []
+
 [lints]
 workspace = true

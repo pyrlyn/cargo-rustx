@@ -106,6 +106,11 @@ pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream
     Ok(tokens)
 }
 
+/// Reports every `#[dyn]` in `tokens`, for a crate without the `dyn` feature of `rustx`.
+pub(crate) fn reject_dyn(tokens: TokenStream) -> syn::Result<()> {
+    dyn_traits::reject(tokens)
+}
+
 pub(crate) fn rewrite_ast(file: &mut syn::File) -> syn::Result<()> {
     run_ast(AST_PASSES, file)
 }

@@ -27,6 +27,8 @@ pub enum LoadError {
 
 An attribute macro runs the one sugar item it names on the item it sits on, and sees nothing else. `#[sugared]` on an inline module runs every sugar item that is valid Rust (`#[data]`, `#[delegate(..)]` fields, `#[display("..")]`, `#[from]`, `#[newtype]`, `#[borrows]`) across the module, so `#[delegate]` can use the module's traits and `except(..)`, and `#[newtype(validate = f)]` its functions. It is not called `#[sugar]` because `sugar!` holds that name.
 
+`#[dyn]` on a trait inside `sugar!` makes its `async fn`s callable through a generated `DynTrait` type (problem 14), via the `dynosaur` crate. It is behind an optional feature, so other users do not compile `dynosaur`: `rustx = { version = "..", features = ["dyn"] }`.
+
 To see the plain Rust that sugar turns into, run `cargo run -p rustx-cli -- expand <file>`: a `.rustx` file is desugared as a whole, and in a Rust file every `sugar! { .. }` invocation is replaced by its expansion. The output is formatted with `prettyplease` (comments other than doc comments are dropped); errors are printed as `file:line:column: message` with a non-zero exit code.
 
 To move existing code onto sugar, run `cargo run -p rustx-cli -- sugar <file.rs>`: it prints the file rewritten into sugar as the text of a `.rustx` file (save it as one, or paste it into `sugar! { .. }`). Only code that a sugar item expands back to exactly is rewritten (so far `let mut x` becomes `var x`), and only those bytes change: comments and layout stay as written. Code that expansion would already change as written, such as `var x` inside a macro call, is reported as an error instead.

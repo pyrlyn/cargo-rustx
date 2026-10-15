@@ -14,7 +14,7 @@
 | quote | local | https://github.com/dtolnay/quote | Building output tokens |
 | syn | local | https://github.com/dtolnay/syn | Parsing the desugared body and AST passes; `visit` (through the `rustx-core` `sugar` feature) for reverse rules |
 | clap | local | https://github.com/clap-rs/clap | `rustx-cli` arguments and subcommands (derive) |
-| dynosaur | local | https://github.com/spastorino/dynosaur | `#[dyn]` traits expand to its attribute; re-exported by `rustx` (pulls in `syn` 2 for its own macro) |
+| dynosaur | local (optional, `rustx` feature `dyn`) | https://github.com/spastorino/dynosaur | `#[dyn]` traits expand to its attribute; re-exported by `rustx` only with `dyn`, because it pulls in `syn` 2 for its own macro |
 | prettyplease | local | https://github.com/dtolnay/prettyplease | Formatting `rustx-cli expand` output and readable expansions in snapshots |
 | anyhow | local | https://github.com/dtolnay/anyhow | Error type of `-> T throws`, re-exported by `rustx` |
 | insta | local (dev) | https://github.com/mitsuhiko/insta | Snapshot tests of expansions |

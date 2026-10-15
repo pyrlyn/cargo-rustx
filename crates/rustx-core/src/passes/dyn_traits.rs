@@ -24,6 +24,10 @@
 //! tokens take the span of `dyn`. `dynosaur`'s expansion names no crate path of its own, so the
 //! attribute is reached through the `rustx` re-export and user crates need no dependency on it.
 //!
+//! `dynosaur` is an optional dependency of `rustx`, behind its `dyn` feature. Without it,
+//! [`reject`] reports each `#[dyn]` naming the feature, instead of letting rustc report the
+//! unresolved `::rustx::dynosaur` path.
+//!
 //! # Limitations
 //!
 //! - Only inside `sugar!`: rustc rejects `#[dyn]` before an attribute macro sees the item.
@@ -43,6 +47,8 @@ use crate::tokens::syntax::combine;
 
 /// Name of the attribute that carries `#[dyn]` from the token half to the AST half.
 const MARKER: &str = "__rustx_dyn";
+
+const NEEDS_FEATURE: &str = "`#[dyn]` needs the `dyn` feature of `rustx`: `rustx = { version = \"..\", features = [\"dyn\"] }`";
 
 const SHAPE: &str = "expected `#[dyn]` or `#[dyn(DynName)]`, where `DynName` names the dyn type";
 
@@ -64,6 +70,19 @@ pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
         }
         out
     })
+}
+
+pub(super) fn reject(tokens: TokenStream) -> syn::Result<()> {
+    map_sequences_reporting(tokens, |seq, errors| {
+        for i in 0..seq.len() {
+            if let Some((keyword, _)) = dyn_attr(seq, i) {
+                combine(errors, syn::Error::new(keyword.span(), NEEDS_FEATURE));
+            }
+        }
+        // Unchanged, so the enclosing sequence still sees the `[dyn]` groups.
+        seq.to_vec()
+    })
+    .map(drop)
 }
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
