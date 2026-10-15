@@ -1,0 +1,22 @@
+mod server {
+    pub fn connect(host: &str, port: u16 = 5432, timeout_ms: u64 = 5_000) -> String {
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+
+    pub fn greet(name: &str, greeting: String = format!("Hello, {name}"), mut times: usize = 1) -> String {
+        let mut out = String::new();
+        while times > 0 {
+            out.push_str(&greeting);
+            times -= 1;
+        }
+        out
+    }
+
+    pub struct Pool;
+
+    impl Pool {
+        pub fn spawn(&self, (min, max): (usize, usize) = (1, 4)) -> usize {
+            max - min
+        }
+    }
+}

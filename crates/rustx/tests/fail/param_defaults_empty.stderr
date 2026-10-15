@@ -1,0 +1,5 @@
+error: expected a default value after `=`, as in `port: u16 = 8080`
+ --> tests/fail/param_defaults_empty.rs:2:38
+  |
+2 |     fn connect(host: &str, port: u16 =) {}
+  |                                      ^
