@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/rustx-core", "crates/rustx-macros", "crates/rustx", "crates/rustx-cli", "crates/rustx-build"]
+members = ["crates/rustx-core", "crates/rustx-macros", "crates/rustx", "crates/rustx-cli", "crates/rustx-build", "examples/build-rs"]
 resolver = "3"
 
 [workspace.package]

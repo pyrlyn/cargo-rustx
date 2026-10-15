@@ -1,0 +1,18 @@
+[package]
+name = "rustx-example-build-rs"
+description = "Example: a library written as a `.rustx` file, desugared by `rustx-build` in `build.rs`"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+# The desugared code names `::rustx::anyhow` for `throws`.
+rustx = { path = "../../crates/rustx" }
+
+[build-dependencies]
+rustx-build.workspace = true
+
+[lints]
+workspace = true

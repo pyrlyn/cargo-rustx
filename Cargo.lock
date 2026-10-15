@@ -417,6 +417,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustx-example-build-rs"
+version = "0.1.0"
+dependencies = [
+ "rustx",
+ "rustx-build",
+]
+
+[[package]]
 name = "rustx-macros"
 version = "0.1.0"
 dependencies = [

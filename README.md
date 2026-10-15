@@ -33,6 +33,26 @@ To see the plain Rust that sugar turns into, run `cargo run -p rustx-cli -- expa
 
 To move existing code onto sugar, run `cargo run -p rustx-cli -- sugar <file.rs>`: it prints the file rewritten into sugar as the text of a `.rustx` file (save it as one, or paste it into `sugar! { .. }`). Only code that a sugar item expands back to exactly is rewritten (so far `let mut x` becomes `var x`), and only those bytes change: comments and layout stay as written. Code that expansion would already change as written, such as `var x` inside a macro call, is reported as an error instead.
 
+### `.rustx` files via `build.rs`
+
+A whole file can be written in sugar as a `.rustx` file and desugared by the build script. Add `rustx-build` to `[build-dependencies]` (and `rustx` to `[dependencies]` when the sugar needs its runtime, as `throws` does), then:
+
+```rust
+// build.rs
+fn main() {
+    if let Err(err) = rustx_build::expand_file("src/stats.rustx") {
+        err.emit();
+    }
+}
+```
+
+```rust
+// src/lib.rs
+include!(concat!(env!("OUT_DIR"), "/src/stats.rs"));
+```
+
+The output sits under `OUT_DIR` at the source's path relative to the package root, with the extension `.rs`; `rustx_build::expand_dir("src")` desugars every `.rustx` file below a directory. The build script reruns when a desugared file, or a directory given to `expand_dir`, changes. `err.emit()` hands each error to Cargo as a `cargo::error` line, so the build fails with `error: <package>@<version>: src/stats.rustx:23:42: expected a trait after ...`; returning the error from `fn main() -> Result<(), rustx_build::Error>` also works but prints the same lines inside the build script's full output. `include!` rejects inner attributes, so `//!` docs and `#![..]` belong in the including file. rustc and clippy report problems in the generated code at the generated file, whose first line names its source. [examples/build-rs](examples/build-rs) is a working crate.
+
 ## Catalog
 
 Each file shows the problem in short form, then a detailed example in valid Rust and the same code with sugar.

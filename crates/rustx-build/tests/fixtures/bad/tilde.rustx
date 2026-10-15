@@ -1,0 +1,5 @@
+// A `~` must be followed by a trait.
+fn ok() {}
+fn handlers() -> Vec<~> {
+    Vec::new()
+}

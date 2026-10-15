@@ -1,0 +1,52 @@
+/// Summary of a sample set.
+pub struct Stats {
+    /// How many samples there are.
+    pub count: usize,
+    /// Their sum.
+    pub sum: f64,
+    /// The smallest sample.
+    pub min: f64,
+    /// The largest sample.
+    pub max: f64,
+}
+
+impl Stats {
+    /// The distance between the smallest and the largest sample.
+    #[must_use]
+    pub fn range(&self) -> f64 {
+        self.max - self.min
+    }
+}
+
+/// Count, sum and range of `samples`, or `None` when there are none.
+#[must_use]
+pub fn summarize(samples: &[f64]) -> Option<Stats> {
+    if samples.is_empty() {
+        return None;
+    }
+    var sum = 0.0;
+    var min = f64::MAX;
+    var max = f64::MIN;
+    for &s in samples {
+        sum += s;
+        min = min.min(s);
+        max = max.max(s);
+    }
+    Some(Stats { count: samples.len(), sum, min, max })
+}
+
+/// Parses whitespace-separated numbers.
+///
+/// # Errors
+///
+/// Fails on the first word that is not a number, naming it.
+pub fn parse(text: &str) -> Vec<f64> throws {
+    var out = Vec::new();
+    for word in text.split_whitespace() {
+        match word.parse::<f64>() {
+            Ok(x) => out.push(x),
+            Err(_) => throw "not a number: {word}",
+        }
+    }
+    out
+}
