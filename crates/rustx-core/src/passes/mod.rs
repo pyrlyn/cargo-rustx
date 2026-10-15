@@ -12,6 +12,7 @@ mod capture_lists;
 mod data;
 mod delegate;
 mod derive_presets;
+mod dyn_traits;
 mod field_defaults;
 mod from_attribute;
 mod from_display;
@@ -25,6 +26,7 @@ mod newtype;
 mod param_defaults;
 mod prefix_types;
 mod rc_values;
+mod shared;
 mod signatures;
 mod throws;
 mod turbofish;
@@ -45,8 +47,10 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     capture_lists::rewrite,
+    shared::rewrite,
     bound_presets::rewrite,
     derive_presets::rewrite,
+    dyn_traits::rewrite,
     from_display::rewrite,
     inline_bounds::rewrite,
     into_params::rewrite,
@@ -77,6 +81,8 @@ const AST_PASSES: &[AstPass] = &[
     param_defaults::lower,
     borrows::lower,
     from_lifetimes::lower,
+    dyn_traits::lower,
+    shared::lower,
     throws::lower,
 ];
 
