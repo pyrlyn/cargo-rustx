@@ -1,0 +1,29 @@
+mod bus {
+    use std::collections::HashMap;
+
+    pub struct Event {
+        pub topic: String,
+        pub payload: String,
+    }
+
+    pub trait Sink {
+        fn deliver(&self, e: &Event);
+    }
+
+    pub struct Bus {
+        handlers: HashMap<String, Vec<~Fn(&Event) -> bool>>,
+        sinks: Vec<~Sink>,
+    }
+
+    impl Bus {
+        pub fn on(&mut self, topic: &str, h: ~Fn(&Event) -> bool) {
+            self.handlers.entry(topic.to_string()).or_default().push(h);
+        }
+
+        pub fn add_sink(&mut self, s: ~Sink) {
+            self.sinks.push(s);
+        }
+    }
+
+    pub type Pair = ~(Sink + std::fmt::Debug);
+}

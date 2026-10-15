@@ -1,0 +1,27 @@
+mod tree {
+    use std::rc::Rc;
+
+    pub struct Node {
+        pub name: String,
+        pub size: u64,
+        pub parent: Option<weak Node>,
+        pub children: Vec<rc Node>,
+    }
+
+    pub fn add_child(parent: &rc Node, child: rc Node) {
+        child.borrow_mut().parent = Some(Rc::downgrade(parent));
+        parent.borrow_mut().children.push(child);
+    }
+
+    pub fn shapes(all: &[rc ~Shape]) -> iter rc ~Shape {
+        all.iter().cloned()
+    }
+
+    pub type Index = std::collections::HashMap<String, weak Node>;
+
+    // Plain Rust that names things `rc` and `weak` is left alone.
+    pub fn strong(rc: &Rc<u8>, weak: &std::rc::Weak<u8>) -> usize {
+        let rc = rc.clone();
+        Rc::strong_count(&rc) + weak.weak_count()
+    }
+}

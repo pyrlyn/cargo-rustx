@@ -1,0 +1,33 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/prefix_types_iter.rustx
+---
+mod log {
+    pub struct Entry {
+        pub level: u8,
+        pub module: String,
+    }
+    pub struct Log {
+        entries: Vec<Entry>,
+    }
+    impl Log {
+        pub fn at_least(
+            &self,
+            min: u8,
+        ) -> impl ::core::iter::Iterator<Item = &Entry> + '_ {
+            self.entries.iter().filter(move |e| e.level >= min)
+        }
+        pub fn modules(&self) -> impl ::core::iter::Iterator<Item = &str> + '_ {
+            self.entries.iter().map(|e| e.module.as_str())
+        }
+        pub fn numbered(
+            &self,
+        ) -> impl ::core::iter::Iterator<Item = (usize, &Entry)> + '_ {
+            self.entries.iter().enumerate()
+        }
+    }
+    pub fn count(iter: std::iter::Empty<u8>) -> usize {
+        iter.count()
+    }
+}
