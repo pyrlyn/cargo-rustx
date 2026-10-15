@@ -32,7 +32,7 @@ mod shared;
 mod signatures;
 mod string_literals;
 mod throw;
-mod throws;
+pub(crate) mod throws;
 mod turbofish;
 mod typed_positions;
 mod var;

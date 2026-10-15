@@ -9,6 +9,7 @@
 
 mod rc_values;
 mod std_paths;
+mod throws;
 mod turbofish;
 mod var;
 
@@ -36,8 +37,14 @@ pub(crate) trait ReverseRule {
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
-// it and is dropped whatever the order: such a value keeps its plain spelling.
-const RULES: &[&dyn ReverseRule] = &[&var::LetMut, &turbofish::Turbofish, &rc_values::RcValues];
+// it and is dropped whatever the order: such a value keeps its plain spelling. `throws` edits a
+// return type and the bytes around a tail's value, which no other rule edits.
+const RULES: &[&dyn ReverseRule] = &[
+    &var::LetMut,
+    &turbofish::Turbofish,
+    &rc_values::RcValues,
+    &throws::Throws,
+];
 
 /// Replaces the bytes `range` of the source with `text`.
 #[derive(Clone, Debug, PartialEq, Eq)]
