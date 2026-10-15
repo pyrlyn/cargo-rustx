@@ -1,6 +1,6 @@
 //! Impl items that forward a trait's items to one field.
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote_spanned};
 use syn::{
     FnArg, ImplItem, Member, Path, PathArguments, ReceiverKind, Token, TraitItem, TraitItemFn, Type,
@@ -16,16 +16,21 @@ pub(super) struct Target<'a> {
     pub(super) span: Span,
 }
 
-/// One forwarding item per trait item.
+/// One forwarding item per trait item, skipping the methods named in `except`.
 ///
 /// Calls go through the trait path (`Trait::method(&mut self.field, ..)`), so an inherent
 /// method of the field type with the same name cannot capture them. Only associated types and
 /// consts name the field type, which keeps its elided lifetimes out of method bodies.
-pub(super) fn items(target: &Target, trait_items: &[TraitItem]) -> syn::Result<Vec<ImplItem>> {
+pub(super) fn items(
+    target: &Target,
+    trait_items: &[TraitItem],
+    except: &[Ident],
+) -> syn::Result<Vec<ImplItem>> {
     let Target { ty, path, span, .. } = target;
     let mut out = Vec::new();
     for item in trait_items {
         let tokens = match item {
+            TraitItem::Fn(method) if except.contains(&method.sig.ident) => continue,
             TraitItem::Fn(method) => method_tokens(target, method)?,
             TraitItem::Type(assoc) => {
                 if !assoc.generics.params.is_empty() {

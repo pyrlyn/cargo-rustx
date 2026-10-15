@@ -1,0 +1,5 @@
+error: `except(..)` needs a hand-written `impl Write for Counting` next to the struct
+ --> tests/fail/delegate_except_without_impl.rs:3:27
+  |
+3 |         #[delegate(Write, except(write))]
+  |                           ^^^^^^

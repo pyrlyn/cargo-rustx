@@ -5,6 +5,24 @@ input_file: crates/rustx-core/tests/cases/delegate.rustx
 ---
 mod io_wrappers {
     use std::io::{self, Read, Write};
+    pub struct CountingWriter<W: Write> {
+        inner: W,
+        pub bytes: usize,
+    }
+    impl<W> Write for CountingWriter<W>
+    where
+        W: Write,
+    {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let n = self.inner.write(buf)?;
+            self.bytes += n;
+            Ok(n)
+        }
+        #[inline]
+        fn flush(&mut self) -> ::std::io::Result<()> {
+            ::std::io::Write::flush(&mut self.inner)
+        }
+    }
     pub struct Tee<R: Read, W: Write> {
         reader: R,
         log: W,

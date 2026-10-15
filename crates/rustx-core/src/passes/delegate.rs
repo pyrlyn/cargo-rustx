@@ -31,6 +31,8 @@
 //! Only required items are forwarded; provided methods are inherited and go through the
 //! forwarded ones, so they see hand-written overrides.
 //!
+//! `except(..)` leaves methods to a hand-written impl; see [`except`].
+//!
 //! # Limitations
 //!
 //! - Associated functions without `self`, typed receivers (`self: Box<Self>`) and generic
@@ -39,9 +41,11 @@
 //!   list form, since the pass neither substitutes arguments nor resolves modules.
 //! - Generic methods are called without turbofish: their parameters must be inferable from the
 //!   arguments, as they are in `Hash::hash`.
-//! - Associated types and consts name the field's type (`<R as Iterator>::Item`). On a
+//! - Associated types and consts name the field's type (`<R as Iterator>::Item`), so a
+//!   hand-written impl that receives them must spell the struct's parameters as declared. On a
 //!   `#[borrows]` struct, elided references in that copy take the lifetime `#[borrows]` adds.
 
+mod except;
 mod forward;
 mod spec;
 mod std_traits;
@@ -54,7 +58,8 @@ use quote::{ToTokens, quote_spanned};
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    Block, Field, Index, Item, ItemMod, ItemStruct, ItemTrait, Member, Path, Stmt, TraitItem, Type,
+    Block, Field, Index, Item, ItemImpl, ItemMod, ItemStruct, ItemTrait, Member, Path, Stmt,
+    TraitItem, Type,
 };
 
 use self::forward::Target;
@@ -153,8 +158,12 @@ impl Walk {
         }
         let mut added = Vec::new();
         for request in requests {
-            match self.lower(&request) {
-                Ok(item) => added.push((request.at, item)),
+            let existing = list.iter_mut().filter_map(item).find_map(|item| {
+                except::hand_written(item, &request.owner.ident, &request.delegation.path)
+            });
+            match self.lower(&request, existing) {
+                Ok(Some(item)) => added.push((request.at, item)),
+                Ok(None) => {}
                 Err(err) => self.fail(err),
             }
         }
@@ -218,23 +227,35 @@ impl Walk {
         }
     }
 
-    fn lower(&self, request: &Request) -> syn::Result<Item> {
+    /// The new impl, or `None` when the items went into a hand-written one.
+    fn lower(
+        &self,
+        request: &Request,
+        existing: Option<&mut ItemImpl>,
+    ) -> syn::Result<Option<Item>> {
         let delegation = &request.delegation;
         let span = delegation.span();
         let (path, trait_items) = self.trait_items(delegation, span)?;
+        except::check(delegation, &trait_items)?;
         let target = Target {
             field: &request.field,
             ty: &request.ty,
             path: &path,
             span,
         };
-        let items = forward::items(&target, &trait_items)?;
+        let items = forward::items(&target, &trait_items, &delegation.except)?;
+        if let Some(existing) = existing {
+            except::merge(existing, items)?;
+            return Ok(None);
+        }
         let owner = &request.owner;
+        except::without_impl(delegation, &owner.ident)?;
         let ident = &owner.ident;
         let (impl_generics, type_generics, where_clause) = owner.generics.split_for_impl();
         syn::parse2(quote_spanned!(span=>
             impl #impl_generics #path for #ident #type_generics #where_clause { #(#items)* }
         ))
+        .map(Some)
     }
 
     /// The path the impl names and the items to forward, in the order the module docs list.
@@ -429,6 +450,29 @@ mod tests {
     }
 
     #[test]
+    fn except_adds_the_other_methods_to_the_hand_written_impl() {
+        assert_eq!(
+            desugar(quote! {
+                struct Counting<W: Write> { #[delegate(Write, except(write))] inner: W, n: usize }
+                impl Write for Counting<W> {
+                    fn write(&mut self, buf: &[u8]) -> io::Result<usize> { self.inner.write(buf) }
+                }
+            })
+            .ok(),
+            Some(reprint(quote! {
+                struct Counting<W: Write> { inner: W, n: usize }
+                impl Write for Counting<W> {
+                    fn write(&mut self, buf: &[u8]) -> io::Result<usize> { self.inner.write(buf) }
+                    #[inline]
+                    fn flush(&mut self) -> ::std::io::Result<()> {
+                        ::std::io::Write::flush(&mut self.inner )
+                    }
+                }
+            }))
+        );
+    }
+
+    #[test]
     fn a_trait_of_the_input_forwards_its_required_items_with_every_receiver() {
         assert_eq!(
             desugar(quote! {
@@ -575,6 +619,26 @@ mod tests {
         assert_eq!(
             errors,
             ["`Write` is already delegated to field `a` of `Tee`; a trait has one impl"]
+        );
+    }
+
+    #[test]
+    fn except_misuse_is_an_error() {
+        let errors = errors(quote! {
+            struct A { #[delegate(Write, except(write))] w: File }
+            struct B { #[delegate(Read, except(read_exact))] r: File }
+            struct C { #[delegate(except(read), Read)] r: File }
+            struct D { #[delegate(Write)] w: File }
+            impl Write for D { fn flush(&mut self) -> R { g() } }
+        });
+        assert_eq!(
+            errors,
+            [
+                "`except(..)` must follow the trait it applies to, as in `Write, except(write)`",
+                "`except(..)` needs a hand-written `impl Write for A` next to the struct",
+                "`read_exact` is not a forwarded method of `Read`",
+                "`flush` is written by hand and also delegated; add it to `except(..)`",
+            ]
         );
     }
 

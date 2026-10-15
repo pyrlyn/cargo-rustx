@@ -2,6 +2,20 @@ rustx::sugar! {
     mod io_wrappers {
         use std::io::{self, Read, Write};
 
+        pub struct CountingWriter<W: Write> {
+            #[delegate(Write, except(write))]
+            pub inner: W,
+            pub bytes: usize,
+        }
+
+        impl Write for CountingWriter<W> {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                let n = self.inner.write(buf)?;
+                self.bytes += n;
+                Ok(n)
+            }
+        }
+
         pub struct Tee<R: Read, W: Write> {
             #[delegate(Read)]
             pub reader: R,
@@ -70,11 +84,18 @@ rustx::sugar! {
     }
 }
 
-use io_wrappers::Tee;
+use io_wrappers::{CountingWriter, Tee};
 use others::{Countdown, Shape, Square, Tile};
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
 fn main() {
+    let mut counting = CountingWriter { inner: Vec::new(), bytes: 0 };
+    counting.write_all(b"hello ").unwrap();
+    write!(counting, "{}", 42).unwrap();
+    counting.flush().unwrap();
+    assert_eq!(counting.bytes, 8);
+    assert_eq!(counting.inner, b"hello 42");
+
     let mut tee = Tee { reader: Cursor::new(b"copied".to_vec()), log: Vec::new() };
     assert_eq!(io_wrappers::copy_all(&mut tee).unwrap(), 6);
     assert_eq!(tee.log, b"copied");
