@@ -1,0 +1,5 @@
+error: `n` is not a reference, so `from(..)` cannot borrow from it
+ --> tests/fail/from_lifetimes_not_a_reference.rs:2:45
+  |
+2 |     fn pick(n: usize, words: &[String]) -> &from(n) str {
+  |                                             ^^^^^^^
