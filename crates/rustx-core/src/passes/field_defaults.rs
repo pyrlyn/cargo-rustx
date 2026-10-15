@@ -48,8 +48,8 @@
 //!
 //! - **Macro arguments.** Macro bodies are opaque tokens and may hold patterns (`matches!`), so
 //!   `..` is filled only inside the std macros whose arguments are all expressions
-//!   ([`EXPRESSION_MACROS`]), and only when the body parses as a comma-separated list, so not
-//!   in `vec![S { .. }; n]`.
+//!   ([`EXPRESSION_MACROS`]), and only when the body parses as expressions (`a, b` or
+//!   `vec![x; n]`).
 //! - **Destructuring assignment.** The left side of `=` is a pattern (`S { a, .. } = s;`), so it
 //!   is never filled.
 //! - **Generic fields** without a default need `T: Default` on the struct, since the bounds are
@@ -65,6 +65,7 @@ use syn::{
     ItemStruct, ItemUnion, Lit, Macro, Path, Stmt, Token, Type, Variant,
 };
 
+use crate::passes::macro_args::MacroArgs;
 use crate::tokens::syntax::combine;
 
 /// Std macros whose arguments are all expressions, so a struct literal in them is never a
@@ -252,12 +253,11 @@ impl VisitMut for Lower {
         {
             return;
         }
-        let Ok(mut args) = mac.parse_body_with(Punctuated::<Expr, Token![,]>::parse_terminated)
-        else {
+        let Ok(mut args) = mac.parse_body::<MacroArgs>() else {
             return;
         };
         let before = self.filled;
-        for arg in &mut args {
+        for arg in args.exprs_mut() {
             self.visit_expr_mut(arg);
         }
         if self.filled != before {
@@ -467,6 +467,16 @@ mod tests {
                     let v = vec![S { ..::core::default::Default::default() }];
                     assert_eq!(v[0], S { a: 1, ..::core::default::Default::default() });
                 }
+            })
+        );
+    }
+
+    #[test]
+    fn a_repeated_vec_element_gets_its_rest_filled() {
+        assert_eq!(
+            desugar(quote! { fn f() { let v = vec![S { .. }; 2]; } }).ok(),
+            reprint(quote! {
+                fn f() { let v = vec![S { ..::core::default::Default::default() }; 2]; }
             })
         );
     }
