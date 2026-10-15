@@ -19,41 +19,86 @@
 //! whatever `'_` would elide to. With markers of two different lifetimes inside, that `'_` is
 //! ambiguous and reported; `from(a, b)` names both sources with one lifetime.
 //!
+//! # Borrowing types (problem 19)
+//!
+//! `from(Self)` and `from(Type)`, where `Type` is a `#[borrows]` type, name that type's lifetime,
+//! in parameters as well as in the return type. The `borrows` pass ran first and left the lifetime
+//! in the generics of each borrowing type and of each `impl` it extended, which is how this pass
+//! recognises both:
+//!
+//! - inside such an `impl` the lifetime is in scope, so both forms resolve to it;
+//! - elsewhere `from(Self)` is an error, and `from(Type)` adds the lifetime to the function and
+//!   to every parameter type `Type` written without a lifetime argument.
+//!
 //! # Limitations
 //!
 //! - Only parameters bound to a plain name (`x: T`, `mut x: T`, `self`) can be named; a
 //!   destructuring pattern has no name to put in `from(..)`.
-//! - `from(Self)` and `from(Type)` belong to `#[borrows]` (problem 19); here they name no
-//!   parameter and are reported as such.
+//! - `Self` and the names of borrowing types always name types, never parameters, and take the
+//!   whole `from(..)`: one lifetime cannot be both a type's and a parameter's.
 //! - A parameter whose references all carry written lifetimes (`&'a T`) cannot be named.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Ident, Span};
 use syn::ext::IdentExt;
 use syn::punctuated::Punctuated;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    FnArg, GenericParam, Generics, Lifetime, LifetimeParam, ParenthesizedGenericArguments, Pat,
-    ReceiverKind, Signature, Token, Type, TypeFnPtr, TypeImplTrait, TypeParamBound, TypeReference,
-    WherePredicate,
+    FnArg, GenericParam, Generics, ItemFn, ItemImpl, ItemTrait, Lifetime, LifetimeParam,
+    ParenthesizedGenericArguments, Pat, ReceiverKind, Signature, Token, Type, TypeFnPtr,
+    TypeImplTrait, TypeParamBound, TypeReference, WherePredicate,
 };
 
 use super::{decode, introduced_span};
+use crate::passes::borrows;
 use crate::tokens::syntax::{bare_name, combine};
 
 pub(in crate::passes) fn lower(file: &mut syn::File) -> syn::Result<()> {
-    let mut pass = Lower { errors: None };
+    let mut pass = Lower {
+        types: borrows::borrowing_types(file),
+        in_borrowing_impl: false,
+        errors: None,
+    };
     pass.visit_file_mut(file);
     pass.errors.map_or(Ok(()), Err)
 }
 
 struct Lower {
+    /// Names of the `#[borrows]` types.
+    types: HashSet<String>,
+    /// Whether the signatures visited now are in an `impl` that has the `#[borrows]` lifetime.
+    in_borrowing_impl: bool,
     errors: Option<syn::Error>,
 }
 
+impl Lower {
+    fn scoped(&mut self, in_borrowing_impl: bool, visit: impl FnOnce(&mut Self)) {
+        let outer = std::mem::replace(&mut self.in_borrowing_impl, in_borrowing_impl);
+        visit(self);
+        self.in_borrowing_impl = outer;
+    }
+}
+
 impl VisitMut for Lower {
+    fn visit_item_impl_mut(&mut self, item: &mut ItemImpl) {
+        let inside = borrows::has_lifetime(&item.generics);
+        self.scoped(inside, |pass| visit_mut::visit_item_impl_mut(pass, item));
+    }
+
+    // Items nested in a method body do not see the generics of the `impl` around it.
+    fn visit_item_fn_mut(&mut self, item: &mut ItemFn) {
+        self.scoped(false, |pass| visit_mut::visit_item_fn_mut(pass, item));
+    }
+
+    fn visit_item_trait_mut(&mut self, item: &mut ItemTrait) {
+        self.scoped(false, |pass| visit_mut::visit_item_trait_mut(pass, item));
+    }
+
     fn visit_signature_mut(&mut self, sig: &mut Signature) {
+        if let Err(err) = lower_type_markers(sig, &self.types, self.in_borrowing_impl) {
+            combine(&mut self.errors, err);
+        }
         if let Err(err) = lower_signature(sig) {
             combine(&mut self.errors, err);
         }
@@ -154,12 +199,7 @@ fn lower_signature(sig: &mut Signature) -> syn::Result<()> {
         return Err(err);
     }
 
-    let at = sig
-        .generics
-        .params
-        .iter()
-        .take_while(|param| matches!(param, GenericParam::Lifetime(_)))
-        .count();
+    let at = lifetimes_end(&sig.generics);
     for (offset, lifetime) in introduced.into_iter().enumerate() {
         let param = GenericParam::Lifetime(LifetimeParam::new(lifetime));
         sig.generics.params.insert(at + offset, param);
@@ -180,6 +220,88 @@ fn lower_signature(sig: &mut Signature) -> syn::Result<()> {
     }
     resolve.visit_return_type_mut(&mut sig.output);
     resolve.errors.map_or(Ok(()), Err)
+}
+
+/// Resolves `from(Self)` and `from(Type)` anywhere in the signature to the `#[borrows]` lifetime,
+/// before [`lower_signature`] looks for parameters.
+fn lower_type_markers(
+    sig: &mut Signature,
+    types: &HashSet<String>,
+    in_borrowing_impl: bool,
+) -> syn::Result<()> {
+    let mut collect = Collect::default();
+    for arg in &mut sig.inputs {
+        collect.visit_fn_arg_mut(arg);
+    }
+    collect.visit_return_type_mut(&mut sig.output);
+    let mut errors = None;
+    let mut resolve = Resolve {
+        by_key: HashMap::new(),
+        errors: None,
+    };
+    // Types named outside a borrowing `impl`, each with the marker that first named it.
+    let mut named: Vec<(&str, &Marker)> = Vec::new();
+    for marker in &collect.0 {
+        let Some(name) = marker
+            .names
+            .iter()
+            .find(|name| *name == "Self" || types.contains(*name))
+        else {
+            continue;
+        };
+        if marker.names.len() > 1 {
+            let msg = format!("`from({name})` names a type's lifetime, so it takes no other names");
+            combine(&mut errors, syn::Error::new_spanned(&marker.written, msg));
+        } else if in_borrowing_impl {
+            // The `impl` already declares the lifetime and gave it to every borrowing type.
+        } else if name == "Self" {
+            let msg = "`from(Self)` only works in an `impl` of a `#[borrows]` type";
+            combine(&mut errors, syn::Error::new_spanned(&marker.written, msg));
+        } else if !named.iter().any(|(seen, _)| seen == name) {
+            named.push((name, marker));
+        }
+        // Resolved even when reported, so the parameter checks do not report it again.
+        let lifetime = borrows::lifetime(marker.written.apostrophe);
+        resolve.by_key.insert(marker.key.clone(), lifetime);
+    }
+    if let Some((_, first)) = named.first() {
+        let lifetime = borrows::lifetime(first.written.apostrophe);
+        let param = GenericParam::Lifetime(LifetimeParam::new(lifetime.clone()));
+        sig.generics
+            .params
+            .insert(lifetimes_end(&sig.generics), param);
+        for (name, marker) in &named {
+            let only = HashSet::from([(*name).to_owned()]);
+            let mut fill = borrows::Fill::new(&lifetime, &only, false);
+            for arg in &mut sig.inputs {
+                fill.visit_fn_arg_mut(arg);
+            }
+            if fill.count == 0 {
+                let msg = format!(
+                    "`from({name})` borrows from a `{name}` parameter, \
+                     but no parameter here has type `{name}` without a lifetime"
+                );
+                combine(&mut errors, syn::Error::new_spanned(&marker.written, msg));
+            }
+        }
+    }
+    for arg in &mut sig.inputs {
+        resolve.visit_fn_arg_mut(arg);
+    }
+    resolve.visit_return_type_mut(&mut sig.output);
+    if let Some(err) = resolve.errors {
+        combine(&mut errors, err);
+    }
+    errors.map_or(Ok(()), Err)
+}
+
+/// Where a new lifetime parameter goes: after the lifetimes the signature already declares.
+fn lifetimes_end(generics: &Generics) -> usize {
+    generics
+        .params
+        .iter()
+        .take_while(|param| matches!(param, GenericParam::Lifetime(_)))
+        .count()
 }
 
 fn root(parent: &[usize], mut index: usize) -> usize {
@@ -531,5 +653,106 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(err.into_iter().count(), 2);
+    }
+
+    /// Runs `#[borrows]` first, as `passes/mod.rs` orders them.
+    fn borrowed(sugar: proc_macro2::TokenStream) -> syn::Result<String> {
+        let tokens = super::super::rewrite(sugar)?;
+        let mut file: syn::File = syn::parse2(tokens)?;
+        borrows::lower(&mut file)?;
+        lower(&mut file)?;
+        Ok(file.into_token_stream().to_string())
+    }
+
+    fn borrowed_errors(sugar: proc_macro2::TokenStream) -> Vec<String> {
+        borrowed(sugar)
+            .unwrap_err()
+            .into_iter()
+            .map(|err| err.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn from_self_in_a_borrowing_impl_is_the_type_lifetime_in_parameters_and_return() {
+        assert_eq!(
+            borrowed(quote! {
+                #[borrows] struct Lexer { src: &str }
+                impl Lexer {
+                    fn new(src: &from(Self) str) -> Lexer { Lexer { src } }
+                    // What `prefix_types` makes of `iter &from(Self) str`.
+                    fn words(&self) -> impl Iterator<Item = &from(Self) str> + '_ { self.src.split(' ') }
+                    fn get(&self, k: &str) -> Option<&from(self) str> { None }
+                }
+            })
+            .unwrap(),
+            printed(quote! {
+                struct Lexer<'__rustx_borrows> { src: &'__rustx_borrows str }
+                impl<'__rustx_borrows> Lexer<'__rustx_borrows> {
+                    fn new(src: &'__rustx_borrows str) -> Lexer<'__rustx_borrows> { Lexer { src } }
+                    fn words(&self) -> impl Iterator<Item = &'__rustx_borrows str> + '__rustx_borrows {
+                        self.src.split(' ')
+                    }
+                    fn get<'__rustx_from_self>(&'__rustx_from_self self, k: &str)
+                        -> Option<&'__rustx_from_self str> { None }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn from_type_outside_its_impl_adds_the_lifetime_and_ties_that_parameter() {
+        let expanded = borrowed(quote! {
+            #[borrows] struct Parser { src: &str }
+            fn first<'x>(p: &mut Parser, q: &Parser, s: &'x str) -> Option<&from(Parser) str> { None }
+        })
+        .unwrap();
+        assert!(
+            expanded.ends_with(&printed(quote! {
+                fn first<'x, '__rustx_borrows>(
+                    p: &mut Parser<'__rustx_borrows>,
+                    q: &Parser<'__rustx_borrows>,
+                    s: &'x str
+                ) -> Option<&'__rustx_borrows str> { None }
+            })),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn from_self_outside_a_borrowing_impl_is_an_error() {
+        assert_eq!(
+            borrowed_errors(quote! {
+                #[borrows] struct Lexer { src: &str }
+                impl Lexer { fn f() { fn inner(s: &str) -> &from(Self) str { s } } }
+                struct Plain;
+                impl Plain { fn f(s: &str) -> &from(Self) str { s } }
+                fn g(s: &str) -> &from(Self) str { s }
+            }),
+            ["`from(Self)` only works in an `impl` of a `#[borrows]` type"; 3]
+        );
+    }
+
+    #[test]
+    fn from_type_without_such_a_parameter_or_with_other_names_is_an_error() {
+        assert_eq!(
+            borrowed_errors(quote! {
+                #[borrows] struct Parser { src: &str }
+                fn f(p: &Parser<'static>) -> &from(Parser) str { "" }
+                impl Parser { fn g(&self) -> &from(Self, self) str { "" } }
+            }),
+            [
+                "`from(Parser)` borrows from a `Parser` parameter, but no parameter here has type \
+                 `Parser` without a lifetime",
+                "`from(Self)` names a type's lifetime, so it takes no other names",
+            ]
+        );
+    }
+
+    #[test]
+    fn from_a_type_without_borrows_still_names_no_parameter() {
+        assert_eq!(
+            borrowed_errors(quote! { fn f(p: &Parser) -> &from(Parser) str { "" } }),
+            ["`from(..)` names `Parser`, which is not a parameter here"]
+        );
     }
 }

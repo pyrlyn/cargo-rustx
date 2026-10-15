@@ -1,0 +1,5 @@
+error: `from(Self)` only works in an `impl` of a `#[borrows]` type
+ --> tests/fail/borrows_from_self_outside_impl.rs:7:44
+  |
+7 |         pub fn first(&self, key: &str) -> &from(Self) str {
+  |                                            ^^^^^^^^^^

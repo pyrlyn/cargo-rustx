@@ -1,0 +1,5 @@
+error: `from(Parser)` borrows from a `Parser` parameter, but no parameter here has type `Parser` without a lifetime
+ --> tests/fail/borrows_from_type_without_parameter.rs:7:34
+  |
+7 |     pub fn first(text: &str) -> &from(Parser) str {
+  |                                  ^^^^^^^^^^^^

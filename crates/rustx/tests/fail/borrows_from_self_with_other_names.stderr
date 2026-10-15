@@ -1,0 +1,5 @@
+error: `from(Self)` names a type's lifetime, so it takes no other names
+ --> tests/fail/borrows_from_self_with_other_names.rs:8:45
+  |
+8 |         pub fn pick(&self, other: &str) -> &from(Self, other) str {
+  |                                             ^^^^^^^^^^^^^^^^^

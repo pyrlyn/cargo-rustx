@@ -1,0 +1,5 @@
+error: `#[borrows]` adds exactly one lifetime, and `Pair` already declares `'a`; a type with several lifetimes keeps explicit parameters
+ --> tests/fail/borrows_two_lifetimes.rs:3:21
+  |
+3 |     pub struct Pair<'a> {
+  |                     ^^

@@ -5,6 +5,9 @@
 //! `&from(a, b) T` ties several parameters to one lifetime, and parameters named together in
 //! any two `from(..)` of one signature share it too.
 //!
+//! `&from(Self) T` and `&from(Type) T` name the lifetime `#[borrows]` gave a type (problem 19)
+//! instead of a parameter, in parameters as well as in the return type.
+//!
 //! # Two halves
 //!
 //! `&from(a) T` does not parse as Rust, and the parameters it names are only known with the
@@ -163,7 +166,7 @@ fn decode(ident: &Ident) -> Option<Vec<String>> {
 
 /// The span to report a marker's lifetime at: resolved like macro output, so it cannot clash
 /// with a user lifetime, but shown on the user's `from`.
-fn introduced_span(user: Span) -> Span {
+pub(super) fn introduced_span(user: Span) -> Span {
     Span::mixed_site().located_at(user)
 }
 
