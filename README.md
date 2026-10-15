@@ -1,6 +1,6 @@
 # cargo-rustx
 
-cargo-rustx is a syntax layer over Rust. It stays as close to Rust as possible and only simplifies the places people find hardest to read and write. Everything desugars into ordinary Rust through procedural macros built on `syn`; there is no custom compiler. There are two entry points: `sugar! { .. }` for the full vocabulary and attribute macros (`#[data]`, `#[display]`, `#[delegate]`, `#[sugared]`) for code that is already valid Rust.
+cargo-rustx is a syntax layer over Rust. It stays as close to Rust as possible and only simplifies the places people find hardest to read and write. Everything desugars into ordinary Rust through procedural macros built on `syn`; there is no custom compiler. There are two entry points: `sugar! { .. }` for the full vocabulary and attribute macros (`#[data]`, `#[display]`, `#[delegate]`, `#[newtype]`, `#[sugared]`) for code that is already valid Rust.
 
 Status: early implementation. M0–M3 are in: `sugar!` handles `var` (02), `~Trait` (04), method generics without turbofish (06), `iter T` (09), `rc T`/`weak T` types (16), inline bounds (03), `bound` presets (21), `&from(x) T` lifetimes (01), `#[borrows]` types (19), `into T` parameters (15) and parameter defaults with default and named arguments at call sites (17); valid Rust passes through unchanged. Later milestones are in [roadmap.md](roadmap.md).
 
@@ -25,7 +25,7 @@ pub enum LoadError {
 }
 ```
 
-An attribute macro runs the one sugar item it names on the item it sits on, and sees nothing else. `#[sugared]` on an inline module runs every sugar item that is valid Rust (`#[data]`, `#[delegate(..)]` fields, `#[display("..")]`, `#[from]`, `#[borrows]`) across the module, so `#[delegate]` can use the module's traits and `except(..)`. It is not called `#[sugar]` because `sugar!` holds that name.
+An attribute macro runs the one sugar item it names on the item it sits on, and sees nothing else. `#[sugared]` on an inline module runs every sugar item that is valid Rust (`#[data]`, `#[delegate(..)]` fields, `#[display("..")]`, `#[from]`, `#[newtype]`, `#[borrows]`) across the module, so `#[delegate]` can use the module's traits and `except(..)`, and `#[newtype(validate = f)]` its functions. It is not called `#[sugar]` because `sugar!` holds that name.
 
 ## Catalog
 

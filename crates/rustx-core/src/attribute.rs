@@ -26,6 +26,8 @@ pub enum AttributeMacro {
     Display,
     /// `#[delegate]` on a struct whose fields carry `#[delegate(Trait, ..)]`.
     Delegate,
+    /// `#[newtype(deref, display, ..)]` on a one-field tuple struct.
+    Newtype,
     /// `#[sugared]` on any item: every attribute-shaped sugar inside it.
     Sugared,
 }
@@ -36,6 +38,7 @@ impl AttributeMacro {
             Self::Data => "data",
             Self::Display => "display",
             Self::Delegate => "delegate",
+            Self::Newtype => "newtype",
             Self::Sugared => "sugared",
         }
     }
@@ -43,14 +46,15 @@ impl AttributeMacro {
     /// Whether the pass reads the macro's own attribute, so it goes back onto the item with its
     /// arguments; the others take no arguments.
     fn reads_itself(self) -> bool {
-        matches!(self, Self::Data)
+        matches!(self, Self::Data | Self::Newtype)
     }
 
     /// Why the macro does not fit `item`, if it does not. A macro that would generate nothing is
     /// reported too, so a forgotten field or variant attribute does not go unnoticed.
     fn misuse(self, item: &Item) -> Option<&'static str> {
         match (self, item) {
-            (Self::Sugared, _) | (Self::Data, Item::Struct(_) | Item::Enum(_) | Item::Union(_)) => {
+            (Self::Sugared, _)
+            | (Self::Data | Self::Newtype, Item::Struct(_) | Item::Enum(_) | Item::Union(_)) => {
                 None
             }
             (Self::Display, Item::Enum(item))
@@ -64,6 +68,7 @@ impl AttributeMacro {
                 None
             }
             (Self::Data, _) => Some("`#[data]` needs a struct with named fields"),
+            (Self::Newtype, _) => Some("`#[newtype]` needs a tuple struct with one field"),
             (Self::Display, _) => Some(
                 "`#[display]` needs an enum whose variants carry `#[display(\"..\")]`; \
                  for `#[from]` alone, use `#[sugared]`",
@@ -125,8 +130,8 @@ fn lower(
     if let Err(found) = passes::rewrite_attribute(kind, &mut file) {
         for err in found {
             let err = match kind {
-                AttributeMacro::Delegate => alone(err),
-                _ => err,
+                AttributeMacro::Sugared => err,
+                _ => alone(err),
             };
             combine(&mut errors, err);
         }
@@ -148,8 +153,8 @@ fn has_attr(attrs: &[Attribute], name: &str) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident(name))
 }
 
-/// Rewords a `delegate` error that tells the user to look at the rest of the input, which a
-/// struct-level `#[delegate]` cannot see.
+/// Rewords a pass error that tells the user to look next to the item, which a macro on the item
+/// alone cannot see.
 ///
 /// Matched by text because the pass owns that wording for `sugar!`, where it is right; the unit
 /// tests here pin both messages, so a change to either one fails them.
@@ -162,6 +167,9 @@ fn alone(err: syn::Error) -> syn::Error {
     } else if msg.starts_with("`except(..)` needs a hand-written") {
         "`#[delegate]` on a struct cannot see the hand-written impl `except(..)` adds to; put \
          `#[sugared]` on a module that holds both"
+    } else if msg.starts_with("`validate` needs a function declared next to the struct") {
+        "`#[newtype]` on a struct cannot see the `validate` function next to it; put `#[sugared]` \
+         on a module that declares both"
     } else {
         return err;
     };
@@ -247,6 +255,52 @@ mod tests {
         ] {
             assert!(out.contains(part), "{part} in {out}");
         }
+    }
+
+    #[test]
+    fn newtype_runs_with_its_flags_and_leaves_no_attribute() {
+        let out = expanded(
+            AttributeMacro::Newtype,
+            quote!(deref, from_str),
+            quote! { pub struct Email(String); },
+        );
+        for part in [
+            "pub struct Email (String) ;",
+            "pub fn new",
+            "Deref for Email",
+            "FromStr for Email",
+        ] {
+            assert!(out.contains(part), "{part} in {out}");
+        }
+        assert!(!out.contains("# [newtype"), "{out}");
+    }
+
+    #[test]
+    fn newtype_validate_needs_the_module_and_says_so() {
+        let (messages, out) = errors(
+            AttributeMacro::Newtype,
+            quote!(validate = check),
+            quote! { pub struct Email(String); },
+        );
+        assert_eq!(
+            messages,
+            [
+                "`#[newtype]` on a struct cannot see the `validate` function next to it; put \
+                 `#[sugared]` on a module that declares both"
+            ]
+        );
+        assert_eq!(out, printed(quote! { pub struct Email(String); }));
+        let out = expanded(
+            AttributeMacro::Sugared,
+            TokenStream::new(),
+            quote! {
+                mod m {
+                    #[newtype(validate = check)] pub struct Email(String);
+                    fn check(s: &String) -> Result<(), &'static str> { Ok(()) }
+                }
+            },
+        );
+        assert!(out.contains("Result < Self , & 'static str >"), "{out}");
     }
 
     #[test]

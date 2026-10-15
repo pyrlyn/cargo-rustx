@@ -36,8 +36,16 @@ pub fn delegate(args: TokenStream, item: TokenStream) -> TokenStream {
     expand_attribute(AttributeMacro::Delegate, args.into(), item.into()).into()
 }
 
+/// Adds `new` and one impl per flag to a one-field tuple struct: `deref`, `as_ref`, `display`,
+/// `from_str`, `into` and the operators; `validate = f` needs `#[sugared]` on a module holding
+/// both, since the macro cannot see `f`.
+#[proc_macro_attribute]
+pub fn newtype(args: TokenStream, item: TokenStream) -> TokenStream {
+    expand_attribute(AttributeMacro::Newtype, args.into(), item.into()).into()
+}
+
 /// Applies every sugar that is valid Rust syntax inside the item: `#[data]`, `#[delegate(..)]`
-/// fields, `#[display("..")]` and `#[from]`, `#[borrows]`.
+/// fields, `#[display("..")]` and `#[from]`, `#[newtype(..)]`, `#[borrows]`.
 ///
 /// Named `sugared` because `sugar!` already takes the name: macros of every kind share one
 /// namespace.

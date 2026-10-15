@@ -1,0 +1,5 @@
+error: `#[newtype]` on a struct cannot see the `validate` function next to it; put `#[sugared]` on a module that declares both
+ --> tests/fail/attr_newtype_validate.rs:1:36
+  |
+1 | #[rustx::newtype(deref, validate = check)]
+  |                                    ^^^^^

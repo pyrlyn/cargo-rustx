@@ -94,6 +94,7 @@ pub(crate) fn rewrite_attribute(kind: AttributeMacro, file: &mut syn::File) -> s
         AttributeMacro::Data => (&[], &[data::lower]),
         AttributeMacro::Display => (&[from_attribute::lower], &[from_display::lower]),
         AttributeMacro::Delegate => (&[], &[delegate::lower]),
+        AttributeMacro::Newtype => (&[], &[newtype::lower]),
         AttributeMacro::Sugared => (&[from_attribute::lower], AST_PASSES),
     };
     run_ast(first.iter().chain(passes), file)
