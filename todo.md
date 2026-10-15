@@ -1,7 +1,6 @@
 - T19. Convert plain Rust into rustx sugar
 - T20. M5: `T throws` return types and tail `Ok(..)`
 - T21. M5: `throw e`
-- T22. M6: `move[..]` capture lists
 - T24. M6: `shared` bindings and `shared T` types
 - T25. M6: `rc e` expressions
 - T26. M6: borrows on `rc T` field access

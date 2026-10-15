@@ -9,7 +9,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19 | todo | P2 | 5 | 0% | |
 | T20 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T21 | todo | P2 | 2 | 0% | |
-| T22 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T24 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T25 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T26 | todo | P2 | 4 | 0% | |
@@ -37,12 +36,6 @@ Plan: token pass `passes/throws.rs::rewrite` (pre-registered before `prefix_type
 ### T21. M5: `throw e`
 
 Problem 10. `throw e` inside a `throws` fn becomes `return Err(::core::convert::Into::into(e))`; outside one it is an error at `throw`. Depends on T20. Done when unit tests, a snapshot case and `pass/` and `fail/` tests cover it, including `throw` inside closures and nested fns, which belong to their own signature.
-
-### T22. M6: `move[..]` capture lists
-
-Problem 11. `move[a.clone(), b.clone()] || work(a, b)` becomes `{ let a = a.clone(); let b = b.clone(); move || work(a, b) }`, keeping the user's names. The form stays close to `move(expr)` (RFC 3968) so the desugaring can switch to native syntax later without changing user code. Done when unit tests, a snapshot case and `pass/` and `fail/` tests cover plain and `async` closures and captures that are not a place expression.
-
-Plan: token pass `passes/capture_lists.rs` (pre-registered in `TOKEN_PASSES` after `var`) that turns `move[e1, e2] <closure>` into a block of `let` bindings plus `move <closure>`, naming each binding after the place the capture starts with; `move[` is never valid Rust, so nothing else changes. Errors on an empty list, a capture with no name to take, and `move[..]` not followed by a closure or `async` block. Verify: unit tests, `tests/cases/capture_lists.rustx`, `pass/capture_lists.rs`, `fail/capture_lists_*.rs`, `just check`.
 
 ### T24. M6: `shared` bindings and `shared T` types
 
