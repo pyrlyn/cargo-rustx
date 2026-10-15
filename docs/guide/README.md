@@ -16,7 +16,7 @@ rustx = ".."
 - [`#[sugared]`](sugared.md): every attribute-shaped item across a module.
 - [`.rustx` files through `build.rs`](build-rs.md): whole files of sugar, with `rustx-build`.
 - [`rustx-cli expand` and `rustx-cli sugar`](cli.md): show the expansion, or move plain Rust onto sugar.
-- [`rustx-cli fmt`](fmt.md): format `.rustx` files.
+- [`rustx-cli fmt`](fmt.md): format `.rustx` files and `sugar!` bodies.
 - [The `dyn` feature](dyn-feature.md): needed by `#[dyn]` traits.
 
 ## Sugar items

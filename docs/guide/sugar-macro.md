@@ -29,4 +29,4 @@ A misuse is a compile error at the sugar token, with every error of the input re
 
 - A macro sees only its own input: parameter defaults, `derive` presets, `#[delegate]` with local traits and the other items that read declarations work within one `sugar!` only.
 - Sugar inside macro arguments (`vec![..]`, `assert_eq!(..)`) is expanded too, so a user macro that accepts tokens like `var x` receives the desugared form.
-- rust-analyzer expands the macro, so types and go-to-definition work, but completion and highlighting inside the body are limited, and rustfmt does not format macro bodies. Whole files of sugar can be written as `.rustx` files instead: see [`build.rs`](build-rs.md) and [`rustx-cli fmt`](fmt.md).
+- rust-analyzer expands the macro, so types and go-to-definition work, but completion and highlighting inside the body are limited, and rustfmt does not format macro bodies: [`rustx-cli fmt`](fmt.md) does. Whole files of sugar can be written as `.rustx` files instead: see [`build.rs`](build-rs.md).

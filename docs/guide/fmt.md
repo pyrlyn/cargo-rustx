@@ -1,10 +1,10 @@
 # `rustx-cli fmt`
 
-`rustx-cli fmt` formats a `.rustx` file in place with rustfmt and keeps its sugar and comments.
+`rustx-cli fmt` formats a `.rustx` file, or the `sugar! { .. }` bodies of a Rust file, in place with rustfmt, and keeps the sugar and the comments.
 
 ```sh
-rustx-cli fmt <file.rustx>
-rustx-cli fmt --check <file.rustx>
+rustx-cli fmt <file.rustx | file.rs>
+rustx-cli fmt --check <file.rustx | file.rs>
 ```
 
 `--check` writes nothing and exits with 1 when the file is not formatted:
@@ -13,18 +13,47 @@ rustx-cli fmt --check <file.rustx>
 a.rustx: not formatted; `rustx-cli fmt` rewrites it
 ```
 
-rustfmt parses only Rust, so each sugar spelling is swapped for a placeholder that is valid Rust, rustfmt formats the result, and the sugar is put back. The layout is the one rustfmt gives ordinary Rust. The result is kept only when it expands to exactly what the file expanded to before; otherwise the file is left as it is, with an error. rustfmt comes from the toolchain (`rustup component add rustfmt`).
+rustfmt parses only Rust, so each sugar spelling is swapped for a placeholder that is valid Rust, rustfmt formats the result, and the sugar is put back. The layout is the one rustfmt gives ordinary Rust, and every sugar item is handled. The result is kept only when it expands to exactly what the file expanded to before; otherwise the file is left as it is, with an error. rustfmt comes from the toolchain (`rustup component add rustfmt`).
+
+## Rust files
+
+In a `.rs` file every `sugar! { .. }` and `rustx::sugar! { .. }` body is formatted, indented like its invocation, and the rest of the file is kept as written. For this file:
+
+```rust
+//! A comment outside stays as written.
+fn   untouched( ) {}
+
+rustx::sugar! {
+    fn total(xs:&[u32])->u32{var sum=0;for x in xs{sum+=x;}sum}
+}
+```
+
+`rustx-cli fmt lib.rs` leaves it as:
+
+```rust
+//! A comment outside stays as written.
+fn   untouched( ) {}
+
+rustx::sugar! {
+    fn total(xs: &[u32]) -> u32 {
+        var sum = 0;
+        for x in xs {
+            sum += x;
+        }
+        sum
+    }
+}
+```
 
 ## Refusals
 
-Sugar that `fmt` cannot map yet reaches rustfmt as it is; rustfmt cannot parse it, and `fmt` reports where, with exit code 1 and the file untouched:
+A file that does not expand is refused with the expansion's error, and a file rustfmt cannot parse with rustfmt's, both at their position, with exit code 1 and the file untouched. `gen` is a keyword of edition 2024, which rustfmt rejects as a name:
 
 ```text
-c.rustx:4:7: rustfmt cannot parse this, probably sugar `rustx-cli fmt` does not handle yet: expected one of `!` or `::`, found `Key`
+refused.rustx:3:9: rustfmt cannot parse this, probably sugar `rustx-cli fmt` does not handle yet: expected identifier, found reserved keyword `gen`
 ```
 
 ## Limits
 
-- Handled: `var` and `shared` bindings, `throw e`, `rc e`, the type prefixes (`iter`, `rc`, `weak`, `shared`, `into T`, `from T`, `&from(a) T`), `~T`, `#[dyn]`, `.m<T>(` and `throws`.
-- Not yet: `bound` and `derive` presets, inline bounds, parameter defaults with call-site defaults and named arguments, and `move[..]` capture lists.
-- Only `.rustx` files: `sugar!` bodies in `.rs` files are not formatted yet, and a Rust file is refused.
+- `bound` and `derive` preset items are kept as written; the code around them is formatted.
+- Lines that rustfmt cannot format stay verbatim, as in ordinary Rust.
