@@ -70,6 +70,24 @@ fn rc_and_weak_types_written_with_short_std_names_become_prefixes() {
 }
 
 #[test]
+fn boxed_trait_objects_and_iterator_types_become_tilde_and_iter() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_box_iter.rs"]);
+    insta::assert_snapshot!("sugar_box_iter_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_box_iter.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded
+            .contains("::std::boxed::Box<dyn Sink + ::core::marker::Send + ::core::marker::Sync>"),
+        "{expanded}"
+    );
+    assert!(
+        expanded.contains("impl ::core::iter::Iterator<Item = &String> + '_"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =
