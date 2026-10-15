@@ -1,0 +1,51 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/named_args.rustx
+---
+mod server {
+    pub fn connect(
+        host: &str,
+        port: ::core::option::Option<u16>,
+        timeout_ms: ::core::option::Option<u64>,
+    ) -> String {
+        let port: u16 = port.unwrap_or(5432);
+        let timeout_ms: u64 = timeout_ms.unwrap_or(5_000);
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+    pub struct Pool;
+    impl Pool {
+        pub fn new(
+            size: ::core::option::Option<usize>,
+            name: ::core::option::Option<&str>,
+        ) -> Self {
+            let size: usize = size.unwrap_or(4);
+            let name: &str = name.unwrap_or("pool");
+            Pool
+        }
+        pub fn spawn(
+            &self,
+            times: ::core::option::Option<usize>,
+            wait: ::core::option::Option<bool>,
+        ) {
+            let times: usize = times.unwrap_or(1);
+            let wait: bool = wait.unwrap_or(false);
+        }
+    }
+    pub fn demo() -> Vec<String> {
+        Pool::new(::core::option::Option::None, ::core::option::Option::Some("db"))
+            .spawn(::core::option::Option::None, ::core::option::Option::Some(true));
+        vec![
+            connect("db", ::core::option::Option::None, ::core::option::Option::None),
+            connect("db", ::core::option::Option::Some(6432),
+            ::core::option::Option::None), connect("db", ::core::option::Option::None,
+            ::core::option::Option::Some(100)), connect("db",
+            ::core::option::Option::Some(6432), ::core::option::Option::Some(100)),
+        ]
+    }
+    pub fn untouched() {
+        let add = |a: u8, b: u8| a + b;
+        let point = Point { x: 1, y: 2 };
+        dsl!(div(class : "x"));
+    }
+}

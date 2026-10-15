@@ -76,13 +76,6 @@ impl Fns {
             });
     }
 
-    pub(super) fn has_defaults(&self) -> bool {
-        self.by_name
-            .values()
-            .flatten()
-            .any(|entry| entry.shape.has_default())
-    }
-
     /// The shapes `qualifier::name(..)` can call: free fns (the qualifier may be a module) and
     /// associated fns of a type named `qualifier`; a bare `name(..)` only reaches free fns.
     pub(super) fn path_call(&self, name: &str, qualifier: Option<&str>) -> Vec<&Shape> {
@@ -180,7 +173,6 @@ mod tests {
                 (Some("d"), "d", true)
             ]
         );
-        assert!(fns.has_defaults());
     }
 
     #[test]

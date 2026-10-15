@@ -1,0 +1,5 @@
+error: named argument `port` needs a call to a fn with parameter defaults declared in this `sugar!` input
+ --> tests/fail/named_args_without_defaults.rs:7:23
+  |
+7 |         connect("db", port: 6432)
+  |                       ^^^^

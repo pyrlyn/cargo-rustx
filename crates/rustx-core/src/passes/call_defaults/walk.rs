@@ -16,6 +16,7 @@ use syn::{
 };
 
 use super::collect::{Fns, Shape, type_name};
+use super::named::{self, Named};
 use super::plan::{Plan, Problem, Slot, plan};
 use crate::passes::param_defaults::default_of;
 use crate::tokens::syntax::combine;
@@ -28,12 +29,11 @@ pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
         collecting: true,
         owner: None,
         changed: false,
+        in_macro: 0,
         errors: None,
     };
     walk.visit_file_mut(file);
-    if !walk.fns.has_defaults() {
-        return Ok(());
-    }
+    // Even without defaults the second walk runs: named arguments still need a report.
     walk.collecting = false;
     walk.visit_file_mut(file);
     walk.errors.map_or(Ok(()), Err)
@@ -48,7 +48,16 @@ struct Walk {
     /// Whether a call was rewritten since the enclosing token stream was parsed, so a macro body
     /// or default without sugar keeps its tokens exactly.
     changed: bool,
+    /// How many macro bodies enclose the walk: there a named argument of a call that is not
+    /// sugar is the macro's own syntax, restored instead of reported.
+    in_macro: usize,
     errors: Option<syn::Error>,
+}
+
+/// One argument of a call: its value, and its name when it was written `name: value`.
+struct Arg {
+    named: Option<Named>,
+    value: Expr,
 }
 
 impl Walk {
@@ -57,44 +66,84 @@ impl Walk {
     }
 
     fn call(&mut self, call: &mut ExprCall) {
-        visit_mut::visit_expr_call_mut(self, call);
-        let Expr::Path(ExprPath {
-            qself: None, path, ..
-        }) = &*call.func
-        else {
+        self.visit_expr_mut(&mut call.func);
+        let Some(args) = self.arguments(&mut call.args) else {
             return;
         };
-        let mut segments = path.segments.iter().rev();
-        let Some(name) = segments.next().map(|segment| segment.ident.clone()) else {
-            return;
-        };
-        let qualifier = match segments.next().map(|segment| segment.ident.to_string()) {
-            Some(word) if word == "Self" => match &self.owner {
-                Some(owner) => Some(owner.clone()),
-                None => return,
-            },
-            other => other,
-        };
-        let shapes = self.fns.path_call(&name.to_string(), qualifier.as_deref());
-        let plans = plans(&shapes, call.args.len());
-        self.apply(&name, plans, &mut call.args, call.paren_token.span.close());
+        let names = names(&args);
+        let resolved = self.path_target(&call.func).and_then(|(name, qualifier)| {
+            let shapes = self.fns.path_call(&name.to_string(), qualifier.as_deref());
+            plans(&shapes, &names).map(|plans| (name, plans))
+        });
+        call.args = self.apply(resolved, args, call.paren_token.span.close());
     }
 
     fn method_call(&mut self, call: &mut ExprMethodCall) {
-        visit_mut::visit_expr_method_call_mut(self, call);
+        self.visit_expr_mut(&mut call.receiver);
+        let Some(args) = self.arguments(&mut call.args) else {
+            return;
+        };
         let shapes = self.fns.method_call(&call.method.to_string());
-        let plans = plans(&shapes, call.args.len());
-        self.apply(
-            &call.method,
-            plans,
-            &mut call.args,
-            call.paren_token.span.close(),
-        );
+        let resolved = plans(&shapes, &names(&args)).map(|plans| (call.method.clone(), plans));
+        call.args = self.apply(resolved, args, call.paren_token.span.close());
     }
 
-    fn apply(&mut self, name: &Ident, plans: Option<Vec<Plan>>, args: &mut Args, close: Span) {
-        let Some(plans) = plans else {
-            return;
+    /// The name a path call is resolved by, and its qualifier with `Self` replaced by the
+    /// enclosing type; `None` for anything else that is called.
+    fn path_target(&self, func: &Expr) -> Option<(Ident, Option<String>)> {
+        let Expr::Path(ExprPath {
+            qself: None, path, ..
+        }) = func
+        else {
+            return None;
+        };
+        let mut segments = path.segments.iter().rev();
+        let name = segments.next()?.ident.clone();
+        let qualifier = match segments.next().map(|segment| segment.ident.to_string()) {
+            Some(word) if word == "Self" => Some(self.owner.clone()?),
+            other => other,
+        };
+        Some((name, qualifier))
+    }
+
+    /// Takes a call's arguments apart, then visits each value; `None` after reporting a named
+    /// argument that does not parse.
+    fn arguments(&mut self, args: &mut Args) -> Option<Vec<Arg>> {
+        let mut out = Vec::with_capacity(args.len());
+        for value in mem::take(args) {
+            out.push(match named::parse(&value) {
+                None => Arg { named: None, value },
+                Some(Ok((named, value))) => Arg {
+                    named: Some(named),
+                    value,
+                },
+                Some(Err(err)) => {
+                    combine(&mut self.errors, err);
+                    return None;
+                }
+            });
+        }
+        for arg in &mut out {
+            self.visit_expr_mut(&mut arg.value);
+        }
+        Some(out)
+    }
+
+    /// The arguments of a call that resolved to the fns of `plans`, or put back as they were
+    /// when it did not or cannot be rewritten.
+    fn apply(&mut self, resolved: Option<(Ident, Vec<Plan>)>, args: Vec<Arg>, close: Span) -> Args {
+        let Some((name, plans)) = resolved else {
+            if self.in_macro == 0 {
+                for named in args.iter().filter_map(|arg| arg.named.as_ref()) {
+                    let message = format!(
+                        "named argument `{}` needs a call to a fn with parameter defaults \
+                         declared in this `sugar!` input",
+                        named.name
+                    );
+                    self.error(named.name.span(), message);
+                }
+            }
+            return unchanged(args);
         };
         if plans.windows(2).any(|pair| pair[0] != pair[1]) {
             self.error(
@@ -104,35 +153,69 @@ impl Walk {
                      differently; calls are matched by name only, so rename one of them"
                 ),
             );
-            return;
+            return unchanged(args);
         }
         match plans.into_iter().next() {
             Some(Ok(slots)) => {
-                *args = fill(mem::take(args), &slots, close);
                 self.changed = true;
+                fill(args, &slots, close)
             }
             Some(Err(problems)) => {
                 for problem in problems {
-                    match problem {
-                        Problem::TooMany { max } => {
-                            let span = args.iter().nth(max).map_or(close, Spanned::span);
-                            self.error(
-                                span,
-                                format!("too many arguments: `{name}` takes at most {max}"),
-                            );
-                        }
-                        Problem::Missing { label } => self.error(
-                            close,
-                            format!(
-                                "missing argument `{label}` of `{name}`; only parameters with \
-                                 a default can be left out"
-                            ),
-                        ),
-                    }
+                    self.report(&name, problem, &args, close);
                 }
+                unchanged(args)
             }
-            None => {}
+            None => unchanged(args),
         }
+    }
+
+    fn report(&mut self, name: &Ident, problem: Problem, args: &[Arg], close: Span) {
+        let value = |at: usize| args.get(at).map_or(close, |arg| arg.value.span());
+        let named = |at: usize| {
+            args.get(at)
+                .and_then(|arg| arg.named.as_ref())
+                .map_or(close, |named| named.name.span())
+        };
+        let label = |at: usize| {
+            args.get(at)
+                .and_then(|arg| arg.named.as_ref())
+                .map(|named| named.name.to_string())
+                .unwrap_or_default()
+        };
+        let (span, message) = match problem {
+            Problem::TooMany { max } => (
+                value(max),
+                format!("too many arguments: `{name}` takes at most {max}"),
+            ),
+            Problem::Missing { label } => (
+                close,
+                format!(
+                    "missing argument `{label}` of `{name}`; only parameters with a default \
+                     can be left out"
+                ),
+            ),
+            Problem::Unknown { arg } => (
+                named(arg),
+                format!("`{name}` has no parameter named `{}`", label(arg)),
+            ),
+            Problem::NotDefaulted { arg } => (
+                named(arg),
+                format!(
+                    "`{}` has no default, so it is passed by position, not by name",
+                    label(arg)
+                ),
+            ),
+            Problem::Duplicate { arg } => (
+                named(arg),
+                format!("`{}` is given more than once", label(arg)),
+            ),
+            Problem::PositionalAfterNamed { arg } => (
+                value(arg),
+                "a positional argument cannot follow a named one".to_owned(),
+            ),
+        };
+        self.error(span, message);
     }
 
     /// Visits code that lives in an opaque token stream (a macro body, a parameter default) and
@@ -165,16 +248,31 @@ impl Walk {
     }
 }
 
+fn names(args: &[Arg]) -> Vec<Option<String>> {
+    args.iter()
+        .map(|arg| arg.named.as_ref().map(|named| named.name.to_string()))
+        .collect()
+}
+
 /// The plans of every candidate, or `None` when none has a default and the call is plain Rust.
-fn plans(shapes: &[&Shape], given: usize) -> Option<Vec<Plan>> {
+fn plans(shapes: &[&Shape], names: &[Option<String>]) -> Option<Vec<Plan>> {
     shapes
         .iter()
         .any(|shape| shape.has_default())
-        .then(|| shapes.iter().map(|shape| plan(shape, given)).collect())
+        .then(|| shapes.iter().map(|shape| plan(shape, names)).collect())
 }
 
-fn fill(args: Args, slots: &[Slot], close: Span) -> Args {
-    let mut given: Vec<Option<Expr>> = args.into_iter().map(Some).collect();
+fn unchanged(args: Vec<Arg>) -> Args {
+    args.into_iter()
+        .map(|arg| match arg.named {
+            Some(named) => named::rebuild(named, &arg.value),
+            None => arg.value,
+        })
+        .collect()
+}
+
+fn fill(args: Vec<Arg>, slots: &[Slot], close: Span) -> Args {
+    let mut given: Vec<Option<Expr>> = args.into_iter().map(|arg| Some(arg.value)).collect();
     let mut take = |at: usize| given.get_mut(at).and_then(Option::take);
     slots
         .iter()
@@ -294,30 +392,53 @@ impl VisitMut for Walk {
         if self.collecting {
             return;
         }
-        let Ok(body) = mac.parse_body::<MacroArgs>() else {
-            return;
-        };
-        self.opaque(&mut mac.tokens, body, |walk, body| match body {
-            MacroArgs::List(list) => list.iter_mut().for_each(|arg| walk.visit_expr_mut(arg)),
-            MacroArgs::Repeat(value, _, count) => {
-                walk.visit_expr_mut(value);
-                walk.visit_expr_mut(count);
+        if let Some(name) = named::marker_name(mac) {
+            // A marker the walk reaches on its own is not an argument of any call.
+            if self.in_macro == 0 {
+                self.error(
+                    name,
+                    "a named argument such as `port: 6432` is only allowed in a call".to_owned(),
+                );
             }
-        });
+            return;
+        }
+        if let Ok(body) = mac.parse_body::<MacroArgs>() {
+            self.in_macro += 1;
+            self.opaque(&mut mac.tokens, body, |walk, body| match body {
+                MacroArgs::List(list) => list.iter_mut().for_each(|arg| walk.visit_expr_mut(arg)),
+                MacroArgs::Repeat(value, _, count) => {
+                    walk.visit_expr_mut(value);
+                    walk.visit_expr_mut(count);
+                }
+            });
+            self.in_macro -= 1;
+        }
+        if let Some(restored) = named::restore(&mac.tokens) {
+            mac.tokens = restored;
+        }
     }
 
-    /// A parameter default is code too: it is lowered into the fn body after this pass.
+    /// A parameter default is code too: it is lowered into the fn body after this pass. Any
+    /// other attribute belongs to whoever reads it, so it gets back what the user wrote.
     fn visit_attribute_mut(&mut self, attr: &mut Attribute) {
         if self.collecting {
             return;
         }
-        let Some(Ok(expr)) = default_of(slice::from_ref(attr)).map(|default| default.expr) else {
+        let default = default_of(slice::from_ref(attr)).map(|default| default.expr);
+        let Meta::List(list) = &mut attr.meta else {
             return;
         };
-        if let Meta::List(list) = &mut attr.meta {
-            self.opaque(&mut list.tokens, expr, |walk, expr| {
+        match default {
+            Some(Ok(expr)) => self.opaque(&mut list.tokens, expr, |walk, expr| {
                 walk.visit_expr_mut(expr);
-            });
+            }),
+            // `param_defaults::lower` reports a default that does not parse.
+            Some(Err(_)) => {}
+            None => {
+                if let Some(restored) = named::restore(&list.tokens) {
+                    list.tokens = restored;
+                }
+            }
         }
     }
 }

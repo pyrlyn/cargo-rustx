@@ -1,15 +1,24 @@
-//! Default arguments at call sites (problem 17): a call in the same input to a fn with parameter
-//! defaults may leave defaulted arguments out.
+//! Default and named arguments at call sites (problem 17): a call in the same input to a fn with
+//! parameter defaults may leave defaulted arguments out or pass them by name.
 //!
-//! An AST pass that runs before `param_defaults::lower`, while every defaulted parameter still
-//! carries its marker (see `param_defaults::default_of`). Arguments at defaulted positions
-//! become `Some(..)`, omitted trailing ones `None`; the others stay as written:
+//! Two halves, because `name: value` in a call does not parse:
+//!
+//! 1. Token pass ([`named`]): `port: 6432` at the start of a call argument becomes the marker
+//!    `__rustx_named!(port = 6432)`.
+//! 2. AST pass, before `param_defaults::lower`, while every defaulted parameter still carries its
+//!    marker (see `param_defaults::default_of`). Positional arguments fill parameters in order,
+//!    named ones the defaulted parameter of that name; arguments at defaulted positions become
+//!    `Some(..)`, omitted ones `None`, the others stay as written:
 //!
 //! ```text
 //! fn connect(host: &str, port: u16 = 5432, timeout_ms: u64 = 5_000) -> String { .. }
-//! connect("db")        → connect("db", ::core::option::Option::None, ::core::option::Option::None)
-//! connect("db", 6432)  → connect("db", ::core::option::Option::Some(6432), ::core::option::Option::None)
+//! connect("db")                 → connect("db", None, None)
+//! connect("db", 6432)           → connect("db", Some(6432), None)
+//! connect("db", timeout_ms: 100) → connect("db", None, Some(100))
 //! ```
+//!
+//! (`None` and `Some` are spelled `::core::option::Option::None` and `::core::option::Option::Some`.)
+//! Only defaulted parameters take a name, so a name never moves a required argument.
 //!
 //! `Some(..)` takes the span of its argument, `None` the span of the call's `)`.
 //!
@@ -34,7 +43,12 @@
 //! # Errors
 //!
 //! Reported together, on the user's tokens: too many arguments (at the first one too many), a
-//! missing argument without a default (at the call's `)`), and an ambiguous name (at the name).
+//! missing argument without a default (at the call's `)`), an ambiguous name (at the name), and
+//! for named arguments (at the name): no such parameter, a parameter without a default, a name
+//! given twice or for a parameter already given by position, a positional argument after a
+//! named one (at that argument), a value missing after `name:` (at the `:`), and a named
+//! argument in a call that resolves to no defaulted fn. In a macro body that last one is the
+//! macro's own syntax: the marker is turned back into `name: value` for the macro to read.
 //!
 //! # Limitations
 //!
@@ -43,10 +57,20 @@
 //! - `<T as Trait>::f(..)` and method calls through the path form (`Type::method(&x, ..)`) are not
 //!   resolved; they need every argument, as `Option`s.
 //! - Calls outside the input see the real `Option<T>` signature.
+//! - Named arguments are evaluated in declaration order, not in the order they are written.
+//! - A call with generic arguments (`f::<T>(..)`, `x.m<T>(..)`) takes no named arguments: its
+//!   argument group follows a `>`, which the token half does not trace back.
 
 mod collect;
+mod named;
 mod plan;
 mod walk;
+
+use proc_macro2::TokenStream;
+
+pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
+    named::rewrite(tokens)
+}
 
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
     walk::lower(file)
@@ -245,6 +269,108 @@ mod tests {
         assert_eq!(
             expanded.map(|tokens| tokens.to_string()).ok(),
             Some(valid.to_string())
+        );
+    }
+
+    #[test]
+    fn named_arguments_fill_their_parameter_and_the_rest_defaults() {
+        let connect = connect();
+        assert_eq!(
+            demo(quote! {
+                #connect
+                fn demo() {
+                    connect("db", port: 6432);
+                    connect("db", timeout_ms: 100);
+                    connect("db", timeout_ms: 1, port: 2);
+                    vec![connect("db", port: 1)];
+                }
+            }),
+            block(quote! {{
+                connect("db", ::core::option::Option::Some(6432), ::core::option::Option::None);
+                connect("db", ::core::option::Option::None, ::core::option::Option::Some(100));
+                connect("db", ::core::option::Option::Some(2), ::core::option::Option::Some(1));
+                vec![connect("db", ::core::option::Option::Some(1), ::core::option::Option::None)];
+            }})
+        );
+    }
+
+    #[test]
+    fn named_arguments_reach_methods_and_associated_fns() {
+        assert_eq!(
+            demo(quote! {
+                struct Pool;
+                impl Pool {
+                    fn new(size: usize = 4, name: &str = "p") -> Self { Pool }
+                    fn spawn(&self, n: usize = 1, wait: bool = false) {}
+                }
+                fn demo() { Pool::new(name: "x").spawn(wait: true); }
+            }),
+            block(quote! {{
+                Pool::new(::core::option::Option::None, ::core::option::Option::Some("x"))
+                    .spawn(::core::option::Option::None, ::core::option::Option::Some(true));
+            }})
+        );
+    }
+
+    #[test]
+    fn misused_names_are_reported_together() {
+        let connect = connect();
+        assert_eq!(
+            demo(quote! {
+                #connect
+                fn demo() {
+                    connect("db", prot: 1);
+                    connect(host: "db");
+                    connect("db", 1, port: 2);
+                    connect("db", port: 1, 2);
+                }
+            }),
+            "`connect` has no parameter named `prot`\n\
+             `host` has no default, so it is passed by position, not by name\n\
+             missing argument `host` of `connect`; only parameters with a default can be left out\n\
+             `port` is given more than once\n\
+             a positional argument cannot follow a named one"
+        );
+    }
+
+    #[test]
+    fn a_named_argument_outside_a_sugar_call_is_an_error() {
+        assert_eq!(
+            demo(quote! { fn plain(a: u8) {} fn demo() { plain(a: 1); (f)(b: 2); } }),
+            "named argument `a` needs a call to a fn with parameter defaults declared in this \
+             `sugar!` input\n\
+             named argument `b` needs a call to a fn with parameter defaults declared in this \
+             `sugar!` input"
+        );
+    }
+
+    #[test]
+    fn a_macro_gets_back_its_own_name_value_syntax() {
+        let connect = connect();
+        let body = quote! {{
+            dsl!(div(class: "x"), [span(id: 1)]);
+            vec![node(class: "y")];
+            #[my_attr(key(name: v))]
+            let x = 1;
+        }};
+        let expanded = demo(quote! { #connect fn demo() #body });
+        assert_eq!(expanded, block(body));
+    }
+
+    #[test]
+    fn named_arguments_work_inside_parameter_defaults() {
+        let expanded = crate::try_expand(quote! {
+            fn base(scale: u64 = 1, offset: u64 = 0) -> u64 { scale + offset }
+            fn wait(ms: u64 = base(offset: 5)) -> u64 { ms }
+        })
+        .map(|file| file.into_token_stream().to_string())
+        .unwrap_or_default();
+        assert!(
+            expanded.contains(
+                "ms . unwrap_or_else (| | base (:: core :: option :: Option :: None , \
+                 :: core :: option :: Option :: Some (5)))"
+            ),
+            "{expanded}"
         );
     }
 }

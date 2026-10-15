@@ -1,0 +1,5 @@
+error: expected a value after `port:`
+ --> tests/fail/named_args_missing_value.rs:7:27
+  |
+7 |         connect("db", port:)
+  |                           ^

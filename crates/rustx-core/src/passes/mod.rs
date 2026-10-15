@@ -24,13 +24,15 @@ type TokenPass = fn(TokenStream) -> syn::Result<TokenStream>;
 type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 
 // `bound` presets first so later passes see ordinary traits; inline bounds and `from` lifetimes
-// before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`.
+// before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Named
+// arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     bound_presets::rewrite,
     inline_bounds::rewrite,
     into_params::rewrite,
     param_defaults::rewrite,
+    call_defaults::rewrite,
     from_lifetimes::rewrite,
     prefix_types::rewrite,
     turbofish::rewrite,

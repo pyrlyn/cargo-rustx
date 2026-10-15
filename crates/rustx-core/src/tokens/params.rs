@@ -35,7 +35,7 @@ where
 }
 
 /// Index of the parameter group when `fn` stands at `i`: `fn name(..)` or `fn name<..>(..)`.
-fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
+pub(crate) fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
     if !matches!(&seq[i], TokenTree::Ident(word) if word == "fn")
         || !matches!(seq.get(i + 1)?, TokenTree::Ident(_))
     {
