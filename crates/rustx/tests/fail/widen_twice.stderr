@@ -1,0 +1,5 @@
+error: `#[widen]` is given twice
+ --> tests/fail/widen_twice.rs:3:5
+  |
+3 |     #[widen]
+  |     ^^^^^^^^

@@ -1,0 +1,5 @@
+error: `#[widen]` goes on a fn, an `impl` or a module, or as `#![widen]` at the start of the input
+ --> tests/fail/widen_not_a_fn.rs:2:5
+  |
+2 |     #[widen]
+  |     ^^^^^^^^

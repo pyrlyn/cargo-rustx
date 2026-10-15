@@ -1,0 +1,73 @@
+// Problem 13: inside `#[widen]`, lossless number conversions between written types are implicit;
+// lossy ones keep their `as`. The second module shows every position, shadowing, and what stays.
+#[widen]
+mod summary {
+    #[data]
+    pub struct Sample { timestamp_ms: u64, bytes: u32, latency_us: u16 }
+
+    #[data]
+    pub struct Summary { total_bytes: u64, avg_latency_us: f64, throughput_bps: f64, window_s: f32 }
+
+    pub fn summarize(samples: &[Sample]) -> Option<Summary> {
+        let first = samples.first()?;
+        let last = samples.last()?;
+        var total_bytes: u64 = 0;
+        var latency_sum: u64 = 0;
+        for s in samples {
+            total_bytes += s.bytes;
+            latency_sum += s.latency_us;
+        }
+        let n = samples.len() as f64;
+        let window_ms = (last.timestamp_ms - first.timestamp_ms).max(1);
+        let window_s = window_ms as f64 / 1000.0;
+        Some(Summary::new(
+            total_bytes,
+            latency_sum as f64 / n,
+            total_bytes as f64 * 8.0 / window_s,
+            window_s as f32,
+        ))
+    }
+
+    pub fn bucket(latency_us: u16) -> usize {
+        let v: u32 = latency_us;
+        (v / 100) as usize
+    }
+}
+
+mod positions {
+    pub struct Counter { total: u64, peak: i64, ratio: f64 }
+
+    #[widen]
+    impl Counter {
+        pub fn new(total: u64, peak: i64, ratio: f64) -> Self {
+            Counter { total, peak, ratio }
+        }
+
+        pub fn add(&mut self, n: u32, level: i16) {
+            self.total += n;
+            self.peak = level;
+        }
+    }
+
+    pub fn scale(x: u64, by: f64) -> f64 { x as f64 * by }
+
+    #[widen]
+    pub fn demo(small: u8, half: f32, c: &mut Counter) -> f64 {
+        let wide: u64 = small;
+        let mut sum: i32 = 0;
+        sum += small;
+        c.total += small;
+        let fresh = Counter::new(small, -1, half);
+        c.ratio = half;
+        let small = 3;
+        let still: u64 = small;
+        let lossy: f32 = wide as f32;
+        sum <<= small;
+        scale(wide, half) + fresh.ratio + lossy as f64 + still as f64
+    }
+
+    pub fn unmarked(small: u8) -> u64 {
+        let x: u64 = small.into();
+        x
+    }
+}

@@ -1,0 +1,5 @@
+error: `#[widen]` takes no arguments
+ --> tests/fail/widen_arguments.rs:2:7
+  |
+2 |     #[widen(all)]
+  |       ^^^^^^^^^^
