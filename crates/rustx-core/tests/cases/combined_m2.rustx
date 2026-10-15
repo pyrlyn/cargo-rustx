@@ -1,0 +1,26 @@
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Scene {
+    shapes: Vec<~Shape>,
+    parent: Option<weak Scene>,
+}
+
+impl Scene {
+    fn areas(&self) -> iter f64 {
+        self.shapes.iter().map(|s| s.area())
+    }
+
+    fn total(&self, extra: &str) -> f64 {
+        var sum = extra.parse<f64>().unwrap_or(0.0);
+        for a in self.areas().collect<Vec>() {
+            sum += a;
+        }
+        sum
+    }
+}
+
+fn shared(scene: Scene) -> rc Scene {
+    std::rc::Rc::new(std::cell::RefCell::new(scene))
+}
