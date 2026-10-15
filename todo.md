@@ -1,2 +1,1 @@
-- T17. M4: `#[newtype]`
 - T18. M4: standalone attribute macros

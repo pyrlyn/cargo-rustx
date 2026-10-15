@@ -6,14 +6,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
-| T17 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T18 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
-
-### T17. M4: `#[newtype]`
-
-Problem 20. `#[newtype(deref, display, from_str, validate = check)] pub struct Email(String);` generates one impl per flag, plus `new` (fallible with `validate`).
-
-Plan: fill the registered stub `passes/newtype.rs` (AST pass, after `from_display`). Parse the flags with `parse_nested_meta` (unknown, repeated and valueless `validate` flags are errors), emit one impl per flag right after the struct, and reuse `from_display`'s format helpers and the `syntax` helpers. Verify with a snapshot case from problem 20, a pass test with asserts and pinned fail tests; `just check` green, no existing snapshot or `.stderr` changed.
 
 ### T18. M4: standalone attribute macros
 
