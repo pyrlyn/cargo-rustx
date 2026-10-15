@@ -4,9 +4,12 @@
 //! Token passes run first, in list order, because their output must parse as Rust.
 //! AST passes then run on the parsed file; all of them run so errors are reported together.
 
+mod borrows;
 mod bound_presets;
 mod from_lifetimes;
 mod inline_bounds;
+mod into_params;
+mod param_defaults;
 mod prefix_types;
 mod turbofish;
 mod var;
@@ -24,12 +27,21 @@ const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     bound_presets::rewrite,
     inline_bounds::rewrite,
+    into_params::rewrite,
+    param_defaults::rewrite,
     from_lifetimes::rewrite,
     prefix_types::rewrite,
     turbofish::rewrite,
 ];
 
-const AST_PASSES: &[AstPass] = &[inline_bounds::lower, from_lifetimes::lower];
+// `#[borrows]` before `from` lifetimes, so `from(Self)` finds the type's lifetime.
+const AST_PASSES: &[AstPass] = &[
+    inline_bounds::lower,
+    into_params::lower,
+    param_defaults::lower,
+    borrows::lower,
+    from_lifetimes::lower,
+];
 
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {
