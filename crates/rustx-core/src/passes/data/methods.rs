@@ -5,6 +5,7 @@ use quote::{format_ident, quote_spanned};
 use syn::{Item, Type};
 
 use super::{Data, DataField, builder};
+use crate::tokens::syntax::is_string;
 
 /// Primitive types whose getters return the value.
 const COPY: &[&str] = &[
@@ -104,25 +105,6 @@ fn is_copy(ty: &Type) -> bool {
             .is_some_and(|name| COPY.iter().any(|copy| name == copy)),
         _ => false,
     }
-}
-
-/// `String`, `std::string::String` or `alloc::string::String`, read as the owned string.
-pub(in crate::passes) fn is_string(ty: &Type) -> bool {
-    let Type::Path(path) = ty else {
-        return false;
-    };
-    if path.qself.is_some() || path.path.segments.iter().any(|s| !s.arguments.is_none()) {
-        return false;
-    }
-    let names: Vec<String> = path
-        .path
-        .segments
-        .iter()
-        .map(|s| s.ident.to_string())
-        .collect();
-    names == ["String"]
-        || names == ["std", "string", "String"]
-        || names == ["alloc", "string", "String"]
 }
 
 #[cfg(test)]

@@ -32,7 +32,7 @@
 pub(super) mod format;
 mod lower;
 
-pub(super) use lower::{Header, lower};
+pub(super) use lower::lower;
 
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
 

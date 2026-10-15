@@ -10,9 +10,10 @@ use quote::{ToTokens, quote, quote_spanned};
 use syn::ext::IdentExt;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{Attribute, Fields, Generics, Item, ItemEnum, LitStr, Token};
+use syn::{Attribute, Fields, Item, ItemEnum, LitStr, Token};
 
 use super::{FROM_MARKER, FROM_SHAPE, format};
+use crate::passes::impl_header::ImplHeader;
 use crate::passes::item_lists::{Entry, ExpandList, for_each_list, insert_after};
 use crate::tokens::syntax::{combine, derived_paths, introduced_span, take_attr};
 
@@ -28,27 +29,6 @@ struct Lower {
     errors: Option<syn::Error>,
 }
 
-/// The type an impl is for: its name and generics, copied into every impl header.
-pub(in crate::passes) struct Header<'a> {
-    pub(in crate::passes) ident: &'a Ident,
-    pub(in crate::passes) generics: &'a Generics,
-}
-
-impl Header<'_> {
-    pub(in crate::passes) fn implement(
-        &self,
-        span: Span,
-        tr: &TokenStream,
-        body: &TokenStream,
-    ) -> TokenStream {
-        let ident = self.ident;
-        let (impl_generics, type_generics, where_clause) = self.generics.split_for_impl();
-        quote_spanned! {span=>
-            impl #impl_generics #tr for #ident #type_generics #where_clause { #body }
-        }
-    }
-}
-
 impl Lower {
     fn generate(&mut self, item: &mut Item) -> Vec<Item> {
         let Item::Enum(item) = item else {
@@ -61,7 +41,7 @@ impl Lower {
             variants,
             ..
         } = item;
-        let header = Header { ident, generics };
+        let header = ImplHeader { ident, generics };
         let mut impls = self.conversions(&header, variants);
         // A derived `Display` owns the `#[display]` attributes; leave them to it.
         if !derived.iter().any(|name| name == "Display") {
@@ -89,7 +69,7 @@ impl Lower {
 
     fn conversions(
         &mut self,
-        header: &Header,
+        header: &ImplHeader,
         variants: &mut Punctuated<syn::Variant, Token![,]>,
     ) -> Vec<TokenStream> {
         let mut impls = Vec::new();
@@ -133,7 +113,7 @@ impl Lower {
 /// `impl Display` from the variants' `#[display]` attributes, which it removes, and the span of
 /// the first one; `None` when no variant has one.
 fn display_impl(
-    header: &Header,
+    header: &ImplHeader,
     variants: &mut Punctuated<syn::Variant, Token![,]>,
 ) -> syn::Result<Option<(Span, TokenStream)>> {
     let attrs: Vec<Option<Attribute>> = variants

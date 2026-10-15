@@ -53,7 +53,7 @@ mod std_traits;
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::Span;
-use quote::{ToTokens, quote_spanned};
+use quote::{ToTokens, quote};
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{Field, Index, Item, ItemImpl, ItemStruct, ItemTrait, Member, Path, TraitItem, Type};
@@ -61,6 +61,7 @@ use syn::{Field, Index, Item, ItemImpl, ItemStruct, ItemTrait, Member, Path, Tra
 use self::forward::Target;
 use self::spec::Delegation;
 use super::borrows;
+use super::impl_header::ImplHeader;
 use super::item_lists::{Entry, ExpandList, for_each_list};
 use crate::tokens::syntax::{combine, take_attr};
 
@@ -232,12 +233,12 @@ impl Walk {
         }
         let owner = &request.owner;
         except::without_impl(delegation, &owner.ident)?;
-        let ident = &owner.ident;
-        let (impl_generics, type_generics, where_clause) = owner.generics.split_for_impl();
-        syn::parse2(quote_spanned!(span=>
-            impl #impl_generics #path for #ident #type_generics #where_clause { #(#items)* }
-        ))
-        .map(Some)
+        let header = ImplHeader {
+            ident: &owner.ident,
+            generics: &owner.generics,
+        };
+        let tr = path.to_token_stream();
+        syn::parse2(header.implement(span, &tr, &quote!(#(#items)*))).map(Some)
     }
 
     /// The path the impl names and the items to forward, in the order the module docs list.

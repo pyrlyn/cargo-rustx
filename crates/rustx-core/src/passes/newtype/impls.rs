@@ -6,9 +6,8 @@ use quote::{ToTokens, quote_spanned};
 use syn::{GenericArgument, Item, PathArguments, Type};
 
 use super::{Flag, Kind, Newtype};
-use crate::passes::data::is_string;
-use crate::passes::from_display::Header;
-use crate::tokens::syntax::introduced_span;
+use crate::passes::impl_header::ImplHeader;
+use crate::tokens::syntax::{introduced_span, is_string, std_type};
 
 pub(super) fn generate(newtype: &Newtype, flags: &[Flag]) -> syn::Result<Vec<Item>> {
     let mut items = vec![constructor(newtype)];
@@ -42,7 +41,7 @@ fn constructor(newtype: &Newtype) -> TokenStream {
 fn flag_impl(newtype: &Newtype, flag: &Flag) -> TokenStream {
     let span = flag.name.span();
     let inner = newtype.inner;
-    let header = Header {
+    let header = ImplHeader {
         ident: &newtype.item.ident,
         generics: &newtype.item.generics,
     };
@@ -96,30 +95,13 @@ fn target(inner: &Type, span: Span) -> TokenStream {
     }
 }
 
-/// `T` of `Vec<T>`, `std::vec::Vec<T>` or `alloc::vec::Vec<T>`, read like `is_string`.
+/// `T` of `Vec<T>`, `std::vec::Vec<T>` or `alloc::vec::Vec<T>`.
 fn vec_element(ty: &Type) -> Option<&Type> {
-    let Type::Path(path) = ty else {
+    let PathArguments::AngleBracketed(args) = std_type(ty, "vec", "Vec")? else {
         return None;
     };
-    let mut segments = path.path.segments.iter();
-    let last = segments.next_back()?;
-    let prefix: Vec<String> = segments
-        .map(|s| s.arguments.is_none().then(|| s.ident.to_string()))
-        .collect::<Option<_>>()?;
-    let in_std = match &prefix[..] {
-        [] => true,
-        [root, module] => (root == "std" || root == "alloc") && module == "vec",
-        _ => false,
-    };
-    let PathArguments::AngleBracketed(args) = &last.arguments else {
-        return None;
-    };
-    match args.args.first() {
-        Some(GenericArgument::Type(element))
-            if path.qself.is_none() && in_std && last.ident == "Vec" && args.args.len() == 1 =>
-        {
-            Some(element)
-        }
+    match (args.args.first(), args.args.len()) {
+        (Some(GenericArgument::Type(element)), 1) => Some(element),
         _ => None,
     }
 }

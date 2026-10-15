@@ -35,8 +35,6 @@
 mod builder;
 mod methods;
 
-pub(super) use methods::is_string;
-
 use std::collections::HashSet;
 use std::mem;
 

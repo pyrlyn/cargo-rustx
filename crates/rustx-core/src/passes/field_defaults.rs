@@ -64,9 +64,10 @@ use syn::{
     ItemStruct, ItemUnion, Lit, Macro, Type, Variant, parse_quote_spanned,
 };
 
+use crate::passes::impl_header::ImplHeader;
 use crate::passes::item_lists::{Entry, insert_after};
 use crate::passes::macro_args::MacroArgs;
-use crate::tokens::syntax::{combine, derived_paths};
+use crate::tokens::syntax::{combine, derived_paths, is_string};
 
 /// Std macros whose arguments are all expressions, so a struct literal in them is never a
 /// pattern.
@@ -138,17 +139,16 @@ impl Lower {
             );
             return None;
         }
-        let name = &item.ident;
+        let span = item.ident.span();
         let cfgs = item.attrs.iter().filter(|attr| is_cfg(attr));
-        let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
-        let default = quote_spanned! {name.span()=>
-            #(#cfgs)*
-            impl #impl_generics ::core::default::Default for #name #ty_generics #where_clause {
-                fn default() -> Self {
-                    Self { #(#values,)* }
-                }
-            }
+        let header = ImplHeader {
+            ident: &item.ident,
+            generics: &item.generics,
         };
+        let tr = quote_spanned!(span=> ::core::default::Default);
+        let body = quote_spanned!(span=> fn default() -> Self { Self { #(#values,)* } });
+        let default_impl = header.implement(span, &tr, &body);
+        let default = quote!(#(#cfgs)* #default_impl);
         syn::parse2(default)
             .map_err(|err| combine(&mut self.errors, err))
             .ok()
@@ -253,7 +253,7 @@ fn field_value(field: &mut Field) -> TokenStream {
 /// The value a field default `= expr` stands for. Shared with `#[data]`, whose `new` and builder
 /// must initialise the field exactly as `Default` does.
 pub(super) fn default_value(expr: &Expr, ty: &Type) -> Expr {
-    if is_str_literal(expr) && written_as_string(ty) {
+    if is_str_literal(expr) && is_string(ty) {
         parse_quote_spanned!(expr.span()=> ::core::convert::Into::into(#expr))
     } else {
         expr.clone()
@@ -272,12 +272,6 @@ fn is_str_literal(expr: &Expr) -> bool {
             ..
         })
     )
-}
-
-fn written_as_string(ty: &Type) -> bool {
-    matches!(ty, Type::Path(path) if path.qself.is_none()
-        && path.path.segments.last().is_some_and(|last| last.ident == "String"
-            && last.arguments.is_none()))
 }
 
 /// The span of `Default` in the struct's `#[derive(..)]`, if it derives it.

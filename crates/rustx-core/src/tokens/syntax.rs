@@ -6,7 +6,7 @@
 
 use proc_macro2::{Ident, Span};
 use syn::punctuated::Punctuated;
-use syn::{Attribute, Path, Token, Type};
+use syn::{Attribute, Path, PathArguments, Token, Type};
 
 /// Prefix of every name the passes generate; reserved, so user names cannot collide with them.
 pub(crate) const RESERVED_PREFIX: &str = "__rustx_";
@@ -53,6 +53,31 @@ pub(crate) fn derived_paths(attrs: &[Attribute]) -> impl Iterator<Item = Path> +
                 .ok()
         })
         .flatten()
+}
+
+/// The generic arguments of `ty` when it is written as the std type `name` of `module`: bare,
+/// or as `std::module::name` or `alloc::module::name`. A macro sees only the written path, so a
+/// renamed import or an alias is not recognised.
+pub(crate) fn std_type<'a>(ty: &'a Type, module: &str, name: &str) -> Option<&'a PathArguments> {
+    let Type::Path(path) = ty else {
+        return None;
+    };
+    let mut segments = path.path.segments.iter();
+    let last = segments.next_back()?;
+    let prefix: Vec<String> = segments
+        .map(|s| s.arguments.is_none().then(|| s.ident.to_string()))
+        .collect::<Option<_>>()?;
+    let in_std = match &prefix[..] {
+        [] => true,
+        [root, inner] => (root == "std" || root == "alloc") && inner == module,
+        _ => false,
+    };
+    (path.qself.is_none() && in_std && last.ident == name).then_some(&last.arguments)
+}
+
+/// `String`, `std::string::String` or `alloc::string::String`.
+pub(crate) fn is_string(ty: &Type) -> bool {
+    std_type(ty, "string", "String").is_some_and(PathArguments::is_none)
 }
 
 pub(crate) fn is_marker(attr: &Attribute) -> bool {
@@ -111,6 +136,25 @@ mod tests {
             .map(|path| quote::ToTokens::to_token_stream(&path).to_string())
             .collect();
         assert_eq!(paths, ["Debug", "std :: hash :: Hash", "Clone"]);
+    }
+
+    #[test]
+    fn std_types_are_recognised_by_their_written_path() {
+        let ty = |source: &str| syn::parse_str::<Type>(source).unwrap();
+        for string in ["String", "std::string::String", "alloc::string::String"] {
+            assert!(is_string(&ty(string)), "{string}");
+        }
+        for other in [
+            "my::String",
+            "std::String",
+            "String<u8>",
+            "<T as X>::String",
+            "&String",
+        ] {
+            assert!(!is_string(&ty(other)), "{other}");
+        }
+        assert!(std_type(&ty("std::vec::Vec<u8>"), "vec", "Vec").is_some());
+        assert!(std_type(&ty("core::vec::Vec<u8>"), "vec", "Vec").is_none());
     }
 
     #[test]
