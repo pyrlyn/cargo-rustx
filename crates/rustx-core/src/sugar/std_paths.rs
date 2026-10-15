@@ -266,7 +266,10 @@ fn starts_a_path(seq: &[TokenTree], at: usize, leading: bool) -> bool {
         };
     }
     let continues = at >= 2 && is_path_sep(seq, at - 2);
-    let names_a_member = matches!(before, TokenTree::Punct(punct) if matches!(punct.as_char(), '.' | '$' | '\'' | '#'));
+    // The second `.` of `..` ends a range or a struct rest, after which a path starts.
+    let after_dots = at >= 2
+        && matches!(&seq[at - 2], TokenTree::Punct(dot) if dot.as_char() == '.' && dot.spacing() == Spacing::Joint);
+    let names_a_member = matches!(before, TokenTree::Punct(punct) if matches!(punct.as_char(), '$' | '\'' | '#') || punct.as_char() == '.' && !after_dots);
     !continues && !names_a_member
 }
 
@@ -471,6 +474,21 @@ mod tests {
             "Default::default()",
             "::core::default::Default::default()"
         ));
+    }
+
+    #[test]
+    fn a_path_after_a_range_or_a_struct_rest_is_equal_and_a_member_is_not() {
+        assert!(same(
+            "",
+            "S { a: 1, ..Default::default() }",
+            "S { a: 1, ..::core::default::Default::default() }"
+        ));
+        assert!(same(
+            "",
+            "0..Default::default()",
+            "0..::core::default::Default::default()"
+        ));
+        assert!(!same("", "x.Default", "x.::core::default::Default"));
     }
 
     #[test]
