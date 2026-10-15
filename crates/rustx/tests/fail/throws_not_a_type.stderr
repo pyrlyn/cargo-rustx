@@ -1,0 +1,5 @@
+error: expected an error type after `throws`, as in `-> T throws MyError`
+ --> tests/fail/throws_not_a_type.rs:2:33
+  |
+2 |     fn parse(text: &str) -> u32 throws "bad input" {
+  |                                 ^^^^^^

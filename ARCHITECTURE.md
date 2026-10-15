@@ -19,7 +19,7 @@ Crate layout:
 
 - `rustx-core` — parser, AST, desugarer, diagnostics. Plain library, testable without proc-macro context.
 - `rustx-macros` — thin `proc-macro = true` crate: `sugar!` and the attribute macros `#[sugared]`, `#[data]`, `#[display]`, `#[delegate]`, `#[newtype]`.
-- `rustx` — facade crate re-exporting macros plus runtime helpers (`Shared<T>`, `with`/`with_mut` for `rc T`, `throws` result alias).
+- `rustx` — facade crate re-exporting macros plus runtime helpers (`Shared<T>`, `with`/`with_mut` for `rc T`, the `anyhow` re-export behind `throws`).
 - `rustx-cli` (later) — `rustx expand`, `rustx fmt`.
 
 ## b) Components
@@ -36,7 +36,7 @@ Crate layout:
    - `&from(a) T` → introduce `'__a`, add to generics, rewrite param `a` to `&'__a`.
    - inline bounds → hoist into `Generics` / `where`.
    - `.m<T>(` → `.m::<T>(`, fill missing args with `_` for known std collections.
-   - `T throws` → `rustx::Result<T>` (= `anyhow::Result<T>`), wrap tail in `Ok(..)`, `throw e` → `return Err(e.into())`.
+   - `T throws` → `::rustx::anyhow::Result<T>`, `T throws E` → `Result<T, E>`, wrap tail in `Ok(..)`, `throw e` → `return Err(e.into())`.
    - `move[a.clone(), ..] || body` → `{ let a = a.clone(); move || body }`.
    - `iter T` → `impl Iterator<Item = T> + '_` (or with the `from` lifetime).
    - `async fn` in traits → native AFIT, or `dynosaur`-generated boxing when the trait is used as `dyn`/`~` (maintained crate; no hand-rolled boxing).

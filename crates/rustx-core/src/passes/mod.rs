@@ -46,6 +46,8 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 // arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
 // Capture lists last: they read the closure after them with `syn`, which needs every other
 // sugar in it gone.
+// `throws` after `prefix_types`: moved into `Result<..>` first, `iter &T` would sit after `<`,
+// where `prefix_types` cannot tell it from a comparison.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     shared::rewrite,
@@ -58,8 +60,8 @@ const TOKEN_PASSES: &[TokenPass] = &[
     param_defaults::rewrite,
     call_defaults::rewrite,
     from_lifetimes::rewrite,
-    throws::rewrite,
     prefix_types::rewrite,
+    throws::rewrite,
     rc_values::rewrite,
     turbofish::rewrite,
     capture_lists::rewrite,

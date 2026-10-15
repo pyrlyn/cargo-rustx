@@ -7,3 +7,7 @@ mod shared;
 
 pub use rustx_macros::{data, delegate, display, newtype, sugar, sugared};
 pub use shared::Shared;
+
+/// The error type behind `-> T throws`, which desugars to `::rustx::anyhow::Result<T>`; the
+/// re-export spares users a dependency of their own and a version that could disagree.
+pub use anyhow;

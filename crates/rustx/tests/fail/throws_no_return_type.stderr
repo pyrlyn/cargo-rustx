@@ -1,0 +1,5 @@
+error: `throws` needs a return type before it: `-> T throws`, or `-> () throws` for no value
+ --> tests/fail/throws_no_return_type.rs:2:14
+  |
+2 |     fn run() throws {
+  |              ^^^^^^

@@ -1,0 +1,71 @@
+// Problem 10, `T throws` and tail `Ok(..)` only: `throw e` is T21, so the early exit returns its
+// `Err(..)` by hand. `anyhow::Error` takes no `String`, so the missing `=` builds its error with
+// `anyhow!`. The second module has its own error type, methods, a trait default and tails that
+// stay as written.
+mod settings {
+    use std::collections::HashMap;
+    use std::fs;
+
+    #[data]
+    pub struct Settings { host: String, port: u16, workers: usize }
+
+    fn parse_kv(text: &str) -> HashMap<String, String> throws {
+        var map = HashMap::new();
+        for (n, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') { continue; }
+            let (k, v) = line
+                .split_once('=')
+                .ok_or_else(|| ::rustx::anyhow::anyhow!("line {}: expected key=value", n + 1))?;
+            map.insert(k.trim().to_string(), v.trim().to_string());
+        }
+        map
+    }
+
+    pub fn load(path: &str) -> Settings throws {
+        let text = fs::read_to_string(path)?;
+        let kv = parse_kv(&text)?;
+        let host = kv.get("host").cloned().unwrap_or_else(|| "localhost".into());
+        let port = kv.get("port").map(|p| p.parse<u16>()).transpose()?.unwrap_or(8080);
+        let workers = match kv.get("workers") {
+            Some(w) => w.parse<usize>()?,
+            None => 4,
+        };
+        if workers == 0 { return Err(::rustx::anyhow::anyhow!("workers must be > 0")); }
+        Settings::new(host, port, workers)
+    }
+}
+
+mod own_error {
+    #[derive(Debug)]
+    pub enum ParseError { Empty, Bad(std::num::ParseIntError) }
+
+    pub fn parse(text: &str) -> u32 throws ParseError {
+        if text.is_empty() { return Err(ParseError::Empty); }
+        text.parse().map_err(ParseError::Bad)?
+    }
+
+    pub fn checked(text: &str) -> u32 throws ParseError {
+        let n = parse(text)?;
+        if n == 0 { return Err(ParseError::Empty); }
+        Ok(n)
+    }
+
+    pub trait Source {
+        fn text(&self) -> String throws ParseError;
+        fn number(&self) -> u32 throws ParseError { parse(&self.text()?)? }
+        fn check(&self) -> () throws ParseError { self.number()?; }
+    }
+
+    pub struct Fixed(pub &'static str);
+
+    impl Source for Fixed {
+        fn text(&self) -> String throws ParseError { self.0.to_string() }
+    }
+
+    impl Fixed {
+        pub fn words(&self) -> iter &str throws { self.0.split(' ') }
+        pub fn forever(&self) -> u32 throws { loop {} }
+        pub fn nothing(&self) -> u32 throws { todo!() }
+    }
+}

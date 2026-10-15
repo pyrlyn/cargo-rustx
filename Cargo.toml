@@ -11,6 +11,8 @@ repository = "https://github.com/pyrlyn/cargo-rustx"
 [workspace.dependencies]
 rustx-core = { path = "crates/rustx-core", version = "=0.1.0" }
 rustx-macros = { path = "crates/rustx-macros", version = "=0.1.0" }
+# `T throws` returns `anyhow::Result<T>`; reached through the `rustx` re-export.
+anyhow = "1.0.104"
 proc-macro2 = "1"
 quote = "1"
 # `full` parses whole items (the `sugar!` body is a file of items); `visit-mut` drives the AST passes.
