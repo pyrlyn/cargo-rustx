@@ -25,7 +25,7 @@
 use proc_macro2::{Delimiter, Ident, Span, TokenStream, TokenTree};
 
 use crate::tokens::map_sequences_reporting;
-use crate::tokens::position::{at_statement_start, outer_attributes_start};
+use crate::tokens::position::starts_statement;
 use crate::tokens::punct::{is_alone, is_joint};
 use crate::tokens::syntax::combine;
 
@@ -60,15 +60,6 @@ fn rewrite_sequence(seq: &[TokenTree], errors: &mut Option<syn::Error>) -> Vec<T
         out.push(tree.clone());
     }
     out
-}
-
-/// Whether the token at `i` starts a statement, as the module header defines it.
-///
-/// An outer attribute right before counts on its own, without checking what precedes it the
-/// way `bound_presets` does for items; that is the detection rule `var` is specified and
-/// tested with, so the shared helper is not reused as is.
-fn starts_statement(seq: &[TokenTree], i: usize) -> bool {
-    at_statement_start(&seq[..i]) || outer_attributes_start(seq, i) < i
 }
 
 fn classify(var: Span, after: &[TokenTree]) -> Use {

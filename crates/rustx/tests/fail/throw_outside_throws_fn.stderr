@@ -1,0 +1,11 @@
+error: `throw` is only allowed in a fn returning `T throws`
+ --> tests/fail/throw_outside_throws_fn.rs:3:21
+  |
+3 |         if n == 0 { throw "zero"; }
+  |                     ^^^^^
+
+error: `throw` is only allowed in a fn returning `T throws`
+ --> tests/fail/throw_outside_throws_fn.rs:8:28
+  |
+8 |         fn inner() -> u8 { throw "inner has no throws"; }
+  |                            ^^^^^

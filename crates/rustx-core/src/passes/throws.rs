@@ -5,7 +5,8 @@
 //! 1. Token pass ([`rewrite`]): in a fn signature, `-> T throws` becomes
 //!    `-> ::rustx::anyhow::Result<T>` and `-> T throws E` becomes
 //!    `-> ::core::result::Result<T, E>`. A body, when there is one, starts with the marker
-//!    `#![__rustx_throws]`.
+//!    `#![__rustx_throws]`, written `#![__rustx_throws(anyhow)]` for plain `throws`, so the
+//!    `throw` pass knows which of the two error types it builds.
 //! 2. AST pass ([`lower`]): every marked body loses its marker and gets its tail wrapped in
 //!    `::core::result::Result::Ok(..)`:
 //!
@@ -71,6 +72,9 @@ use crate::tokens::syntax::{combine, take_attr};
 
 /// Name of the marker attribute at the start of a `throws` body; [`lower`] takes it off.
 pub(super) const MARKER: &str = "__rustx_throws";
+
+/// The marker's argument on a body whose error type is `anyhow::Error`.
+pub(super) const ANYHOW: &str = "anyhow";
 
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
     map_sequences_reporting(tokens, rewrite_sequence)
@@ -158,7 +162,7 @@ fn rewrite_signature(
     match body_after(seq, stop) {
         Some((body, group)) => {
             out.extend_from_slice(&seq[stop..body]);
-            out.push(marked(group, span));
+            out.push(marked(group, span, error.is_empty()));
             Ok(Some((body + 1, out)))
         }
         None => Ok(Some((stop, out))),
@@ -224,9 +228,14 @@ fn body_after(seq: &[TokenTree], from: usize) -> Option<(usize, &Group)> {
     None
 }
 
-fn marked(body: &Group, span: Span) -> TokenTree {
+fn marked(body: &Group, span: Span, anyhow: bool) -> TokenTree {
     let name = Ident::new(MARKER, span);
-    let mut stream = quote_spanned!(span=> #![#name]);
+    let mut stream = if anyhow {
+        let form = Ident::new(ANYHOW, span);
+        quote_spanned!(span=> #![#name(#form)])
+    } else {
+        quote_spanned!(span=> #![#name])
+    };
     stream.extend(body.stream());
     let mut rebuilt = Group::new(Delimiter::Brace, stream);
     rebuilt.set_span(body.span());
@@ -388,12 +397,12 @@ mod tests {
     }
 
     #[test]
-    fn t_throws_becomes_an_anyhow_result_and_marks_the_body() {
+    fn t_throws_becomes_an_anyhow_result_and_marks_the_body_as_anyhow() {
         assert_eq!(
             marks("pub fn load(path: &str) -> Settings throws { read(path) }"),
             same(
                 "pub fn load(path: &str) -> ::rustx::anyhow::Result<Settings> \
-                 { #![__rustx_throws] read(path) }"
+                 { #![__rustx_throws(anyhow)] read(path) }"
             )
         );
     }
@@ -425,7 +434,7 @@ mod tests {
         assert_eq!(
             marks("impl S { fn m(&self) -> u8 throws { fn n() -> u16 throws E { 2 } 1 } }"),
             same(
-                "impl S { fn m(&self) -> ::rustx::anyhow::Result<u8> { #![__rustx_throws] \
+                "impl S { fn m(&self) -> ::rustx::anyhow::Result<u8> { #![__rustx_throws(anyhow)] \
                  fn n() -> ::core::result::Result<u16, E> { #![__rustx_throws] 2 } 1 } }"
             )
         );

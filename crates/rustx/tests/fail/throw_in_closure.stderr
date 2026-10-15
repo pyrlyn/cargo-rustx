@@ -1,0 +1,17 @@
+error: `throw` is only allowed in a fn returning `T throws`
+ --> tests/fail/throw_in_closure.rs:3:41
+  |
+3 |         let check = |x: u8| if x == 0 { throw "zero" } else { x };
+  |                                         ^^^^^
+
+error: `throw` is only allowed in a fn returning `T throws`
+ --> tests/fail/throw_in_closure.rs:4:28
+  |
+4 |         let task = async { throw "async blocks return on their own" };
+  |                            ^^^^^
+
+error: `throw` is only allowed in a fn returning `T throws`
+ --> tests/fail/throw_in_closure.rs:5:34
+  |
+5 |         xs.iter().for_each(|x| { throw "closures return on their own" });
+  |                                  ^^^^^

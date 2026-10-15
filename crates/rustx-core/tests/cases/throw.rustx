@@ -1,0 +1,37 @@
+// Problem 10, `throw e`: plain `throws` builds an `anyhow` error, `throws E` converts through
+// `Into`. `throw` is recognised at a statement start and after `=>` and `=`; a nested `throws` fn
+// throws its own error type; closures keep their own return type; `throw` as a name stays.
+mod settings {
+    pub fn workers(text: &str) -> usize throws {
+        let workers = text.parse<usize>()?;
+        if workers == 0 { throw "workers must be > 0"; }
+        workers
+    }
+
+    pub fn port(text: &str) -> u16 throws {
+        match text.parse<u16>() {
+            Ok(0) => throw "port {text} is reserved",
+            Ok(port) => port,
+            Err(err) => throw err,
+        }
+    }
+}
+
+mod own_error {
+    #[derive(Debug)]
+    pub enum ConfigError { Missing(&'static str), Zero }
+
+    pub fn require(value: Option<u32>, name: &'static str) -> u32 throws ConfigError {
+        let value = match value { Some(v) => v, None => throw ConfigError::Missing(name), };
+        fn check(v: u32) -> u32 throws ConfigError { if v == 0 { throw ConfigError::Zero } v }
+        let doubled = value.checked_mul(2).map(|v| v + 1);
+        check(doubled.unwrap_or(value))?
+    }
+
+    pub fn first_line(text: &str) -> &str throws Box<dyn std::error::Error + Send + Sync> {
+        let Some(line) = text.lines().next() else { throw "empty input" };
+        line
+    }
+
+    pub fn throw(throw: u8) -> u8 { let throw = throw + 1; throw }
+}

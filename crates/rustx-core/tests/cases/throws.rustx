@@ -1,7 +1,6 @@
-// Problem 10, `T throws` and tail `Ok(..)` only: `throw e` is T21, so the early exit returns its
-// `Err(..)` by hand. `anyhow::Error` takes no `String`, so the missing `=` builds its error with
-// `anyhow!`. The second module has its own error type, methods, a trait default and tails that
-// stay as written.
+// Problem 10, `T throws` and tail `Ok(..)`; `throw` has its own case. `anyhow::Error` takes no
+// `String`, so the missing `=` builds its error with `anyhow!`. The second module has its own
+// error type, methods, a trait default and tails that stay as written.
 mod settings {
     use std::collections::HashMap;
     use std::fs;
@@ -31,7 +30,7 @@ mod settings {
             Some(w) => w.parse<usize>()?,
             None => 4,
         };
-        if workers == 0 { return Err(::rustx::anyhow::anyhow!("workers must be > 0")); }
+        if workers == 0 { throw "workers must be > 0"; }
         Settings::new(host, port, workers)
     }
 }
@@ -41,13 +40,13 @@ mod own_error {
     pub enum ParseError { Empty, Bad(std::num::ParseIntError) }
 
     pub fn parse(text: &str) -> u32 throws ParseError {
-        if text.is_empty() { return Err(ParseError::Empty); }
+        if text.is_empty() { throw ParseError::Empty; }
         text.parse().map_err(ParseError::Bad)?
     }
 
     pub fn checked(text: &str) -> u32 throws ParseError {
         let n = parse(text)?;
-        if n == 0 { return Err(ParseError::Empty); }
+        if n == 0 { throw ParseError::Empty; }
         Ok(n)
     }
 

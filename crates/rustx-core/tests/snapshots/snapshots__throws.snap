@@ -52,7 +52,9 @@ mod settings {
             None => 4,
         };
         if workers == 0 {
-            return Err(::rustx::anyhow::anyhow!("workers must be > 0"));
+            return ::core::result::Result::Err(
+                ::rustx::anyhow::anyhow!("workers must be > 0"),
+            );
         }
         ::core::result::Result::Ok(Settings::new(host, port, workers))
     }
@@ -65,14 +67,18 @@ mod own_error {
     }
     pub fn parse(text: &str) -> ::core::result::Result<u32, ParseError> {
         if text.is_empty() {
-            return Err(ParseError::Empty);
+            return ::core::result::Result::Err(
+                ::core::convert::Into::into(ParseError::Empty),
+            );
         }
         ::core::result::Result::Ok(text.parse().map_err(ParseError::Bad)?)
     }
     pub fn checked(text: &str) -> ::core::result::Result<u32, ParseError> {
         let n = parse(text)?;
         if n == 0 {
-            return Err(ParseError::Empty);
+            return ::core::result::Result::Err(
+                ::core::convert::Into::into(ParseError::Empty),
+            );
         }
         Ok(n)
     }

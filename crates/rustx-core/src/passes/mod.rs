@@ -28,6 +28,7 @@ mod prefix_types;
 mod rc_values;
 mod shared;
 mod signatures;
+mod throw;
 mod throws;
 mod turbofish;
 mod var;
@@ -49,6 +50,8 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 // sugar in it gone.
 // `throws` after `prefix_types`: moved into `Result<..>` first, `iter &T` would sit after `<`,
 // where `prefix_types` cannot tell it from a comparison.
+// `throw` right after `throws`, whose body marker tells it the fn's error type, and before
+// capture lists, which parse the closure after a list with `syn`.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
     shared::rewrite,
@@ -63,6 +66,7 @@ const TOKEN_PASSES: &[TokenPass] = &[
     from_lifetimes::rewrite,
     prefix_types::rewrite,
     throws::rewrite,
+    throw::rewrite,
     rc_values::rewrite,
     turbofish::rewrite,
     capture_lists::rewrite,

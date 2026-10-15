@@ -30,8 +30,7 @@ rustx::sugar! {
                 Some(w) => w.parse<usize>()?,
                 None => 4,
             };
-            // `throw` is T21; until then the early exit is spelled out.
-            if workers == 0 { return Err(::rustx::anyhow::anyhow!("workers must be > 0")); }
+            if workers == 0 { throw "workers must be > 0"; }
             Settings::new(host, port, workers)
         }
     }
@@ -41,13 +40,13 @@ rustx::sugar! {
         pub enum ParseError { Empty, Bad }
 
         pub fn parse(text: &str) -> u32 throws ParseError {
-            if text.is_empty() { return Err(ParseError::Empty); }
+            if text.is_empty() { throw ParseError::Empty; }
             text.parse().map_err(|_| ParseError::Bad)?
         }
 
         pub fn checked(text: &str) -> u32 throws ParseError {
             let n = parse(text)?;
-            if n == 0 { return Err(ParseError::Empty); }
+            if n == 0 { throw ParseError::Empty; }
             Ok(n)
         }
 
