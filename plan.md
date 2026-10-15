@@ -12,7 +12,7 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.5 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.6 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.7 | in progress | P2 | 4 | 100% | Claude / opus-5.5 |
-| T19.8 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.11 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
