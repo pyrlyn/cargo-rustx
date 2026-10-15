@@ -1,0 +1,49 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/call_defaults.rustx
+---
+mod server {
+    pub fn connect(
+        host: &str,
+        port: ::core::option::Option<u16>,
+        timeout_ms: ::core::option::Option<u64>,
+    ) -> String {
+        let port: u16 = port.unwrap_or(5432);
+        let timeout_ms: u64 = timeout_ms.unwrap_or(5_000);
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+    pub struct Pool {
+        size: usize,
+    }
+    impl Pool {
+        pub fn new(size: ::core::option::Option<usize>) -> Self {
+            let size: usize = size.unwrap_or(4);
+            Pool { size }
+        }
+        pub fn spawn(&self, n: ::core::option::Option<usize>) -> usize {
+            let n: usize = n.unwrap_or(1);
+            self.size * n
+        }
+        pub fn twice() -> Self {
+            Self::new(
+                ::core::option::Option::Some(self::double(::core::option::Option::None)),
+            )
+        }
+    }
+    fn double(n: ::core::option::Option<usize>) -> usize {
+        let n: usize = n.unwrap_or(2);
+        n * 2
+    }
+    pub fn demo() -> Vec<String> {
+        let pool = Pool::new(::core::option::Option::None);
+        assert_eq!(pool.spawn(::core::option::Option::Some(3)), 12);
+        vec![
+            connect("db", ::core::option::Option::None, ::core::option::Option::None),
+            connect("db", ::core::option::Option::Some(6432),
+            ::core::option::Option::None), connect("db",
+            ::core::option::Option::Some(6432), ::core::option::Option::Some(100)),
+            format!("{}", Pool::twice().spawn(::core::option::Option::None)),
+        ]
+    }
+}

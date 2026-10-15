@@ -1,0 +1,38 @@
+mod server {
+    pub fn connect(host: &str, port: u16 = 5432, timeout_ms: u64 = 5_000) -> String {
+        format!("{host}:{port} ({timeout_ms} ms)")
+    }
+
+    pub struct Pool {
+        size: usize,
+    }
+
+    impl Pool {
+        pub fn new(size: usize = 4) -> Self {
+            Pool { size }
+        }
+
+        pub fn spawn(&self, n: usize = 1) -> usize {
+            self.size * n
+        }
+
+        pub fn twice() -> Self {
+            Self::new(self::double())
+        }
+    }
+
+    fn double(n: usize = 2) -> usize {
+        n * 2
+    }
+
+    pub fn demo() -> Vec<String> {
+        let pool = Pool::new();
+        assert_eq!(pool.spawn(3), 12);
+        vec![
+            connect("db"),
+            connect("db", 6432),
+            connect("db", 6432, 100),
+            format!("{}", Pool::twice().spawn()),
+        ]
+    }
+}

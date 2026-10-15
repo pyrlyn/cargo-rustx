@@ -6,6 +6,7 @@
 
 mod borrows;
 mod bound_presets;
+mod call_defaults;
 mod from_lifetimes;
 mod inline_bounds;
 mod into_params;
@@ -35,10 +36,12 @@ const TOKEN_PASSES: &[TokenPass] = &[
     turbofish::rewrite,
 ];
 
-// `#[borrows]` before `from` lifetimes, so `from(Self)` finds the type's lifetime.
+// `#[borrows]` before `from` lifetimes, so `from(Self)` finds the type's lifetime. Call-site
+// defaults before `param_defaults::lower`, which takes off the markers they read.
 const AST_PASSES: &[AstPass] = &[
     inline_bounds::lower,
     into_params::lower,
+    call_defaults::lower,
     param_defaults::lower,
     borrows::lower,
     from_lifetimes::lower,

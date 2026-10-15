@@ -1,0 +1,11 @@
+error: `open` matches several fns in this input that read this call differently; calls are matched by name only, so rename one of them
+  --> tests/fail/call_defaults_ambiguous.rs:11:15
+   |
+11 |         file::open("a");
+   |               ^^^^
+
+error: `open` matches several fns in this input that read this call differently; calls are matched by name only, so rename one of them
+  --> tests/fail/call_defaults_ambiguous.rs:12:17
+   |
+12 |         socket::open("b");
+   |                 ^^^^
