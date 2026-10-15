@@ -1,0 +1,56 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/rc_values.rustx
+---
+mod tree {
+    use std::rc::Rc;
+    pub struct Node {
+        pub name: String,
+        pub size: u64,
+        pub parent: Option<::std::rc::Weak<::core::cell::RefCell<Node>>>,
+        pub children: Vec<::std::rc::Rc<::core::cell::RefCell<Node>>>,
+    }
+    pub struct Forest {
+        pub first: ::std::rc::Rc<::core::cell::RefCell<Node>>,
+        pub rest: Vec<::std::rc::Rc<::core::cell::RefCell<Node>>>,
+        pub visits: ::std::rc::Rc<::core::cell::RefCell<usize>>,
+    }
+    pub fn new_node(
+        name: &str,
+        size: u64,
+    ) -> ::std::rc::Rc<::core::cell::RefCell<Node>> {
+        ::std::rc::Rc::new(
+            ::std::cell::RefCell::new(Node {
+                name: name.to_string(),
+                size,
+                parent: None,
+                children: Vec::new(),
+            }),
+        )
+    }
+    pub fn demo(
+        root: &::std::rc::Rc<::core::cell::RefCell<Node>>,
+        visits: usize,
+    ) -> Forest {
+        add_child(root, ::std::rc::Rc::new(::std::cell::RefCell::new(leaf("a"))));
+        let shared: ::std::rc::Rc<::core::cell::RefCell<Node>> = ::std::rc::Rc::new(
+            ::std::cell::RefCell::new(Node { size: 5, ..leaf("b") }),
+        );
+        let index = ::std::rc::Rc::new(
+            ::std::cell::RefCell::new(HashMap::<String, usize>::new()),
+        );
+        let on_visit = ::std::rc::Rc::new(
+            ::std::cell::RefCell::new(move |name: &str, n: usize| n + name.len()),
+        );
+        Forest {
+            first: ::std::rc::Rc::new(::std::cell::RefCell::new(leaf("c"))),
+            rest: vec![::std::rc::Rc::new(::std::cell::RefCell::new(leaf("d"))), shared],
+            visits: (::std::rc::Rc::new(::std::cell::RefCell::new(visits))),
+        }
+    }
+    pub fn strong(rc: &Rc<u8>) -> usize {
+        let rc = rc.clone();
+        if rc.is_empty() { rc(0) } else { rc[0] - 1 }
+    }
+}

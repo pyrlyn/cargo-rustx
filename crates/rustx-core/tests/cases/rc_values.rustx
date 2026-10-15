@@ -1,0 +1,38 @@
+mod tree {
+    use std::rc::Rc;
+
+    pub struct Node {
+        pub name: String,
+        pub size: u64,
+        pub parent: Option<weak Node>,
+        pub children: Vec<rc Node>,
+    }
+
+    pub struct Forest {
+        pub first: rc Node,
+        pub rest: Vec<rc Node>,
+        pub visits: rc usize,
+    }
+
+    pub fn new_node(name: &str, size: u64) -> rc Node {
+        rc Node { name: name.to_string(), size, parent: None, children: Vec::new() }
+    }
+
+    pub fn demo(root: &rc Node, visits: usize) -> Forest {
+        add_child(root, rc leaf("a"));
+        let shared: rc Node = rc Node { size: 5, ..leaf("b") };
+        let index = rc HashMap::<String, usize>::new();
+        let on_visit = rc move |name: &str, n: usize| n + name.len();
+        Forest {
+            first: rc leaf("c"),
+            rest: vec![rc leaf("d"), shared],
+            visits: (rc visits),
+        }
+    }
+
+    // Plain Rust that names things `rc` is left alone.
+    pub fn strong(rc: &Rc<u8>) -> usize {
+        let rc = rc.clone();
+        if rc.is_empty() { rc(0) } else { rc[0] - 1 }
+    }
+}
