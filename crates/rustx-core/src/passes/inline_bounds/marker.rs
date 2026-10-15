@@ -1,0 +1,227 @@
+//! Token half of inline bounds: `x: T: B` in a fn parameter list becomes
+//! `#[__rustx_bound(B)] x: T`.
+//!
+//! Only the parenthesised group right after `fn name` or `fn name<..>` is a parameter list, so
+//! closures, struct fields and fn-pointer types are never touched. Parameters are split at
+//! commas outside `<..>`; a second `:` outside `<..>` and outside `::` starts the bounds, which
+//! run to the end of the parameter. Every generated token takes the span of that `:`.
+
+use proc_macro2::{Delimiter, Group, Ident, Spacing, Span, TokenStream, TokenTree};
+use quote::quote_spanned;
+
+use crate::tokens::map_sequences;
+
+/// Name of the marker attribute; the AST half removes every one it finds.
+pub(super) const MARKER: &str = "__rustx_bound";
+
+pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
+    map_sequences(tokens, &mut rewrite_sequence)
+}
+
+fn rewrite_sequence(mut seq: Vec<TokenTree>) -> syn::Result<Vec<TokenTree>> {
+    for i in 0..seq.len() {
+        let Some(at) = parameter_list(&seq, i) else {
+            continue;
+        };
+        if let TokenTree::Group(group) = &seq[at] {
+            let mut rebuilt = Group::new(Delimiter::Parenthesis, rewrite_parameters(group)?);
+            rebuilt.set_span(group.span());
+            seq[at] = TokenTree::Group(rebuilt);
+        }
+    }
+    Ok(seq)
+}
+
+/// Index of the parameter group when `fn` stands at `i`: `fn name(..)` or `fn name<..>(..)`.
+fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
+    if !matches!(&seq[i], TokenTree::Ident(word) if word == "fn")
+        || !matches!(seq.get(i + 1)?, TokenTree::Ident(_))
+    {
+        return None;
+    }
+    let mut at = i + 2;
+    if is_punct(seq.get(at)?, '<') {
+        at = generics_end(seq, at)? + 1;
+    }
+    match seq.get(at)? {
+        TokenTree::Group(group) if group.delimiter() == Delimiter::Parenthesis => Some(at),
+        _ => None,
+    }
+}
+
+/// Index of the `>` that closes the `<` at `open`.
+fn generics_end(seq: &[TokenTree], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for at in open..seq.len() {
+        depth = angle_depth(seq, at, depth);
+        if depth == 0 {
+            return Some(at);
+        }
+    }
+    None
+}
+
+/// Angle-bracket depth after the token at `at`; the `>` of `->` closes nothing.
+fn angle_depth(seq: &[TokenTree], at: usize, depth: usize) -> usize {
+    match &seq[at] {
+        TokenTree::Punct(p) if p.as_char() == '<' => depth + 1,
+        TokenTree::Punct(p) if p.as_char() == '>' && !arrow_head(seq, at) => {
+            depth.saturating_sub(1)
+        }
+        _ => depth,
+    }
+}
+
+fn arrow_head(seq: &[TokenTree], at: usize) -> bool {
+    at.checked_sub(1)
+        .is_some_and(|before| is_joint(&seq[before], '-'))
+}
+
+fn rewrite_parameters(group: &Group) -> syn::Result<TokenStream> {
+    let seq: Vec<TokenTree> = group.stream().into_iter().collect();
+    let mut out = Vec::with_capacity(seq.len());
+    let mut start = 0;
+    let mut depth = 0;
+    for at in 0..=seq.len() {
+        let comma = seq.get(at).is_some_and(|tree| is_punct(tree, ','));
+        if at == seq.len() || (comma && depth == 0) {
+            out.extend(rewrite_parameter(&seq[start..at])?);
+            out.extend(seq.get(at).cloned());
+            start = at + 1;
+        } else {
+            depth = angle_depth(&seq, at, depth);
+        }
+    }
+    Ok(out.into_iter().collect())
+}
+
+/// `x: T: B` → `#[__rustx_bound(B)] x: T`; any other parameter is returned as written.
+fn rewrite_parameter(param: &[TokenTree]) -> syn::Result<Vec<TokenTree>> {
+    let mut depth = 0;
+    let mut colons = 0;
+    for at in 0..param.len() {
+        depth = angle_depth(param, at, depth);
+        if depth > 0 || !single_colon(param, at) {
+            continue;
+        }
+        colons += 1;
+        if colons < 2 {
+            continue;
+        }
+        let colon = param[at].span();
+        let bounds = &param[at + 1..];
+        if bounds.is_empty() {
+            return Err(syn::Error::new(
+                colon,
+                "expected bounds after `:`, as in `x: T: Clone`",
+            ));
+        }
+        let mut out: Vec<TokenTree> = marker(colon, bounds).into_iter().collect();
+        out.extend_from_slice(&param[..at]);
+        return Ok(out);
+    }
+    Ok(param.to_vec())
+}
+
+fn marker(span: Span, bounds: &[TokenTree]) -> TokenStream {
+    let bounds: TokenStream = bounds.iter().cloned().collect();
+    let name = Ident::new(MARKER, span);
+    quote_spanned!(span=> #[#name(#bounds)])
+}
+
+/// A `:` that is not half of `::`.
+fn single_colon(seq: &[TokenTree], at: usize) -> bool {
+    is_punct(&seq[at], ':')
+        && !(is_joint(&seq[at], ':') && seq.get(at + 1).is_some_and(|next| is_punct(next, ':')))
+        && !at
+            .checked_sub(1)
+            .is_some_and(|before| is_joint(&seq[before], ':'))
+}
+
+fn is_punct(tree: &TokenTree, ch: char) -> bool {
+    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch)
+}
+
+fn is_joint(tree: &TokenTree, ch: char) -> bool {
+    matches!(tree, TokenTree::Punct(p) if p.as_char() == ch && p.spacing() == Spacing::Joint)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    fn compact(tokens: &TokenStream) -> String {
+        tokens.to_string().split_whitespace().collect()
+    }
+
+    fn marks(sugar: &str) -> String {
+        rewrite(sugar.parse().unwrap_or_default())
+            .map_or_else(|err| err.to_string(), |out| compact(&out))
+    }
+
+    fn same(source: &str) -> String {
+        compact(&source.parse().unwrap_or_default())
+    }
+
+    #[test]
+    fn a_second_colon_turns_the_bounds_into_a_marker() {
+        assert_eq!(
+            marks("fn f(x: T: Clone + Debug, y: u8) {}"),
+            same("fn f(#[__rustx_bound(Clone + Debug)] x: T, y: u8) {}")
+        );
+    }
+
+    #[test]
+    fn commas_and_colons_inside_angle_brackets_stay_in_the_bounds() {
+        assert_eq!(
+            marks("fn f<A: Fn() -> u8>(m: M: Into<HashMap<K, V>>, i: I: Iterator<Item: Clone>) {}"),
+            same(
+                "fn f<A: Fn() -> u8>(#[__rustx_bound(Into<HashMap<K, V>>)] m: M, \
+                 #[__rustx_bound(Iterator<Item: Clone>)] i: I) {}"
+            )
+        );
+    }
+
+    #[test]
+    fn closures_returning_bounds_stay_whole() {
+        assert_eq!(
+            marks("fn f(g: F: FnOnce(&K) -> Result<V, E>) {}"),
+            same("fn f(#[__rustx_bound(FnOnce(&K) -> Result<V, E>)] g: F) {}")
+        );
+    }
+
+    #[test]
+    fn methods_in_nested_groups_are_rewritten() {
+        assert_eq!(
+            marks("impl S { fn m(&self, x: T: Copy) { fn n(y: U: Send); } }"),
+            same(
+                "impl S { fn m(&self, #[__rustx_bound(Copy)] x: T) \
+                 { fn n(#[__rustx_bound(Send)] y: U); } }"
+            )
+        );
+    }
+
+    #[test]
+    fn valid_parameters_are_unchanged() {
+        let valid = quote! {
+            fn f(x: T, (a, b): (u8, u8), p: ::std::path::PathBuf, q: <T as Tr>::A, S { a, .. }: S) {}
+            fn g<T: Iterator<Item: Clone>>(f: fn(x: u8) -> u8, i: impl Iterator<Item: Copy>) {}
+            struct P { a: B, c: D }
+            let c = |x: u8, y: Vec<u8>| x;
+            s(a: b);
+        };
+        assert_eq!(
+            rewrite(valid.clone()).map(|out| out.to_string()).ok(),
+            Some(valid.to_string())
+        );
+    }
+
+    #[test]
+    fn a_colon_without_bounds_is_an_error() {
+        assert_eq!(
+            marks("fn f(x: T:) {}"),
+            "expected bounds after `:`, as in `x: T: Clone`"
+        );
+    }
+}

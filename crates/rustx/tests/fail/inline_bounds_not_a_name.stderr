@@ -1,0 +1,5 @@
+error: an inline bound needs a bare generic name such as `T`; bound other types in `where`
+ --> tests/fail/inline_bounds_not_a_name.rs:2:17
+  |
+2 |     fn first(v: Vec<u8>: Clone) -> u8 {
+  |                 ^^^

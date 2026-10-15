@@ -1,0 +1,5 @@
+error: `Meters` names a type here, not a new generic; bound it in `where`
+ --> tests/fail/inline_bounds_known_type.rs:4:17
+  |
+4 |     fn twice(m: Meters: Clone) -> u32 {
+  |                 ^^^^^^

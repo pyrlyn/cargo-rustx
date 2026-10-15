@@ -1,0 +1,45 @@
+mod cache {
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::fmt::Debug;
+    use std::hash::Hash;
+
+    pub struct Cache<K: Eq + Hash + Clone + Debug, V: Clone> {
+        map: HashMap<K, V>,
+        hits: u64,
+    }
+
+    impl Cache<K, V> {
+        pub fn new() -> Self {
+            Cache { map: HashMap::new(), hits: 0 }
+        }
+
+        pub fn get_or_insert_with(
+            &mut self,
+            key: K,
+            make: F: FnOnce(&K) -> Result<V, E>,
+        ) -> Result<V, E: Debug> {
+            if let Some(v) = self.map.get(&key) {
+                self.hits += 1;
+                return Ok(v.clone());
+            }
+            let v = make(&key)?;
+            self.map.insert(key, v.clone());
+            Ok(v)
+        }
+    }
+
+    pub fn warm_up(cache: &mut Cache<K, V>, items: I: IntoIterator<Item = (K, V)>) {
+        for (k, v) in items {
+            cache.map.insert(k, v);
+        }
+    }
+
+    pub fn run(x: T: Clone + Debug + Send) -> Result<T, E: Error> {
+        Ok(x)
+    }
+
+    pub trait Store {
+        fn put(&mut self, key: K: Hash + Eq, value: V: Clone);
+    }
+}
