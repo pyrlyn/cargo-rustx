@@ -42,6 +42,21 @@ fn the_output_saved_as_rustx_expands_to_the_same_rust_as_the_input() {
 }
 
 #[test]
+fn rc_values_written_with_short_std_names_become_rc_sugar() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_rc.rs"]);
+    insta::assert_snapshot!("sugar_rc_rs", converted);
+    // The expansion spells the paths in full, so it is not the input's text; the core tests
+    // compare the tokens with std paths resolved.
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_rc.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("::std::rc::Rc::new(::std::cell::RefCell::new(0))"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =
