@@ -7,7 +7,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T19.5 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.6 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.7 | in progress | P2 | 4 | 100% | Claude / opus-5.5 |
 | T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
@@ -24,12 +23,6 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
-
-### T19.5. Reverse rule: string literal conversions back to a bare literal
-
-Inverts T29: `String::from("lit")`, `"lit".to_string()`, `"lit".to_owned()` and `"lit".into()` where the position is written `String` (and the `Some(..)` / `vec![..]` shapes of `Option<String>` / `Vec<String>`) become the bare literal, because `string_literals` turns it back into `String::from`. Done when the rule fires in every position T29 converts and nowhere else.
-
-Plan: `sugar/string_literals.rs` implementing `ReverseRule`, using `typed_positions` (or the same position knowledge) to find typed places; only edits whose expansion the driver check accepts survive, so the rule may propose broadly but tests pin where it fires and where it must not (untyped `let`, `&str` positions, method arguments, `+=`). Register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
 

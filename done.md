@@ -188,6 +188,12 @@ The first reverse rule that needs T19.3: `Rc::new(RefCell::new(e))` in any spell
 
 Done: merged in #15. `sugar/rc_values.rs` turns `Rc::new(RefCell::new(e))` in any spelling `std_paths` equates into `rc e`, refuses positions where `rc e` reads differently, and the driver check refuses bindings whose field accesses `rc_borrows` would rewrite.
 
+### T19.5. Reverse rule: string literal conversions back to a bare literal
+
+Inverts T29: `String::from("lit")`, `"lit".to_string()`, `"lit".to_owned()` and `"lit".into()` where the position is written `String` (and the `Some(..)` / `vec![..]` shapes of `Option<String>` / `Vec<String>`) become the bare literal, because `string_literals` turns it back into `String::from`. Done when the rule fires in every position T29 converts and nowhere else.
+
+Done: merged in #18. `sugar/string_literals.rs` turns `String::from("lit")` back into a bare literal only in the places the `string_literals` pass fills: fields and parameters typed `String`. It finds them with the same walker the pass uses (`Strings` and `walk_file` are shared with the pass). `.to_string()`, `.into()` and `String::from` on a non-literal are left alone.
+
 ### T24. M6: `shared` bindings and `shared T` types
 
 Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type position becomes `Shared<T>`, and field access on such bindings goes through the lock, one lock per access, as the problem file shows; read-only data becomes a plain `Arc`. Depends on T23. The access rewriting is written so T26 can reuse it. Done when the problem's detailed example compiles and runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.

@@ -1,5 +1,4 @@
 - T19. Convert plain Rust into rustx sugar
-- T19.5. Reverse rule: string literal conversions back to a bare literal
 - T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
 - T19.7. Reverse rule: `Result` functions back to `throws`
 - T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
