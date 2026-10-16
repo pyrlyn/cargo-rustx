@@ -11,6 +11,7 @@ mod into_params;
 mod rc_values;
 mod std_paths;
 mod string_literals;
+mod throws;
 mod turbofish;
 mod var;
 
@@ -24,11 +25,22 @@ pub(crate) trait ReverseRule {
     /// Edits turning the shapes this rule recognises in `file`, parsed from `source`, into sugar.
     /// They may overlap other rules' edits; the driver keeps the first of overlapping edits.
     fn edits(&self, file: &syn::File, source: &str) -> Vec<Edit>;
+
+    /// The edits in sets the driver keeps or drops as a whole, for a rule whose edits keep the
+    /// meaning only together; by default each edit is a set of its own.
+    fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
+        self.edits(file, source)
+            .into_iter()
+            .map(|edit| vec![edit])
+            .collect()
+    }
 }
 
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
+// it and is dropped whatever the order: such a value keeps its plain spelling. `throws` edits a
+// return type and the bytes around a tail's value, which no other rule edits.
 // it and is dropped whatever the order: such a value keeps its plain spelling. An `into` edit
 // starts in the signature, before any edit of the rebindings it removes, so it wins those too.
 // it and is dropped whatever the order: such a value keeps its plain spelling. A string literal
@@ -37,6 +49,7 @@ const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
+    &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
 ];
@@ -98,42 +111,73 @@ fn convert(source: &str, rules: &[&dyn ReverseRule]) -> syn::Result<String> {
             .and_then(|tokens| crate::try_expand(tokens).ok())
             .is_some_and(|file| paths.normalise(file.into_token_stream()) == expected)
     };
-    let edits = non_overlapping(text, rules.iter().flat_map(|rule| rule.edits(&file, text)));
-    let accepted = if round_trips(&apply(text, &edits)) {
-        edits
+    let groups = non_overlapping(
+        text,
+        rules.iter().flat_map(|rule| rule.edit_groups(&file, text)),
+    );
+    let accepted = if round_trips(&apply(text, &flatten(&groups))) {
+        groups
     } else {
-        // Some edit changes the meaning; keep each edit only if it does not, together with the
-        // ones kept before it, so one bad edit does not cost the good ones.
+        // Some edit changes the meaning; keep each set of edits only if it does not, together
+        // with the ones kept before it, so one bad set does not cost the good ones. A set is
+        // never split: part of it may keep the meaning while not being what the rule meant.
         let mut kept = Vec::new();
-        for edit in edits {
-            kept.push(edit);
-            if !round_trips(&apply(text, &kept)) {
+        for group in groups {
+            kept.push(group);
+            if !round_trips(&apply(text, &flatten(&kept))) {
                 kept.pop();
             }
         }
         kept
     };
-    Ok(format!("{bom}{}", apply(text, &accepted)))
+    Ok(format!("{bom}{}", apply(text, &flatten(&accepted))))
 }
 
-/// Sorts edits by position and drops each one that overlaps an edit kept before it, or that is
-/// not a range of `text` at all, so applying them cannot slice off a character.
-fn non_overlapping(text: &str, edits: impl Iterator<Item = Edit>) -> Vec<Edit> {
-    let mut edits: Vec<Edit> = edits
-        .filter(|edit| text.get(edit.range.clone()).is_some())
+/// Sorts sets of edits by their first position and drops each set with an edit that overlaps an
+/// edit kept before it or of its own, or that is not a range of `text` at all, so applying them
+/// cannot slice off a character.
+fn non_overlapping(text: &str, groups: impl Iterator<Item = Vec<Edit>>) -> Vec<Vec<Edit>> {
+    let mut groups: Vec<Vec<Edit>> = groups
+        .map(|mut group| {
+            group.sort_by_key(|edit| edit.range.start);
+            group
+        })
+        .filter(|group| {
+            group
+                .iter()
+                .all(|edit| text.get(edit.range.clone()).is_some())
+                && group.windows(2).all(|pair| !overlap(&pair[0], &pair[1]))
+        })
         .collect();
-    // Stable, so of two edits at one position the earlier rule wins.
-    edits.sort_by_key(|edit| edit.range.start);
-    let mut kept: Vec<Edit> = Vec::with_capacity(edits.len());
-    for edit in edits {
-        if kept
-            .last()
-            .is_none_or(|last| last.range.end <= edit.range.start)
-        {
-            kept.push(edit);
+    // Stable, so of two sets at one position the earlier rule wins.
+    groups.sort_by_key(|group| group.first().map(|edit| edit.range.start));
+    let mut kept: Vec<Vec<Edit>> = Vec::with_capacity(groups.len());
+    for group in groups {
+        let free = group
+            .iter()
+            .all(|edit| kept.iter().flatten().all(|old| !overlap(old, edit)));
+        if free {
+            kept.push(group);
         }
     }
     kept
+}
+
+/// Whether `new` touches bytes `old`, kept before it, replaces. An insertion right where a
+/// replacement starts goes before it when it was kept first.
+fn overlap(old: &Edit, new: &Edit) -> bool {
+    if old.range.start <= new.range.start {
+        new.range.start < old.range.end
+    } else {
+        old.range.start < new.range.end
+    }
+}
+
+/// The edits of non-overlapping sets in source order, as [`apply`] takes them.
+fn flatten(groups: &[Vec<Edit>]) -> Vec<Edit> {
+    let mut edits: Vec<Edit> = groups.iter().flatten().cloned().collect();
+    edits.sort_by_key(|edit| edit.range.start);
+    edits
 }
 
 /// `text` with sorted, non-overlapping `edits` applied.
@@ -247,6 +291,47 @@ pub(crate) mod tests {
         );
     }
 
+    /// Edits every occurrence of each word, all of them as one set.
+    struct Together(&'static [(&'static str, &'static str)]);
+
+    impl ReverseRule for Together {
+        fn edits(&self, file: &syn::File, source: &str) -> Vec<Edit> {
+            self.edit_groups(file, source).concat()
+        }
+
+        fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
+            let edits = self
+                .0
+                .iter()
+                .flat_map(|&(from, to)| Replace(from, to).edits(file, source));
+            vec![edits.collect()]
+        }
+    }
+
+    #[test]
+    fn a_set_of_edits_is_kept_or_dropped_as_a_whole() {
+        let source = "fn f() { let a = 1; }\nfn g() { let b = 2; }\n";
+        // The first edit keeps the meaning on its own, the second does not: the set goes.
+        let partial = Together(&[("let a = 1;", "let a = 1 ;"), ("f()", "h()")]);
+        let out = convert(source, &[&partial, &Replace("let b = 2;", "let b = 2 ;")]);
+        assert_eq!(
+            out.unwrap(),
+            "fn f() { let a = 1; }\nfn g() { let b = 2 ; }\n"
+        );
+        // One edit of the set overlaps an edit kept before it: the other goes with it.
+        let late = Together(&[("fn f()", "fn f ()"), ("let b", "let  b")]);
+        let out = convert(source, &[&Replace("fn f", "fn  f"), &late]);
+        assert_eq!(
+            out.unwrap(),
+            "fn  f() { let a = 1; }\nfn g() { let b = 2; }\n"
+        );
+        let whole = Together(&[("let a = 1;", "let a = 1 ;"), ("let b", "let  b")]);
+        assert_eq!(
+            convert(source, &[&whole]).unwrap(),
+            "fn f() { let a = 1 ; }\nfn g() { let  b = 2; }\n"
+        );
+    }
+
     #[test]
     fn of_overlapping_edits_the_earlier_rule_wins() {
         let source = "fn f() {}\n";
@@ -272,7 +357,10 @@ pub(crate) mod tests {
                 text: String::new(),
             },
         ];
-        assert_eq!(non_overlapping(source, edits.into_iter()), []);
+        assert_eq!(
+            non_overlapping(source, edits.into_iter().map(|edit| vec![edit])),
+            Vec::<Vec<Edit>>::new()
+        );
     }
 
     #[test]
