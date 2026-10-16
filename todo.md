@@ -1,6 +1,4 @@
 - T19. Convert plain Rust into rustx sugar
-- T19.3. Std path equivalence in the sugar check
-- T19.4. Reverse rule: `Rc::new(RefCell::new(e))` back to `rc e`
 - T19.5. Reverse rule: string literal conversions back to a bare literal
 - T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
 - T19.7. Reverse rule: `Result` functions back to `throws`
@@ -10,5 +8,4 @@
 - T19.11. Sugar driver: trailing commas and edit groups
 - T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
 - T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
-- T31.2. M9: `rustx-cli fmt` for the remaining sugar
 - T33. M9: user documentation
