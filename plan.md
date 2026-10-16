@@ -7,7 +7,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 | T19.12 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.13 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
@@ -19,12 +18,6 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
-
-### T19.9. Reverse rule: generic bounds back to inline bounds
-
-Inverts inline bounds (problem 3): a generic parameter used by exactly one fn parameter, declared with bounds the `inline_bounds` pass would have generated, becomes `x: T: Bound` with the generic removed. Done when the pass output turns back into the sugar and generics used elsewhere (return type, other parameters, body turbofish, where clauses the pass would not write) are left alone.
-
-Plan: read `passes/inline_bounds.rs` for the emitted shape (generic list position, naming, where clauses); `sugar/inline_bounds.rs` implementing `ReverseRule` with the generic removal and the parameter edit kept or dropped together; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
 
