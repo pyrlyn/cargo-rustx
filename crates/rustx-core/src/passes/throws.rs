@@ -269,7 +269,7 @@ fn ok(span: Span, value: Option<Expr>) -> syn::Result<Expr> {
 }
 
 /// Tails whose type is always `()`, so `Ok(())` after them reads better than `Ok(for ..)`.
-fn is_unit(tail: &Expr) -> bool {
+pub(crate) fn is_unit(tail: &Expr) -> bool {
     matches!(
         tail,
         Expr::ForLoop(_)
@@ -281,7 +281,7 @@ fn is_unit(tail: &Expr) -> bool {
     )
 }
 
-fn is_ok_or_err(tail: &Expr) -> bool {
+pub(crate) fn is_ok_or_err(tail: &Expr) -> bool {
     let Expr::Call(call) = tail else {
         return false;
     };
@@ -289,7 +289,7 @@ fn is_ok_or_err(tail: &Expr) -> bool {
         if path.path.segments.last().is_some_and(|last| last.ident == "Ok" || last.ident == "Err"))
 }
 
-fn produces_no_value(expr: &Expr) -> bool {
+pub(crate) fn produces_no_value(expr: &Expr) -> bool {
     match expr {
         Expr::Return(_) => true,
         Expr::Macro(mac) => diverging_macro(&mac.mac),
@@ -298,7 +298,7 @@ fn produces_no_value(expr: &Expr) -> bool {
     }
 }
 
-fn diverging_macro(mac: &Macro) -> bool {
+pub(crate) fn diverging_macro(mac: &Macro) -> bool {
     mac.path.segments.last().is_some_and(|last| {
         ["panic", "unreachable", "todo", "unimplemented"]
             .iter()
