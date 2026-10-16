@@ -8,6 +8,7 @@
 //! in any spelling the file gives one meaning (`std_paths`), since passes emit full paths.
 
 mod into_params;
+mod param_defaults;
 mod rc_values;
 mod std_paths;
 mod string_literals;
@@ -39,6 +40,8 @@ pub(crate) trait ReverseRule {
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
+// it and is dropped whatever the order: such a value keeps its plain spelling. A parameter
+// default's statement removal starts at its body's `{`, so it wins over a `var` edit inside it.
 // it and is dropped whatever the order: such a value keeps its plain spelling. `throws` edits a
 // return type and the bytes around a tail's value, which no other rule edits.
 // it and is dropped whatever the order: such a value keeps its plain spelling. An `into` edit
@@ -49,6 +52,7 @@ const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
+    &param_defaults::ParamDefaults,
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
