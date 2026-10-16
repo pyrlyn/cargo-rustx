@@ -1,0 +1,114 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/throws.rustx
+---
+mod settings {
+    use std::collections::HashMap;
+    use std::fs;
+    pub struct Settings {
+        host: String,
+        port: u16,
+        workers: usize,
+    }
+    #[allow(dead_code)]
+    impl Settings {
+        pub fn new(host: String, port: u16, workers: usize) -> Self {
+            Self { host, port, workers }
+        }
+        pub fn host(&self) -> &str {
+            &self.host
+        }
+        pub fn port(&self) -> u16 {
+            self.port
+        }
+        pub fn workers(&self) -> usize {
+            self.workers
+        }
+    }
+    fn parse_kv(text: &str) -> ::rustx::anyhow::Result<HashMap<String, String>> {
+        let mut map = HashMap::new();
+        for (n, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (k, v) = line
+                .split_once('=')
+                .ok_or_else(|| {
+                    ::rustx::anyhow::anyhow!("line {}: expected key=value", n + 1)
+                })?;
+            map.insert(k.trim().to_string(), v.trim().to_string());
+        }
+        ::core::result::Result::Ok(map)
+    }
+    pub fn load(path: &str) -> ::rustx::anyhow::Result<Settings> {
+        let text = fs::read_to_string(path)?;
+        let kv = parse_kv(&text)?;
+        let host = kv.get("host").cloned().unwrap_or_else(|| "localhost".into());
+        let port = kv.get("port").map(|p| p.parse::<u16>()).transpose()?.unwrap_or(8080);
+        let workers = match kv.get("workers") {
+            Some(w) => w.parse::<usize>()?,
+            None => 4,
+        };
+        if workers == 0 {
+            return ::core::result::Result::Err(
+                ::rustx::anyhow::anyhow!("workers must be > 0"),
+            );
+        }
+        ::core::result::Result::Ok(Settings::new(host, port, workers))
+    }
+}
+mod own_error {
+    #[derive(Debug)]
+    pub enum ParseError {
+        Empty,
+        Bad(std::num::ParseIntError),
+    }
+    pub fn parse(text: &str) -> ::core::result::Result<u32, ParseError> {
+        if text.is_empty() {
+            return ::core::result::Result::Err(
+                ::core::convert::Into::into(ParseError::Empty),
+            );
+        }
+        ::core::result::Result::Ok(text.parse().map_err(ParseError::Bad)?)
+    }
+    pub fn checked(text: &str) -> ::core::result::Result<u32, ParseError> {
+        let n = parse(text)?;
+        if n == 0 {
+            return ::core::result::Result::Err(
+                ::core::convert::Into::into(ParseError::Empty),
+            );
+        }
+        Ok(n)
+    }
+    pub trait Source {
+        fn text(&self) -> ::core::result::Result<String, ParseError>;
+        fn number(&self) -> ::core::result::Result<u32, ParseError> {
+            ::core::result::Result::Ok(parse(&self.text()?)?)
+        }
+        fn check(&self) -> ::core::result::Result<(), ParseError> {
+            self.number()?;
+            ::core::result::Result::Ok(())
+        }
+    }
+    pub struct Fixed(pub &'static str);
+    impl Source for Fixed {
+        fn text(&self) -> ::core::result::Result<String, ParseError> {
+            ::core::result::Result::Ok(self.0.to_string())
+        }
+    }
+    impl Fixed {
+        pub fn words(
+            &self,
+        ) -> ::rustx::anyhow::Result<impl ::core::iter::Iterator<Item = &str> + '_> {
+            ::core::result::Result::Ok(self.0.split(' '))
+        }
+        pub fn forever(&self) -> ::rustx::anyhow::Result<u32> {
+            loop {}
+        }
+        pub fn nothing(&self) -> ::rustx::anyhow::Result<u32> {
+            todo!()
+        }
+    }
+}

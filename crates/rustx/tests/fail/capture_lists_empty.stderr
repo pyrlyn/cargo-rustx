@@ -1,0 +1,5 @@
+error: a capture list needs at least one capture; without captures write `move ||`
+ --> tests/fail/capture_lists_empty.rs:3:13
+  |
+3 |         move[] || 1
+  |             ^^

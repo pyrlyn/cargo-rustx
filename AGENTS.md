@@ -9,6 +9,7 @@ If an `AGENTS.md` or `CLAUDE.md` exists higher in the tree, follow it too; on co
 - `crates/rustx-core/src/tokens.rs`: `map_sequences`, the shared token-tree walker. Token passes use it instead of their own recursion. Its submodules hold the other helpers passes share (`punct`, `position`, `angle`, `syntax`); look there before writing a token check of your own.
 - `crates/rustx-macros`: the `sugar!` proc macro, a thin shell over `rustx_core::expand`.
 - `crates/rustx`: the facade users depend on; re-exports the macros and will hold runtime helpers.
+- `crates/rustx-build`: desugars `.rustx` files into `OUT_DIR` from `build.rs`, and holds the expansion and error rendering `rustx-cli expand` uses. `examples/build-rs` is a crate built that way.
 - `problems/`, `ARCHITECTURE.md`, `research.md`: the design. A pass implements exactly what its `problems/NN-*.md` file shows.
 
 ## Adding a sugar item

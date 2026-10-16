@@ -1,0 +1,69 @@
+// Problem 15: string literals going where the input writes `String`, `Option<String>` or
+// `Vec<String>` become `String::from`. The second module shows every position and what stays.
+mod contacts {
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone)]
+    pub struct Contact {
+        pub name: String,
+        pub email: Option<String>,
+        pub tags: Vec<String>,
+    }
+
+    impl Contact {
+        pub fn new(name: into String) -> Self {
+            Contact { name, email: None, tags: Vec::new() }
+        }
+
+        pub fn with_email(mut self, email: into String) -> Self {
+            self.email = Some(email);
+            self
+        }
+
+        pub fn tag(mut self, tag: into String) -> Self {
+            self.tags.push(tag);
+            self
+        }
+
+        pub fn email_domain(&self) -> Option<&str> {
+            self.email.as_deref().and_then(|e| e.split_once('@')).map(|(_, d)| d)
+        }
+    }
+
+    pub fn demo() -> HashMap<String, Contact> {
+        var book = HashMap::new();
+        let ann = Contact {
+            name: "Ann",
+            email: Some("ann@example.com"),
+            tags: vec!["work", "vip"],
+        };
+        book.insert("ann".into(), ann);
+        let bob = Contact::new("Bob").with_email("bob@example.org").tag("home");
+        book.insert("bob".into(), bob);
+        book
+    }
+}
+
+mod positions {
+    pub struct Label { pub text: String, pub alt: &'static str }
+
+    pub const DEFAULT: &str = "default";
+
+    pub fn greet(name: String, tags: Vec<String>) -> usize {
+        name.len() + tags.len()
+    }
+
+    pub fn all(label: &mut Label) -> Vec<String> {
+        let title: String = "title";
+        var note: Option<String> = None;
+        note = Some(r"raw note");
+        label.text = "changed";
+        let size = greet("Ann", vec!["a"; 2]);
+        let kept = Label { text: title, alt: "alt" };
+        let untyped = "untyped";
+        let bytes: &[u8] = b"bytes";
+        let all: Vec<String> =
+            vec!["first", label.text.clone(), kept.text, untyped.to_owned(), DEFAULT.into()];
+        all
+    }
+}

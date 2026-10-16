@@ -61,7 +61,7 @@
 //! - A call with generic arguments (`f::<T>(..)`, `x.m<T>(..)`) takes no named arguments: its
 //!   argument group follows a `>`, which the token half does not trace back.
 
-mod collect;
+pub(super) mod collect;
 mod named;
 mod plan;
 mod walk;

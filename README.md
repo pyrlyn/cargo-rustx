@@ -27,6 +27,34 @@ pub enum LoadError {
 
 An attribute macro runs the one sugar item it names on the item it sits on, and sees nothing else. `#[sugared]` on an inline module runs every sugar item that is valid Rust (`#[data]`, `#[delegate(..)]` fields, `#[display("..")]`, `#[from]`, `#[newtype]`, `#[borrows]`) across the module, so `#[delegate]` can use the module's traits and `except(..)`, and `#[newtype(validate = f)]` its functions. It is not called `#[sugar]` because `sugar!` holds that name.
 
+`#[dyn]` on a trait inside `sugar!` makes its `async fn`s callable through a generated `DynTrait` type (problem 14), via the `dynosaur` crate. It is behind an optional feature, so other users do not compile `dynosaur`: `rustx = { version = "..", features = ["dyn"] }`.
+
+To see the plain Rust that sugar turns into, run `cargo run -p rustx-cli -- expand <file>`: a `.rustx` file is desugared as a whole, and in a Rust file every `sugar! { .. }` invocation is replaced by its expansion. The output is formatted with `prettyplease` (comments other than doc comments are dropped); errors are printed as `file:line:column: message` with a non-zero exit code.
+
+To move existing code onto sugar, run `cargo run -p rustx-cli -- sugar <file.rs>`: it prints the file rewritten into sugar as the text of a `.rustx` file (save it as one, or paste it into `sugar! { .. }`). Only code that a sugar item expands back to exactly is rewritten (so far `let mut x` becomes `var x`, `.m::<T>()` becomes `.m<T>()` and `Rc::new(RefCell::new(e))` becomes `rc e`), and only those bytes change: comments and layout stay as written. Code that expansion would already change as written, such as `var x` inside a macro call, is reported as an error instead. Sugar expands to full std paths (`::std::rc::Rc::new`), and the check counts a short name such as `Rc` or `Option` as that path unless the file gives the name another meaning (its own item, a `use` from elsewhere, a generic parameter, a binding or a glob import).
+
+To format a `.rustx` file, run `cargo run -p rustx-cli -- fmt <file.rustx>`: it rewrites the file in place with the layout `rustfmt` gives ordinary Rust, keeping the sugar and every comment (`--check` writes nothing and exits with 1 when the file is not formatted). It needs `rustfmt` on `PATH`, and refuses any change that would alter what the file expands to. Not formatted yet: `sugar! { .. }` bodies inside Rust files, and files that use `bound` or `derive` presets, inline bounds, parameter or call defaults, named arguments or capture lists, which it refuses with the position of the sugar.
+
+### `.rustx` files via `build.rs`
+
+A whole file can be written in sugar as a `.rustx` file and desugared by the build script. Add `rustx-build` to `[build-dependencies]` (and `rustx` to `[dependencies]` when the sugar needs its runtime, as `throws` does), then:
+
+```rust
+// build.rs
+fn main() {
+    if let Err(err) = rustx_build::expand_file("src/stats.rustx") {
+        err.emit();
+    }
+}
+```
+
+```rust
+// src/lib.rs
+include!(concat!(env!("OUT_DIR"), "/src/stats.rs"));
+```
+
+The output sits under `OUT_DIR` at the source's path relative to the package root, with the extension `.rs`; `rustx_build::expand_dir("src")` desugars every `.rustx` file below a directory. The build script reruns when a desugared file, or a directory given to `expand_dir`, changes. `err.emit()` hands each error to Cargo as a `cargo::error` line, so the build fails with `error: <package>@<version>: src/stats.rustx:23:42: expected a trait after ...`; returning the error from `fn main() -> Result<(), rustx_build::Error>` also works but prints the same lines inside the build script's full output. `include!` rejects inner attributes, so `//!` docs and `#![..]` belong in the including file. rustc and clippy report problems in the generated code at the generated file, whose first line names its source. [examples/build-rs](examples/build-rs) is a working crate.
+
 ## Catalog
 
 Each file shows the problem in short form, then a detailed example in valid Rust and the same code with sugar.

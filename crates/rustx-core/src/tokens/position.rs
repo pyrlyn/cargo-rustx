@@ -25,6 +25,16 @@ pub(crate) fn at_statement_start(before: &[TokenTree]) -> bool {
     }
 }
 
+/// Whether the token at `i` starts a statement: [`at_statement_start`], or right after an outer
+/// attribute.
+///
+/// An outer attribute right before counts on its own, without checking what precedes it the
+/// way `bound_presets` does for items; that is the rule statement sugar (`var`, `throw`,
+/// `shared`) is specified and tested with.
+pub(crate) fn starts_statement(seq: &[TokenTree], i: usize) -> bool {
+    at_statement_start(&seq[..i]) || outer_attributes_start(seq, i) < i
+}
+
 /// Index of the first of the outer attributes (`#[..]`) right before `end`, or `end` if none.
 pub(crate) fn outer_attributes_start(seq: &[TokenTree], mut end: usize) -> usize {
     while let [.., hash, TokenTree::Group(g)] = &seq[..end]
@@ -67,6 +77,14 @@ mod tests {
         for before in ["let a =", "f(x) +", "x [0]", "#[allow(unused)]", "a ,"] {
             assert!(!at_statement_start(&trees(before)), "{before}");
         }
+    }
+
+    #[test]
+    fn a_token_after_an_outer_attribute_starts_a_statement() {
+        let seq = trees("let a = #[x] b; #[y] c");
+        assert!(starts_statement(&seq, 0) && starts_statement(&seq, 5));
+        assert!(starts_statement(&seq, 9));
+        assert!(!starts_statement(&seq, 3) && !starts_statement(&seq, 1));
     }
 
     #[test]

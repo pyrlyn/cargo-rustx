@@ -98,6 +98,7 @@ mod tests {
                     name: Some(name.to_owned()),
                     label: name.to_owned(),
                     default,
+                    ty: syn::parse_quote!(u8),
                 })
                 .collect(),
         }

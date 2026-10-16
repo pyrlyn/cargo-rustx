@@ -1,0 +1,5 @@
+error: `#[dyn]` is given twice
+ --> tests/fail/dyn_traits_twice.rs:3:7
+  |
+3 |     #[dyn(AnyStore)]
+  |       ^^^

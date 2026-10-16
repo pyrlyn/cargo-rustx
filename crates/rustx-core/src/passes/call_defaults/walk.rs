@@ -14,7 +14,7 @@ use syn::{
     Macro, Meta, Path, PathSegment, Token, TraitItemFn,
 };
 
-use super::collect::{Fns, Shape, type_name};
+use super::collect::{Fns, Shape, path_target, type_name};
 use super::named::{self, Named};
 use super::plan::{Plan, Problem, Slot, plan};
 use crate::passes::macro_args::MacroArgs;
@@ -71,10 +71,11 @@ impl Walk {
             return;
         };
         let names = names(&args);
-        let resolved = self.path_target(&call.func).and_then(|(name, qualifier)| {
-            let shapes = self.fns.path_call(&name.to_string(), qualifier.as_deref());
-            plans(&shapes, &names).map(|plans| (name, plans))
-        });
+        let resolved =
+            path_target(&call.func, self.owner.as_deref()).and_then(|(name, qualifier)| {
+                let shapes = self.fns.path_call(&name.to_string(), qualifier.as_deref());
+                plans(&shapes, &names).map(|plans| (name, plans))
+            });
         call.args = self.apply(resolved, args, call.paren_token.span.close());
     }
 
@@ -86,24 +87,6 @@ impl Walk {
         let shapes = self.fns.method_call(&call.method.to_string());
         let resolved = plans(&shapes, &names(&args)).map(|plans| (call.method.clone(), plans));
         call.args = self.apply(resolved, args, call.paren_token.span.close());
-    }
-
-    /// The name a path call is resolved by, and its qualifier with `Self` replaced by the
-    /// enclosing type; `None` for anything else that is called.
-    fn path_target(&self, func: &Expr) -> Option<(Ident, Option<String>)> {
-        let Expr::Path(ExprPath {
-            qself: None, path, ..
-        }) = func
-        else {
-            return None;
-        };
-        let mut segments = path.segments.iter().rev();
-        let name = segments.next()?.ident.clone();
-        let qualifier = match segments.next().map(|segment| segment.ident.to_string()) {
-            Some(word) if word == "Self" => Some(self.owner.clone()?),
-            other => other,
-        };
-        Some((name, qualifier))
     }
 
     /// Takes a call's arguments apart, then visits each value; `None` after reporting a named

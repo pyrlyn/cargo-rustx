@@ -1,0 +1,75 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/throw.rustx
+---
+mod settings {
+    pub fn workers(text: &str) -> ::rustx::anyhow::Result<usize> {
+        let workers = text.parse::<usize>()?;
+        if workers == 0 {
+            return ::core::result::Result::Err(
+                ::rustx::anyhow::anyhow!("workers must be > 0"),
+            );
+        }
+        ::core::result::Result::Ok(workers)
+    }
+    pub fn port(text: &str) -> ::rustx::anyhow::Result<u16> {
+        ::core::result::Result::Ok(
+            match text.parse::<u16>() {
+                Ok(0) => {
+                    return ::core::result::Result::Err(
+                        ::rustx::anyhow::anyhow!("port {text} is reserved"),
+                    );
+                }
+                Ok(port) => port,
+                Err(err) => {
+                    return ::core::result::Result::Err(::rustx::anyhow::anyhow!(err));
+                }
+            },
+        )
+    }
+}
+mod own_error {
+    #[derive(Debug)]
+    pub enum ConfigError {
+        Missing(&'static str),
+        Zero,
+    }
+    pub fn require(
+        value: Option<u32>,
+        name: &'static str,
+    ) -> ::core::result::Result<u32, ConfigError> {
+        let value = match value {
+            Some(v) => v,
+            None => {
+                return ::core::result::Result::Err(
+                    ::core::convert::Into::into(ConfigError::Missing(name)),
+                );
+            }
+        };
+        fn check(v: u32) -> ::core::result::Result<u32, ConfigError> {
+            if v == 0 {
+                return ::core::result::Result::Err(
+                    ::core::convert::Into::into(ConfigError::Zero),
+                );
+            }
+            ::core::result::Result::Ok(v)
+        }
+        let doubled = value.checked_mul(2).map(|v| v + 1);
+        ::core::result::Result::Ok(check(doubled.unwrap_or(value))?)
+    }
+    pub fn first_line(
+        text: &str,
+    ) -> ::core::result::Result<&str, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(line) = text.lines().next() else {
+            return ::core::result::Result::Err(
+                ::core::convert::Into::into("empty input"),
+            )
+        };
+        ::core::result::Result::Ok(line)
+    }
+    pub fn throw(throw: u8) -> u8 {
+        let throw = throw + 1;
+        throw
+    }
+}

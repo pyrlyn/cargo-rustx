@@ -6,7 +6,7 @@
 
 use proc_macro2::{Ident, Span};
 use syn::punctuated::Punctuated;
-use syn::{Attribute, Path, PathArguments, Token, Type};
+use syn::{Attribute, Expr, ExprLit, GenericArgument, Lit, Path, PathArguments, Token, Type};
 
 /// Prefix of every name the passes generate; reserved, so user names cannot collide with them.
 pub(crate) const RESERVED_PREFIX: &str = "__rustx_";
@@ -75,9 +75,32 @@ pub(crate) fn std_type<'a>(ty: &'a Type, module: &str, name: &str) -> Option<&'a
     (path.qself.is_none() && in_std && last.ident == name).then_some(&last.arguments)
 }
 
+/// `T` of the std type `name` of `module` written with one type argument (`Vec<T>`,
+/// `std::option::Option<T>`), recognised as `std_type` does.
+pub(crate) fn std_argument<'a>(ty: &'a Type, module: &str, name: &str) -> Option<&'a Type> {
+    let PathArguments::AngleBracketed(args) = std_type(ty, module, name)? else {
+        return None;
+    };
+    match (args.args.first(), args.args.len()) {
+        (Some(GenericArgument::Type(argument)), 1) => Some(argument),
+        _ => None,
+    }
+}
+
 /// `String`, `std::string::String` or `alloc::string::String`.
 pub(crate) fn is_string(ty: &Type) -> bool {
     std_type(ty, "string", "String").is_some_and(PathArguments::is_none)
+}
+
+/// A string literal, raw or not; byte and C strings are not `str`.
+pub(crate) fn is_str_literal(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Lit(ExprLit {
+            lit: Lit::Str(_),
+            ..
+        })
+    )
 }
 
 pub(crate) fn is_marker(attr: &Attribute) -> bool {
@@ -155,6 +178,14 @@ mod tests {
         }
         assert!(std_type(&ty("std::vec::Vec<u8>"), "vec", "Vec").is_some());
         assert!(std_type(&ty("core::vec::Vec<u8>"), "vec", "Vec").is_none());
+        let argument = |source: &str| {
+            std_argument(&ty(source), "option", "Option")
+                .map(|arg| quote::ToTokens::to_token_stream(arg).to_string())
+        };
+        assert_eq!(argument("std::option::Option<u8>").as_deref(), Some("u8"));
+        for other in ["Option", "Option<'a>", "Option<u8, u8>", "Option<N = u8>"] {
+            assert_eq!(argument(other), None, "{other}");
+        }
     }
 
     #[test]

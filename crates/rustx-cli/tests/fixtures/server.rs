@@ -1,0 +1,37 @@
+//! Problem 17 in a Rust file: `sugar!` as an item and inside a function body.
+
+use rustx::sugar;
+
+rustx::sugar! {
+    mod server {
+        #[derive(Debug, Clone)]
+        pub struct ServerConfig {
+            pub host: String = String::from("127.0.0.1"),
+            pub port: u16 = 8080,
+            pub workers: usize = 4,
+        }
+
+        pub fn dev() -> ServerConfig {
+            ServerConfig { port: 3000, .. }
+        }
+
+        pub fn connect(host: &str, port: u16 = 5432, timeout_ms: u64 = 5_000) -> String {
+            format!("{host}:{port} ({timeout_ms} ms)")
+        }
+
+        pub fn demo() -> Vec<String> {
+            vec![connect("db"), connect("db", port: 6432), connect("db", timeout_ms: 100)]
+        }
+    }
+}
+
+fn main() {
+    sugar! {
+        fn total(xs: &[u32]) -> u32 {
+            var sum = 0;
+            for x in xs { sum += x; }
+            sum
+        }
+    }
+    println!("{} {:?}", total(&[1, 2, 3]), server::dev());
+}

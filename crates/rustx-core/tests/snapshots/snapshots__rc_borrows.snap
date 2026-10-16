@@ -1,0 +1,70 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/rc_borrows.rustx
+---
+mod tree {
+    use std::rc::Rc;
+    pub struct Node {
+        pub name: String,
+        pub size: u64,
+        pub parent: Option<::std::rc::Weak<::core::cell::RefCell<Node>>>,
+        pub children: Vec<::std::rc::Rc<::core::cell::RefCell<Node>>>,
+    }
+    pub fn new_node(
+        name: &str,
+        size: u64,
+    ) -> ::std::rc::Rc<::core::cell::RefCell<Node>> {
+        ::std::rc::Rc::new(
+            ::std::cell::RefCell::new(Node {
+                name: name.to_string(),
+                size,
+                parent: None,
+                children: Vec::new(),
+            }),
+        )
+    }
+    pub fn add_child(
+        parent: &::std::rc::Rc<::core::cell::RefCell<Node>>,
+        child: ::std::rc::Rc<::core::cell::RefCell<Node>>,
+    ) {
+        child.borrow_mut().parent = Some(Rc::downgrade(parent));
+        parent.borrow_mut().size += child.borrow().size;
+        parent.borrow_mut().children.push(child);
+    }
+    pub fn path(node: &::std::rc::Rc<::core::cell::RefCell<Node>>) -> String {
+        let mut parts = vec![node.borrow().name.clone()];
+        let mut cur = node.borrow().parent.as_ref().and_then(|w| w.upgrade());
+        while let Some(p) = cur {
+            parts.push(p.borrow().name.clone());
+            cur = p.borrow().parent.as_ref().and_then(|w| w.upgrade());
+        }
+        parts.reverse();
+        parts.join("/")
+    }
+    pub fn count(node: &::std::rc::Rc<::core::cell::RefCell<Node>>) -> usize {
+        1 + node.borrow().children.iter().map(count).sum::<usize>()
+    }
+    pub fn double(node: &::std::rc::Rc<::core::cell::RefCell<Node>>) -> u64 {
+        {
+            let __rustx_node = &mut *node.borrow_mut();
+            __rustx_node.size = __rustx_node.size * 2;
+        };
+        node.borrow().size
+    }
+    pub fn totals(nodes: Vec<::std::rc::Rc<::core::cell::RefCell<Node>>>) -> Vec<u64> {
+        let seen = ::std::rc::Rc::new(::std::cell::RefCell::new(Vec::new()));
+        for n in &nodes {
+            seen.borrow_mut().push(n.borrow().size);
+        }
+        nodes
+            .iter()
+            .map(|n: &::std::rc::Rc<::core::cell::RefCell<Node>>| {
+                n.borrow().size + seen.borrow().len() as u64
+            })
+            .collect()
+    }
+    pub fn reset(n: &::std::rc::Rc<::core::cell::RefCell<u64>>) -> u64 {
+        n.replace(0)
+    }
+}

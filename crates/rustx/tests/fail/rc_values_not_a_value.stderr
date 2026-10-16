@@ -1,0 +1,5 @@
+error: expected an expression after `rc`, as in `rc value`; a type here needs the plain `Rc<RefCell<T>>` spelling
+ --> tests/fail/rc_values_not_a_value.rs:3:19
+  |
+3 |     fn pair() -> (rc dyn std::fmt::Debug, u8) {
+  |                   ^^

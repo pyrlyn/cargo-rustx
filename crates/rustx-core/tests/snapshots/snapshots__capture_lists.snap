@@ -1,0 +1,74 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/capture_lists.rustx
+---
+mod pool {
+    use std::sync::mpsc;
+    use std::sync::Arc;
+    use std::thread;
+    pub struct Job {
+        id: usize,
+        input: String,
+    }
+    #[allow(dead_code)]
+    impl Job {
+        pub fn new(id: usize, input: String) -> Self {
+            Self { id, input }
+        }
+        pub fn id(&self) -> usize {
+            self.id
+        }
+        pub fn input(&self) -> &str {
+            &self.input
+        }
+    }
+    pub fn run_pool(jobs: Vec<Job>, prefix: String, workers: usize) -> Vec<String> {
+        let jobs = Arc::new(jobs);
+        let (tx, rx) = mpsc::channel();
+        let mut handles = Vec::new();
+        for w in 0..workers {
+            handles
+                .push(
+                    thread::spawn({
+                        let jobs = jobs.clone();
+                        let tx = tx.clone();
+                        let prefix = prefix.clone();
+                        move || {
+                            for job in jobs.iter().filter(|j| j.id % workers == w) {
+                                let out = format!(
+                                    "{}[{}] {}", prefix, w, job.input.to_uppercase()
+                                );
+                                tx.send(out).unwrap();
+                            }
+                        }
+                    }),
+                );
+        }
+        drop(tx);
+        let reporter = thread::spawn({
+            let prefix = prefix.clone();
+            move || {
+                let mut all = rx.iter().collect::<Vec<String>>();
+                all.sort();
+                all.insert(0, format!("{} report", prefix));
+                all
+            }
+        });
+        for h in handles {
+            h.join().unwrap();
+        }
+        reporter.join().unwrap()
+    }
+}
+pub fn adders(base: Vec<u32>) -> (impl Fn(u32) -> usize, impl AsyncFn(u32) -> u32) {
+    let count = {
+        let base = base.clone();
+        move |x: u32| base.iter().filter(|&&b| b < x).count()
+    };
+    let sum = {
+        let base = base.iter().sum::<u32>();
+        async move |x| base + x
+    };
+    (count, sum)
+}

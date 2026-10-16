@@ -1,0 +1,5 @@
+error: `name` is already captured in this list
+ --> tests/fail/capture_lists_duplicate.rs:3:28
+  |
+3 |         move[name.clone(), name.to_uppercase()] || name.len()
+  |                            ^^^^

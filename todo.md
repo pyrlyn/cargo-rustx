@@ -1,15 +1,12 @@
 - T19. Convert plain Rust into rustx sugar
-- T20. M5: `T throws` return types and tail `Ok(..)`
-- T21. M5: `throw e`
-- T22. M6: `move[..]` capture lists
-- T23. M6: `Shared<T>` runtime type
-- T24. M6: `shared` bindings and `shared T` types
-- T25. M6: `rc e` expressions
-- T26. M6: borrows on `rc T` field access
-- T27. M7: `async fn` in traits for `dyn` use
-- T28. M8: implicit lossless `into()`
-- T29. M8: string literals into `String`
-- T30. M9: `rustx-cli expand`
-- T31. M9: `rustx-cli fmt`
-- T32. M9: file-level `.rustx` via `build.rs`
+- T19.5. Reverse rule: string literal conversions back to a bare literal
+- T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
+- T19.7. Reverse rule: `Result` functions back to `throws`
+- T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
+- T19.9. Reverse rule: generic bounds back to inline bounds
+- T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
+- T19.11. Sugar driver: trailing commas and edit groups
+- T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
+- T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
+- T31.2. M9: `rustx-cli fmt` for the remaining sugar
 - T33. M9: user documentation

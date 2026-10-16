@@ -3,11 +3,11 @@
 
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, quote_spanned};
-use syn::{GenericArgument, Item, PathArguments, Type};
+use syn::{Item, Type};
 
 use super::{Flag, Kind, Newtype};
 use crate::passes::impl_header::ImplHeader;
-use crate::tokens::syntax::{introduced_span, is_string, std_type};
+use crate::tokens::syntax::{introduced_span, is_string, std_argument};
 
 pub(super) fn generate(newtype: &Newtype, flags: &[Flag]) -> syn::Result<Vec<Item>> {
     let mut items = vec![constructor(newtype)];
@@ -88,21 +88,10 @@ fn flag_impl(newtype: &Newtype, flag: &Flag) -> TokenStream {
 fn target(inner: &Type, span: Span) -> TokenStream {
     if is_string(inner) {
         quote_spanned!(span=> str)
-    } else if let Some(element) = vec_element(inner) {
+    } else if let Some(element) = std_argument(inner, "vec", "Vec") {
         quote_spanned!(span=> [#element])
     } else {
         inner.to_token_stream()
-    }
-}
-
-/// `T` of `Vec<T>`, `std::vec::Vec<T>` or `alloc::vec::Vec<T>`.
-fn vec_element(ty: &Type) -> Option<&Type> {
-    let PathArguments::AngleBracketed(args) = std_type(ty, "vec", "Vec")? else {
-        return None;
-    };
-    match (args.args.first(), args.args.len()) {
-        (Some(GenericArgument::Type(element)), 1) => Some(element),
-        _ => None,
     }
 }
 

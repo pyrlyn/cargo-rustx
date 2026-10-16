@@ -4,13 +4,16 @@
 //! Token passes run first, in list order, because their output must parse as Rust.
 //! AST passes then run on the parsed file; all of them run so errors are reported together.
 
+mod access;
 mod attr_flags;
 mod borrows;
 mod bound_presets;
 mod call_defaults;
+mod capture_lists;
 mod data;
 mod delegate;
 mod derive_presets;
+mod dyn_traits;
 mod field_defaults;
 mod from_attribute;
 mod from_display;
@@ -23,9 +26,17 @@ mod macro_args;
 mod newtype;
 mod param_defaults;
 mod prefix_types;
+mod rc_borrows;
+mod rc_values;
+mod shared;
 mod signatures;
+mod string_literals;
+mod throw;
+mod throws;
 mod turbofish;
+mod typed_positions;
 mod var;
+mod widen;
 
 use proc_macro2::TokenStream;
 
@@ -39,10 +50,18 @@ type AstPass = fn(&mut syn::File) -> syn::Result<()>;
 // before `prefix_types`, so `iter T` can pick up a `from` lifetime instead of `'_`. Item-level
 // M4 sugar (`derive` presets, `from` variants) right after `bound` presets. Named
 // arguments before `from` lifetimes and `prefix_types`, which would read `name:` as a type's `:`.
+// Capture lists last: they read the closure after them with `syn`, which needs every other
+// sugar in it gone.
+// `throws` after `prefix_types`: moved into `Result<..>` first, `iter &T` would sit after `<`,
+// where `prefix_types` cannot tell it from a comparison.
+// `throw` right after `throws`, whose body marker tells it the fn's error type, and before
+// capture lists, which parse the closure after a list with `syn`.
 const TOKEN_PASSES: &[TokenPass] = &[
     var::rewrite,
+    shared::rewrite,
     bound_presets::rewrite,
     derive_presets::rewrite,
+    dyn_traits::rewrite,
     from_display::rewrite,
     inline_bounds::rewrite,
     into_params::rewrite,
@@ -50,7 +69,11 @@ const TOKEN_PASSES: &[TokenPass] = &[
     call_defaults::rewrite,
     from_lifetimes::rewrite,
     prefix_types::rewrite,
+    throws::rewrite,
+    throw::rewrite,
+    rc_values::rewrite,
     turbofish::rewrite,
+    capture_lists::rewrite,
 ];
 
 // Derive-like M4 passes first, so the impls they generate get generics and lifetimes from
@@ -71,6 +94,12 @@ const AST_PASSES: &[AstPass] = &[
     param_defaults::lower,
     borrows::lower,
     from_lifetimes::lower,
+    dyn_traits::lower,
+    shared::lower,
+    rc_borrows::lower,
+    string_literals::lower,
+    widen::lower,
+    throws::lower,
 ];
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
@@ -81,6 +110,11 @@ pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream
         tokens = pass(tokens)?;
     }
     Ok(tokens)
+}
+
+/// Reports every `#[dyn]` in `tokens`, for a crate without the `dyn` feature of `rustx`.
+pub(crate) fn reject_dyn(tokens: TokenStream) -> syn::Result<()> {
+    dyn_traits::reject(tokens)
 }
 
 pub(crate) fn rewrite_ast(file: &mut syn::File) -> syn::Result<()> {

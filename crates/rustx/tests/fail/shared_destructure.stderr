@@ -1,0 +1,5 @@
+error: `shared` takes a single name, as in `shared name = value;`
+ --> tests/fail/shared_destructure.rs:3:9
+  |
+3 |         shared (a, b) = pair;
+  |         ^^^^^^

@@ -1,0 +1,5 @@
+error: a capture is named after the variable it starts with (`a.clone()` binds `a`); bind this value with `let` before the closure and capture that
+ --> tests/fail/capture_lists_no_name.rs:5:14
+  |
+5 |         move[Arc::clone(&shared)] || shared.len()
+  |              ^^^

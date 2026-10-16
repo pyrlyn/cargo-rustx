@@ -1,0 +1,162 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/widen.rustx
+---
+mod summary {
+    pub struct Sample {
+        timestamp_ms: u64,
+        bytes: u32,
+        latency_us: u16,
+    }
+    #[allow(dead_code)]
+    impl Sample {
+        pub fn new(timestamp_ms: u64, bytes: u32, latency_us: u16) -> Self {
+            Self {
+                timestamp_ms,
+                bytes,
+                latency_us,
+            }
+        }
+        pub fn timestamp_ms(&self) -> u64 {
+            self.timestamp_ms
+        }
+        pub fn bytes(&self) -> u32 {
+            self.bytes
+        }
+        pub fn latency_us(&self) -> u16 {
+            self.latency_us
+        }
+    }
+    pub struct Summary {
+        total_bytes: u64,
+        avg_latency_us: f64,
+        throughput_bps: f64,
+        window_s: f32,
+    }
+    #[allow(dead_code)]
+    impl Summary {
+        pub fn new(
+            total_bytes: u64,
+            avg_latency_us: f64,
+            throughput_bps: f64,
+            window_s: f32,
+        ) -> Self {
+            Self {
+                total_bytes,
+                avg_latency_us,
+                throughput_bps,
+                window_s,
+            }
+        }
+        pub fn total_bytes(&self) -> u64 {
+            self.total_bytes
+        }
+        pub fn avg_latency_us(&self) -> f64 {
+            self.avg_latency_us
+        }
+        pub fn throughput_bps(&self) -> f64 {
+            self.throughput_bps
+        }
+        pub fn window_s(&self) -> f32 {
+            self.window_s
+        }
+    }
+    pub fn summarize(samples: &[Sample]) -> Option<Summary> {
+        let first = samples.first()?;
+        let last = samples.last()?;
+        let mut total_bytes: u64 = 0;
+        let mut latency_sum: u64 = 0;
+        for s in samples {
+            total_bytes
+                += <::core::primitive::u64 as ::core::convert::From<
+                    ::core::primitive::u32,
+                >>::from(s.bytes);
+            latency_sum
+                += <::core::primitive::u64 as ::core::convert::From<
+                    ::core::primitive::u16,
+                >>::from(s.latency_us);
+        }
+        let n = samples.len() as f64;
+        let window_ms = (last.timestamp_ms - first.timestamp_ms).max(1);
+        let window_s = window_ms as f64 / 1000.0;
+        Some(
+            Summary::new(
+                total_bytes,
+                latency_sum as f64 / n,
+                total_bytes as f64 * 8.0 / window_s,
+                window_s as f32,
+            ),
+        )
+    }
+    pub fn bucket(latency_us: u16) -> usize {
+        let v: u32 = <::core::primitive::u32 as ::core::convert::From<
+            ::core::primitive::u16,
+        >>::from(latency_us);
+        (v / 100) as usize
+    }
+}
+mod positions {
+    pub struct Counter {
+        total: u64,
+        peak: i64,
+        ratio: f64,
+    }
+    impl Counter {
+        pub fn new(total: u64, peak: i64, ratio: f64) -> Self {
+            Counter { total, peak, ratio }
+        }
+        pub fn add(&mut self, n: u32, level: i16) {
+            self.total
+                += <::core::primitive::u64 as ::core::convert::From<
+                    ::core::primitive::u32,
+                >>::from(n);
+            self.peak = <::core::primitive::i64 as ::core::convert::From<
+                ::core::primitive::i16,
+            >>::from(level);
+        }
+    }
+    pub fn scale(x: u64, by: f64) -> f64 {
+        x as f64 * by
+    }
+    pub fn demo(small: u8, half: f32, c: &mut Counter) -> f64 {
+        let wide: u64 = <::core::primitive::u64 as ::core::convert::From<
+            ::core::primitive::u8,
+        >>::from(small);
+        let mut sum: i32 = 0;
+        sum
+            += <::core::primitive::i32 as ::core::convert::From<
+                ::core::primitive::u8,
+            >>::from(small);
+        c.total
+            += <::core::primitive::u64 as ::core::convert::From<
+                ::core::primitive::u8,
+            >>::from(small);
+        let fresh = Counter::new(
+            <::core::primitive::u64 as ::core::convert::From<
+                ::core::primitive::u8,
+            >>::from(small),
+            -1,
+            <::core::primitive::f64 as ::core::convert::From<
+                ::core::primitive::f32,
+            >>::from(half),
+        );
+        c.ratio = <::core::primitive::f64 as ::core::convert::From<
+            ::core::primitive::f32,
+        >>::from(half);
+        let small = 3;
+        let still: u64 = small;
+        let lossy: f32 = wide as f32;
+        sum <<= small;
+        scale(
+            wide,
+            <::core::primitive::f64 as ::core::convert::From<
+                ::core::primitive::f32,
+            >>::from(half),
+        ) + fresh.ratio + lossy as f64 + still as f64
+    }
+    pub fn unmarked(small: u8) -> u64 {
+        let x: u64 = small.into();
+        x
+    }
+}

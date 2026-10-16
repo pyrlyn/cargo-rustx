@@ -1,0 +1,5 @@
+error: expected `#[dyn]` or `#[dyn(DynName)]`, where `DynName` names the dyn type
+ --> tests/fail/dyn_traits_bad_argument.rs:2:11
+  |
+2 |     #[dyn(pub DynStore)]
+  |           ^^^

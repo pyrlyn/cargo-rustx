@@ -1,0 +1,5 @@
+error: `#[dyn]` goes on a trait, to make it usable as a dyn type
+ --> tests/fail/dyn_traits_not_a_trait.rs:2:7
+  |
+2 |     #[dyn]
+  |       ^^^

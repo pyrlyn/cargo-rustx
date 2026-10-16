@@ -5,7 +5,7 @@
 //! behind for rustc to reject.
 
 use syn::visit_mut::{self, VisitMut};
-use syn::{Block, ForeignItemFn, ImplItemFn, ItemFn, Signature, TraitItemFn};
+use syn::{Attribute, Block, ForeignItemFn, ImplItemFn, ItemFn, Signature, TraitItemFn};
 
 use crate::tokens::syntax::combine;
 
@@ -13,9 +13,18 @@ use crate::tokens::syntax::combine;
 ///
 /// `body` is `None` for a trait method without a default body and for an `extern` fn. Errors
 /// from all signatures are combined.
-pub(super) fn for_each_signature<F>(file: &mut syn::File, rewrite: F) -> syn::Result<()>
+pub(super) fn for_each_signature<F>(file: &mut syn::File, mut rewrite: F) -> syn::Result<()>
 where
     F: FnMut(&mut Signature, Option<&mut Block>) -> syn::Result<()>,
+{
+    for_each_fn(file, |_, sig, body| rewrite(sig, body))
+}
+
+/// Like [`for_each_signature`], with the fn's attributes too, inner ones from its body included:
+/// a pass that marks the whole fn rather than a parameter finds its marker there.
+pub(super) fn for_each_fn<F>(file: &mut syn::File, rewrite: F) -> syn::Result<()>
+where
+    F: FnMut(&mut Vec<Attribute>, &mut Signature, Option<&mut Block>) -> syn::Result<()>,
 {
     let mut walk = Walk {
         rewrite,
@@ -32,10 +41,10 @@ struct Walk<F> {
 
 impl<F> Walk<F>
 where
-    F: FnMut(&mut Signature, Option<&mut Block>) -> syn::Result<()>,
+    F: FnMut(&mut Vec<Attribute>, &mut Signature, Option<&mut Block>) -> syn::Result<()>,
 {
-    fn apply(&mut self, sig: &mut Signature, body: Option<&mut Block>) {
-        if let Err(err) = (self.rewrite)(sig, body) {
+    fn apply(&mut self, attrs: &mut Vec<Attribute>, sig: &mut Signature, body: Option<&mut Block>) {
+        if let Err(err) = (self.rewrite)(attrs, sig, body) {
             combine(&mut self.errors, err);
         }
     }
@@ -43,25 +52,25 @@ where
 
 impl<F> VisitMut for Walk<F>
 where
-    F: FnMut(&mut Signature, Option<&mut Block>) -> syn::Result<()>,
+    F: FnMut(&mut Vec<Attribute>, &mut Signature, Option<&mut Block>) -> syn::Result<()>,
 {
     fn visit_item_fn_mut(&mut self, item: &mut ItemFn) {
-        self.apply(&mut item.sig, Some(&mut item.block));
+        self.apply(&mut item.attrs, &mut item.sig, Some(&mut item.block));
         visit_mut::visit_item_fn_mut(self, item);
     }
 
     fn visit_impl_item_fn_mut(&mut self, item: &mut ImplItemFn) {
-        self.apply(&mut item.sig, Some(&mut item.block));
+        self.apply(&mut item.attrs, &mut item.sig, Some(&mut item.block));
         visit_mut::visit_impl_item_fn_mut(self, item);
     }
 
     fn visit_trait_item_fn_mut(&mut self, item: &mut TraitItemFn) {
-        self.apply(&mut item.sig, item.default.as_mut());
+        self.apply(&mut item.attrs, &mut item.sig, item.default.as_mut());
         visit_mut::visit_trait_item_fn_mut(self, item);
     }
 
     fn visit_foreign_item_fn_mut(&mut self, item: &mut ForeignItemFn) {
-        self.apply(&mut item.sig, None);
+        self.apply(&mut item.attrs, &mut item.sig, None);
         visit_mut::visit_foreign_item_fn_mut(self, item);
     }
 }
@@ -98,6 +107,30 @@ mod tests {
                 "foreign false",
             ]
         );
+    }
+
+    #[test]
+    fn every_fn_comes_with_its_outer_and_inner_attributes() {
+        let mut file: syn::File = syn::parse2(quote! {
+            #[a] fn free() { #![b] }
+            impl S { #[c] fn method(&self) { #![d] } }
+            trait T { #[e] fn declared(); }
+        })
+        .unwrap();
+        let mut seen = Vec::new();
+        for_each_fn(&mut file, |attrs, sig, _| {
+            let names = attrs
+                .iter()
+                .map(|attr| quote::ToTokens::to_token_stream(attr.path()).to_string());
+            seen.push(format!(
+                "{} {}",
+                sig.ident,
+                names.collect::<Vec<_>>().join(",")
+            ));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(seen, ["free a,b", "method c,d", "declared e"]);
     }
 
     #[test]

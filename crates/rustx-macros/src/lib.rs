@@ -11,7 +11,12 @@ use rustx_core::{AttributeMacro, expand_attribute};
 /// Valid Rust passes through unchanged.
 #[proc_macro]
 pub fn sugar(input: TokenStream) -> TokenStream {
-    rustx_core::expand(input.into()).into()
+    // `rustx` turns on this crate's `dyn` feature together with the `dynosaur` re-export, so the
+    // feature here says whether `#[dyn]` output would resolve in the user crate.
+    let features = rustx_core::Features {
+        dyn_traits: cfg!(feature = "dyn"),
+    };
+    rustx_core::expand_with(input.into(), features).into()
 }
 
 /// Adds a constructor, getters and, with `#[data(setters, with, builder)]`, setters, `with_`

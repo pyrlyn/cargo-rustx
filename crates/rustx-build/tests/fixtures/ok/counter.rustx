@@ -1,0 +1,5 @@
+pub fn count(xs: &[u32]) -> usize {
+    var count = 0;
+    for _ in xs { count += 1; }
+    count
+}

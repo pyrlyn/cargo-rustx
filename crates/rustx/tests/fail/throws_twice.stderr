@@ -1,0 +1,5 @@
+error: `throws` is written twice; a return type takes it once
+ --> tests/fail/throws_twice.rs:2:40
+  |
+2 |     fn parse(text: &str) -> u32 throws throws {
+  |                                        ^^^^^^
