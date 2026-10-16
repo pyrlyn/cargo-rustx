@@ -88,6 +88,19 @@ fn boxed_trait_objects_and_iterator_types_become_tilde_and_iter() {
 }
 
 #[test]
+fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_strings.rs"]);
+    insta::assert_snapshot!("sugar_strings_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_strings.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("::std::string::String::from(\"Ann\")"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =

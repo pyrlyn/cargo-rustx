@@ -10,6 +10,7 @@
 mod prefix_types;
 mod rc_values;
 mod std_paths;
+mod string_literals;
 mod turbofish;
 mod var;
 
@@ -28,13 +29,15 @@ pub(crate) trait ReverseRule {
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
-// it and is dropped whatever the order: such a value keeps its plain spelling.
+// it and is dropped whatever the order: such a value keeps its plain spelling. A string literal
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
 // `prefix_types` edits types and `rc_values` expressions, so their edits never overlap.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
     &prefix_types::PrefixTypes,
+    &string_literals::StringLiterals,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
