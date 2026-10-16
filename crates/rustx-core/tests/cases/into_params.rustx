@@ -1,6 +1,8 @@
-// Problem 15, `into T` parameters only: string literals into `String` fields are M8, so the
-// literals keep their explicit conversions. The second module mixes `into` with inline bounds
-// and a `from` lifetime in one signature.
+// Problem 15, `into T` parameters only. The struct literal's conversions are no longer needed
+// (string literals into `String` fields are the `string_literals` case); they stay so this case
+// shows `into T` alone. The `insert` keys still need `.into()`: method call arguments stay
+// explicit. The second module mixes `into` with inline bounds and a `from` lifetime in one
+// signature.
 mod contacts {
     use std::collections::HashMap;
 
