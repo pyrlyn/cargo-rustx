@@ -103,6 +103,8 @@ const AST_PASSES: &[AstPass] = &[
 ];
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
+#[cfg(feature = "sugar")]
+pub(crate) use inline_bounds::KnownTypes;
 pub(crate) use newtype::VALIDATOR_NOT_FOUND;
 #[cfg(feature = "sugar")]
 pub(crate) use rc_borrows::would_borrow;

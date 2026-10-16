@@ -1,0 +1,23 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! Generic functions with their bounds in `where`, written without sugar.
+
+use std::fmt::Debug;
+
+/// Prints one value.
+pub fn show(value: T: Debug) {
+    println!("{value:?}");
+}
+
+pub fn label<'a, K: Copy>(key: &'a K, value: V: Clone + Debug) -> String where K: Debug {
+    var copy = value.clone();
+    copy = value;
+    format!("{key:?}: {copy:?}")
+}
+
+// `T` is also the return type, so it stays a generic.
+pub fn same<T>(value: T) -> T where T: Clone {
+    value.clone()
+}

@@ -7,10 +7,8 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
-| T19.11 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.12 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.13 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
 
@@ -21,12 +19,6 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
-
-### T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
-
-Inverts parameter defaults (problem 17, from the T19 card): `x: Option<T>` plus the exact `let x = x.unwrap_or(..)` (or whatever `param_defaults` emits) becomes `x: T = ..`. Call sites are out of scope unless the pass rewrites them in a way a rule can invert safely. Done when the pass output turns back into the sugar and other `Option` parameters are left alone.
-
-Plan: read `passes/param_defaults.rs` and `call_defaults` for the emitted shapes; `sugar/param_defaults.rs` implementing `ReverseRule` with the type and rebinding edits kept or dropped together; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T19.9. Reverse rule: generic bounds back to inline bounds
 
@@ -39,12 +31,6 @@ Plan: read `passes/inline_bounds.rs` for the emitted shape (generic list positio
 Inverts the type half of problem 16 (`prefix_types`): a type written `Rc<RefCell<T>>` (any spelling the normaliser equates) becomes `rc T`, and `Weak<RefCell<T>>` becomes `weak T`, in every position where `prefix_types` reads the prefix. Done when field, return, parameter and generic-argument types convert, and positions where the conversion would change the expansion (bindings whose field accesses `rc_borrows` would rewrite, starts of groups that `prefix_types` cannot read) are left alone.
 
 Plan: read `passes/prefix_types.rs` (which positions it reads, the `__rustx_rc` marker) and `passes/rc_borrows.rs` (which bindings it tracks); `sugar/prefix_types.rs` implementing `ReverseRule`; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
-
-### T19.11. Sugar driver: trailing commas and edit groups
-
-Two limits found by T19.6 and T19.9. First, code formatted by rustfmt never converts when a rule spans a list rustfmt ends with a trailing comma (a multi-line `where`, generics, parameters), because the check compares tokens exactly; a trailing comma before a closing delimiter or before the body brace of a `where` list never changes meaning outside macro calls, so the check should ignore it there (never inside a macro invocation's tokens, never the comma of a one-element tuple). Second, the driver has no edit groups, so multi-place rules (T19.6, T19.9) emit one edit spanning the whole signature, and other rules' edits inside that span are dropped. Done when the check accepts rustfmt's trailing commas, the driver keeps or drops a group of edits as one unit (including in its one-at-a-time fallback), and a test shows `into T` and inline bounds converting in the same fn.
-
-Plan: in `crates/rustx-core/src/sugar/mod.rs`, extend the token comparison (next to the `std_paths` normaliser) with the trailing comma rule above, and add an edit group to `ReverseRule` output (e.g. `Vec<Vec<Edit>>` or an `Edit` group id) with the fallback adding whole groups. Keep the existing rules working unchanged; moving T19.6/T19.9 onto groups is done when their branches merge, not here. Edit groups already landed with T19.7 (`ReverseRule::edit_groups`, commit `be71ac6`): merge that commit and build on it instead of a second mechanism. Also fix a `std_paths` gap T19.7 found: enum variants are not recorded as declarations, so `use self::Outcome::Ok;` does not shadow the prelude `Ok`. Verify: unit tests for the comparison (where, generics, params, 1-tuple, macro tokens), a failing-first test for the enum variant gap, `just check`.
 
 ### T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
 
