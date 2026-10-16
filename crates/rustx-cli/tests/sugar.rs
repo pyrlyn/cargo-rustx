@@ -70,6 +70,32 @@ fn result_fns_with_an_ok_tail_become_throws_fns() {
 }
 
 #[test]
+fn impl_into_parameters_with_their_conversion_become_into_sugar() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_into.rs"]);
+    insta::assert_snapshot!("sugar_into_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_into.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("let mut more: Vec<String> = ::core::convert::Into::into(more);"),
+        "{expanded}"
+    );
+}
+
+#[test]
+fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_strings.rs"]);
+    insta::assert_snapshot!("sugar_strings_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_strings.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("::std::string::String::from(\"Ann\")"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =

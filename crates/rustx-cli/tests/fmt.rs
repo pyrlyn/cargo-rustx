@@ -9,20 +9,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-/// Cases with sugar that T31.2 maps (presets, inline bounds, parameter and call defaults, named
-/// arguments, capture lists), or that do not expand at all.
+/// Cases that do not expand, so there is nothing to check a formatted file against.
 const NOT_YET: &[&str] = &[
-    "bound_presets",
-    "call_defaults",
-    "capture_lists",
-    "derive_presets",
-    "inline_bounds",
     "inline_bounds_known_type",
-    "into_params",
-    "named_args",
-    "param_defaults",
     "prefix_types_tilde_without_trait",
-    "shared",
 ];
 
 fn rustx_cli(args: &[&str], path: &Path) -> Output {
@@ -172,39 +162,53 @@ fn every_case_formats_once_for_good_and_expands_as_before() {
         assert_eq!(expand_formatted(&path), expand_formatted(&source), "{name}");
         formatted += 1;
     }
-    assert!(formatted >= 19, "only {formatted} cases formatted");
+    assert!(formatted >= 30, "only {formatted} cases formatted");
 }
 
 #[test]
-fn sugar_without_a_placeholder_is_refused_at_its_position() {
+fn what_rustfmt_cannot_parse_is_refused_at_its_position() {
     if rustfmt_missing() {
         return;
     }
-    let source =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../rustx-core/tests/cases/named_args.rustx");
-    let path = copy("refused", &source);
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("fmt/refused");
+    fs::create_dir_all(&dir).unwrap();
+    // `gen` is a keyword of edition 2024, which rustfmt parses and `syn` does not know.
+    let path = dir.join("refused.rustx");
+    let source = "fn f() {\n    var x = 1;\n    let gen = x;\n}\n";
+    fs::write(&path, source).unwrap();
     let out = rustx_cli(&["fmt"], &path);
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8(out.stderr).unwrap();
-    let expected = format!(
-        "{}:2:42: rustfmt cannot parse this, probably sugar",
-        path.display()
-    );
+    let expected = format!("{}:3:9: rustfmt cannot parse this", path.display());
     assert!(stderr.starts_with(&expected), "{stderr}");
+    assert_eq!(fs::read_to_string(&path).unwrap(), source);
 }
 
 #[test]
-fn a_rust_file_is_refused() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/server.rs");
+fn sugar_bodies_in_a_rust_file_are_formatted_and_the_rest_is_kept() {
+    if rustfmt_missing() {
+        return;
+    }
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/server.rs");
+    let path = copy("rust_file", &source);
+    let before = fs::read_to_string(&path).unwrap();
     let out = rustx_cli(&["fmt"], &path);
-    assert_eq!(out.status.code(), Some(1));
-    let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(
-        stderr.ends_with(
-            ": only `.rustx` files can be formatted; `sugar!` bodies in Rust files cannot yet\n"
-        ),
-        "{stderr}"
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
+    let after = fs::read_to_string(&path).unwrap();
+    insta::assert_snapshot!("fmt_server_rs", after);
+    assert!(rustx_cli(&["fmt", "--check"], &path).status.success());
+    assert_eq!(comments(&after), comments(&before));
+    let outside = |text: &str| -> Vec<String> {
+        let first = text.find("rustx::sugar! {").unwrap();
+        let tail = text.rfind("    println!").unwrap();
+        vec![text[..first].to_owned(), text[tail..].to_owned()]
+    };
+    assert_eq!(outside(&after), outside(&before));
+    assert_eq!(expand_formatted(&path), expand_formatted(&source));
 }
 
 #[test]

@@ -7,8 +7,10 @@
 //! an edit for which it does not is dropped. Tokens are compared with paths to std items written
 //! in any spelling the file gives one meaning (`std_paths`), since passes emit full paths.
 
+mod into_params;
 mod rc_values;
 mod std_paths;
+mod string_literals;
 mod throws;
 mod turbofish;
 mod var;
@@ -39,11 +41,17 @@ pub(crate) trait ReverseRule {
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
 // it and is dropped whatever the order: such a value keeps its plain spelling. `throws` edits a
 // return type and the bytes around a tail's value, which no other rule edits.
+// it and is dropped whatever the order: such a value keeps its plain spelling. An `into` edit
+// starts in the signature, before any edit of the rebindings it removes, so it wins those too.
+// it and is dropped whatever the order: such a value keeps its plain spelling. A string literal
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
     &throws::Throws,
+    &into_params::IntoParams,
+    &string_literals::StringLiterals,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
@@ -196,6 +204,13 @@ fn first_difference(original: TokenStream, expanded: TokenStream) -> Span {
         .map(|(_, leaf)| leaf)
         .or(a.last())
         .map_or_else(Span::call_site, |(_, span)| *span)
+}
+
+/// The spans of the first and last token of `tokens`.
+pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
+    let mut all = Vec::new();
+    leaves(tokens, &mut all);
+    Some((all.first()?.1, all.last()?.1))
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.

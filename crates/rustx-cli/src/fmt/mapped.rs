@@ -15,8 +15,20 @@ pub(super) struct Placeholder {
     range: Range<usize>,
     pre: &'static str,
     post: String,
-    /// The text that comes back in place of the placeholder.
+    /// The text that comes back for the placeholder.
     sugar: String,
+    back: Back,
+}
+
+/// Where the sugar of a placeholder comes back.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Back {
+    /// In place of the placeholder.
+    Here,
+    /// At the end of the parameter the placeholder starts; the placeholder itself goes away.
+    ParameterEnd,
+    /// Nowhere: the text is cut and carries no id, another placeholder brings it back.
+    Cut,
 }
 
 impl Placeholder {
@@ -27,7 +39,41 @@ impl Placeholder {
             pre,
             post,
             sugar,
+            back: Back::Here,
         }
+    }
+
+    /// A parameter suffix (`: Bound` or, after a `space`, `= v`) cut from the parameter that
+    /// starts at `parameter`. rustfmt moves a comment after a parameter behind its comma, so an
+    /// attribute on the parameter carries the id instead, padded to the suffix's width so the
+    /// line breaks where it would with the suffix.
+    pub(super) fn suffix(
+        source: &str,
+        parameter: usize,
+        suffix: Range<usize>,
+        space: bool,
+    ) -> [Self; 2] {
+        let sugar = [
+            if space { " " } else { "" },
+            &normalize(source[suffix.clone()].trim_start()),
+        ]
+        .concat();
+        let pad = "_".repeat(sugar.len().saturating_sub(7));
+        let attribute = Self {
+            range: parameter..parameter,
+            pre: "#[",
+            post: format!("{pad}] "),
+            sugar,
+            back: Back::ParameterEnd,
+        };
+        let cut = Self {
+            range: suffix,
+            pre: "",
+            post: String::new(),
+            sugar: String::new(),
+            back: Back::Cut,
+        };
+        [attribute, cut]
     }
 }
 
@@ -66,11 +112,15 @@ impl Mapped {
             }
             text.push_str(&source[at..p.range.start]);
             let start = text.len();
-            let id = placeholders.len();
-            text += &[p.pre, &marker, &id.to_string(), &p.post].concat();
+            if p.back != Back::Cut {
+                let id = placeholders.len();
+                text += &[p.pre, &marker, &id.to_string(), &p.post].concat();
+            }
             edits.push((p.range.clone(), start..text.len()));
             at = p.range.end;
-            placeholders.push(p);
+            if p.back != Back::Cut {
+                placeholders.push(p);
+            }
         }
         text.push_str(&source[at..]);
         Self {
@@ -118,12 +168,21 @@ impl Mapped {
             let Some((start, end)) = span.filter(|_| !seen[id]) else {
                 return Err((p.range.start, MOVED.into()));
             };
-            edits.push((start..end, &p.sugar));
+            if p.back == Back::ParameterEnd {
+                // The attribute's `post` ends in a space, so its match takes the whitespace
+                // after it, and the parameter starts right at `end`.
+                let parameter_end = parameter_end(formatted, end);
+                edits.push((start..end, ""));
+                edits.push((parameter_end..parameter_end, &p.sugar));
+            } else {
+                edits.push((start..end, &p.sugar));
+            }
             seen[id] = true;
         }
         if let Some(lost) = seen.iter().position(|seen| !seen) {
             return Err((self.placeholders[lost].range.start, DROPPED.into()));
         }
+        edits.sort_by_key(|(range, _)| (range.start, range.end));
         let mut out = formatted.to_owned();
         for (range, text) in edits.into_iter().rev() {
             out.replace_range(range, text);
@@ -149,6 +208,30 @@ fn match_at(text: &str, at: usize, pattern: &str) -> Option<usize> {
         rest = if k > 0 { rest.trim_start() } else { rest }.strip_prefix(part)?;
     }
     Some(text.len() - rest.len())
+}
+
+/// The end of the parameter that starts at `from` in rustfmt's output: the last non-blank byte
+/// before a top-level `,`, the list's closing bracket, or a comment.
+fn parameter_end(text: &str, from: usize) -> usize {
+    let bytes = text.as_bytes();
+    let (mut depth, mut end, mut at) = (0usize, from, from);
+    while let Some(&byte) = bytes.get(at) {
+        let next = bytes.get(at + 1).copied();
+        match byte {
+            // The `>` of `->` closes nothing.
+            b'-' if next == Some(b'>') => at += 1,
+            b'(' | b'[' | b'{' | b'<' => depth += 1,
+            b')' | b']' | b'}' | b'>' | b',' if depth == 0 => break,
+            b'/' if matches!(next, Some(b'/' | b'*')) => break,
+            b')' | b']' | b'}' | b'>' => depth -= 1,
+            _ => {}
+        }
+        at += 1;
+        if !byte.is_ascii_whitespace() {
+            end = at;
+        }
+    }
+    end
 }
 
 fn has_id(source: &str, marker: &str) -> bool {
@@ -223,6 +306,22 @@ mod tests {
                 .contains("moved")
         );
         assert_eq!(mapped.restore("x let\n_R0y").unwrap(), source);
+    }
+
+    #[test]
+    fn a_parameter_suffix_comes_back_at_the_end_of_the_parameter_rustfmt_laid_out() {
+        let source = "fn f(make: Box<dyn Fn(u8) -> u8> = g(), y: u8) {}";
+        let (start, at) = (source.find("make").unwrap(), source.find(" =").unwrap());
+        let found = Placeholder::suffix(source, start, at..at + 6, true);
+        let mapped = Mapped::new(source, found.into());
+        assert_eq!(
+            mapped.text,
+            "fn f(#[_R0] make: Box<dyn Fn(u8) -> u8>, y: u8) {}"
+        );
+        let formatted =
+            "fn f(\n    #[_R0]\n    make: Box<dyn Fn(u8) -> u8>, // c\n    y: u8,\n) {}\n";
+        let restored = "fn f(\n    make: Box<dyn Fn(u8) -> u8> = g(), // c\n    y: u8,\n) {}\n";
+        assert_eq!(mapped.restore(formatted).unwrap(), restored);
     }
 
     #[test]
