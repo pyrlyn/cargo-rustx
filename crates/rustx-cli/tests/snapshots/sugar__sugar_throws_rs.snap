@@ -1,0 +1,49 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! Settings read through `Result` return types, written without sugar.
+
+use std::collections::HashMap;
+
+#[derive(Debug)]
+pub enum ConfigError {
+    Missing(&'static str),
+    Bad(String),
+}
+
+pub fn parse_kv(text: &str) -> HashMap<String, String> throws ConfigError {
+    var map = HashMap::new();
+    for line in text.lines() {
+        let (k, v) = line
+            .split_once('=')
+            .ok_or_else(|| ConfigError::Bad(line.to_string()))?;
+        map.insert(k.trim().to_string(), v.trim().to_string());
+    }
+    map
+}
+
+pub fn check(kv: &HashMap<String, String>) -> () throws ConfigError {
+    for key in ["host", "port"] {
+        if !kv.contains_key(key) {
+            return Err(ConfigError::Missing(key));
+        }
+    }
+    // Every key is there.
+}
+
+pub trait Source {
+    fn read(&self) -> String throws ConfigError;
+
+    fn settings(&self) -> HashMap<String, String> throws ConfigError {
+        let kv = parse_kv(&self.read()?)?;
+        check(&kv)?;
+        kv
+    }
+}
+
+pub fn port(kv: &HashMap<String, String>) -> Result<u16, ConfigError> {
+    let text = kv.get("port").ok_or(ConfigError::Missing("port"))?;
+    // The tail is already a `Result`, so this fn stays as written.
+    text.parse().map_err(|_| ConfigError::Bad(text.clone()))
+}

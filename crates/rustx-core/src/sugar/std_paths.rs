@@ -17,9 +17,10 @@
 //!   `use std::sync::Arc as Rc;` for `Arc`).
 //!
 //! A name is unknown, and every path through it is compared as written, when anything in the
-//! file declares it otherwise: an item, an `extern crate` of another crate, a generic parameter,
-//! a binding, a `use` from outside std (`crate::`, another crate, a renamed `super::` import), or
-//! a `use` of a std path other than the name's prelude item or other imports. A glob import makes
+//! file declares it otherwise: an item or enum variant, an `extern crate` of another crate, a
+//! generic parameter, a binding, a `use` from outside std (`crate::`, another crate, a renamed
+//! `super::` import), or a `use` of a std path other than the name's prelude item or other
+//! imports. A glob import makes
 //! every name unknown, except `use super::*` that stays inside the file, which only re-imports
 //! names the file already declares; `#![no_implicit_prelude]` drops the prelude.
 //!
@@ -36,7 +37,7 @@ use std::collections::{HashMap, HashSet};
 use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::visit::{self, Visit};
-use syn::{ForeignItem, GenericParam, Item, ItemExternCrate, ItemUse, PatIdent, UseTree};
+use syn::{ForeignItem, GenericParam, Item, ItemExternCrate, ItemUse, PatIdent, UseTree, Variant};
 
 /// The std items whose spellings are equated, by their path from the crate that defines them,
 /// and whether the prelude brings their name into scope.
@@ -156,10 +157,12 @@ impl StdPaths {
         Self { roots, one_crate }
     }
 
-    /// The tokens of `tokens` with every path to a known std item replaced by one canonical
-    /// token, so that two spellings of that path compare equal. Delimiters and spacing are kept,
-    /// since they take part in what the tokens mean.
+    /// The tokens of `tokens` as the sugar check compares them: without trailing commas that
+    /// mean nothing ([`super::commas`]), and with every path to a known std item replaced by one
+    /// canonical token, so that two spellings of that path compare equal. Delimiters and spacing
+    /// are kept, since they take part in what the tokens mean.
     pub(super) fn normalise(&self, tokens: TokenStream) -> Vec<String> {
+        let tokens = super::without_trailing_commas(tokens, super::MacroTokens::Kept);
         let mut out = Vec::new();
         self.flatten(&tokens.into_iter().collect::<Vec<_>>(), &mut out);
         out
@@ -416,6 +419,13 @@ impl<'ast> Visit<'ast> for Declarations {
         visit::visit_foreign_item(self, item);
     }
 
+    // A variant is not an item, but `use self::E::Ok;` brings it in as one, and that import
+    // alone looks like a re-import from this file.
+    fn visit_variant(&mut self, variant: &'ast Variant) {
+        self.declare(&variant.ident, Meaning::Other);
+        visit::visit_variant(self, variant);
+    }
+
     fn visit_generic_param(&mut self, param: &'ast GenericParam) {
         match param {
             GenericParam::Type(param) => self.declare(&param.ident, Meaning::Other),
@@ -563,6 +573,24 @@ mod tests {
         ));
         let matches_none = "fn f(o: Option<u8>) { match o { None => {} _ => {} } }";
         assert!(same(matches_none, "None", "::core::option::Option::None"));
+    }
+
+    #[test]
+    fn an_enum_variant_of_the_file_turns_equality_off_for_its_name() {
+        let ok = "::core::result::Result::Ok(1)";
+        let outcome = "enum Outcome { Ok(u8), Fail }";
+        assert!(!same(
+            &format!("{outcome} use self::Outcome::Ok;"),
+            "Ok(1)",
+            ok
+        ));
+        assert!(!same(
+            &format!("mod m {{ pub {outcome} }} use m::Outcome::Ok;"),
+            "Ok(1)",
+            ok
+        ));
+        assert!(!same(&format!("{outcome} use Outcome::*;"), "Ok(1)", ok));
+        assert!(same(outcome, "Fail", "Fail"));
     }
 
     #[test]

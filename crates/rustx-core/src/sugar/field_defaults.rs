@@ -35,9 +35,8 @@ use syn::{
     Member, Stmt, UseName, UseRename,
 };
 
-use super::rc_values::bounds;
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, apply};
+use super::{Edit, ReverseRule, apply, bounds};
 use crate::tokens::syntax::{is_str_literal, is_string};
 
 pub(crate) struct FieldDefaults;

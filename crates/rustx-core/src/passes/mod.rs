@@ -32,7 +32,7 @@ mod shared;
 mod signatures;
 mod string_literals;
 mod throw;
-mod throws;
+pub(crate) mod throws;
 mod turbofish;
 mod typed_positions;
 mod var;
@@ -103,7 +103,23 @@ const AST_PASSES: &[AstPass] = &[
 ];
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
+#[cfg(feature = "sugar")]
+pub(crate) use inline_bounds::KnownTypes;
 pub(crate) use newtype::VALIDATOR_NOT_FOUND;
+#[cfg(feature = "sugar")]
+pub(crate) use rc_borrows::would_borrow;
+// The reverse rule for parameter defaults resolves calls and reads defaults as these passes do.
+#[cfg(feature = "sugar")]
+pub(crate) use {
+    call_defaults::collect::{Fns, Shape, path_target, type_name},
+    macro_args::MacroArgs,
+    param_defaults::{MARKER as DEFAULT_MARKER, has_impl_trait, is_constant},
+};
+// The reverse rule for string literals finds its places exactly as the pass does.
+#[cfg(feature = "sugar")]
+pub(crate) use string_literals::Strings;
+#[cfg(feature = "sugar")]
+pub(crate) use typed_positions::walk_file;
 
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {

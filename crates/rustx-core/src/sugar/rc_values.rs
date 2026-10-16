@@ -22,7 +22,6 @@
 
 use std::ops::Range;
 
-use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
 use syn::{
@@ -31,7 +30,7 @@ use syn::{
 };
 
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, apply, leaves};
+use super::{Edit, ReverseRule, apply, bounds};
 
 pub(crate) struct RcValues;
 
@@ -99,16 +98,10 @@ impl Finder<'_> {
             edits: Vec::new(),
         };
         nested.value(value);
-        nested.edits.sort_by_key(|edit| edit.range.start);
-        let nested: Vec<Edit> = nested
-            .edits
-            .into_iter()
-            .map(|edit| Edit {
-                range: edit.range.start - start..edit.range.end - start,
-                text: edit.text,
-            })
-            .collect();
-        let text = format!("rc {}", apply(self.source.get(start..end)?, &nested));
+        let text = format!(
+            "rc {}",
+            apply_inside(self.source, start..end, nested.edits)?
+        );
         let (func_start, _) = bounds(outer.func.to_token_stream())?;
         Some(Edit::between(
             func_start,
@@ -134,11 +127,21 @@ impl Finder<'_> {
     }
 }
 
-/// The spans of the first and last token of `tokens`.
-pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
-    let mut all = Vec::new();
-    leaves(tokens, &mut all);
-    Some((all.first()?.1, all.last()?.1))
+/// The text of `source[range]` with `edits`, which a nested search found inside it, applied.
+pub(super) fn apply_inside(
+    source: &str,
+    range: Range<usize>,
+    mut edits: Vec<Edit>,
+) -> Option<String> {
+    edits.sort_by_key(|edit| edit.range.start);
+    let relative: Vec<Edit> = edits
+        .into_iter()
+        .map(|edit| Edit {
+            range: edit.range.start - range.start..edit.range.end - range.start,
+            text: edit.text,
+        })
+        .collect();
+    Some(apply(source.get(range)?, &relative))
 }
 
 /// Whether the token passes read `rc value` as the sugar for exactly this value.
@@ -241,7 +244,7 @@ mod tests {
                  match 0 { 0 => Rc::new(RefCell::new(4)), _ => Rc::new(RefCell::new(5)) }\n}\n",
             ),
             &with_uses(
-                "fn f(v: Vec<u8>) -> Rc<RefCell<u8>> {\n    let a = rc v;\n    \
+                "fn f(v: Vec<u8>) -> rc u8 {\n    let a = rc v;\n    \
                  g(rc 1, [rc 2]);\n    \
                  let c = || rc 3;\n    \
                  match 0 { 0 => rc 4, _ => rc 5 }\n}\n",
@@ -315,8 +318,8 @@ mod tests {
              vec![Rc::new(RefCell::new(x))];\n}\n",
         );
         assert_eq!(sugar(&source).unwrap(), source);
-        // Checked without the driver, which would also drop these edits; a trailing comma in a
-        // call is one the driver refuses to read at all.
+        // Checked without the driver, which would also drop these edits; the rule itself does
+        // not match a call with a trailing comma.
         let source = source.replace("let m", "let l = Rc::new(RefCell::new(x,));\n    let m");
         let file = syn::parse_file(&source).unwrap();
         assert_eq!(RcValues.edits(&file, &source), []);

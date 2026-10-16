@@ -1,0 +1,45 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! An event bus with boxed handlers and borrowing iterators, written without sugar.
+
+use std::collections::HashMap;
+use std::fmt::Debug;
+
+pub trait Sink {
+    fn write(&self, line: &str);
+}
+
+pub struct Bus {
+    pub sinks: Vec<~Sink>,
+    // Handlers run on any thread, so they must be `Send + Sync`.
+    pub handlers: HashMap<String, Vec<~Fn(&str) -> bool>>,
+    pub tagged: Vec<(String, ~Sink)>,
+}
+
+pub type Logger = ~(Sink + Debug);
+
+impl Bus {
+    pub fn add_sink(&mut self, sink: ~Sink) {
+        self.sinks.push(sink);
+    }
+
+    pub fn topics(&self) -> iter &String {
+        self.handlers.keys()
+    }
+
+    pub fn handlers_of(&self, topic: &str) -> iter (usize, &~Fn(&str) -> bool) {
+        self.handlers.get(topic).into_iter().flatten().enumerate()
+    }
+
+    // A box without the markers is not what `~` writes, so it keeps its spelling.
+    pub fn first(&self) -> Option<&Box<dyn Sink>> {
+        None
+    }
+
+    // Without `+ '_` this is not what `iter` writes.
+    pub fn counts(&self) -> impl Iterator<Item = usize> {
+        vec![self.sinks.len()].into_iter()
+    }
+}

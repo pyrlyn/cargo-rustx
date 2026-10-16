@@ -7,7 +7,7 @@ expression: converted
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub fn handles() -> Vec<Rc<RefCell<u32>>> {
+pub fn handles() -> Vec<rc u32> {
     // One value behind every handle.
     let counter = rc 0;
     *counter.borrow_mut() += 1;

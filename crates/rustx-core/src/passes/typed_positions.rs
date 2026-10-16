@@ -30,7 +30,7 @@ use super::call_defaults::collect::{Fns, path_target, type_name};
 use crate::tokens::syntax::std_argument;
 
 /// A conversion pass: called at every place with a written target type, innermost first.
-pub(super) trait Convert {
+pub(crate) trait Convert {
     /// Whether the fields of a struct literal are such places. Off unless a pass documents them,
     /// since `#[widen]` leaves them explicit.
     const STRUCT_FIELDS: bool = false;
@@ -55,7 +55,7 @@ pub(super) trait Convert {
 
 /// Calls `convert` at every typed place in the fn bodies of `file` it marks: fns, methods and
 /// trait default methods, each walked on its own.
-pub(super) fn walk_file(file: &mut syn::File, convert: &mut impl Convert) {
+pub(crate) fn walk_file(file: &mut syn::File, convert: &mut impl Convert) {
     let declared = Declared::collect(file);
     let on = convert.marks(&mut file.attrs);
     Bodies {

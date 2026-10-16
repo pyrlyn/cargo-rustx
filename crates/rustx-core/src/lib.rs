@@ -16,7 +16,7 @@ mod tokens;
 
 pub use attribute::{AttributeMacro, expand_attribute};
 #[cfg(feature = "sugar")]
-pub use sugar::sugar;
+pub use sugar::{MacroTokens, sugar, without_trailing_commas};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;

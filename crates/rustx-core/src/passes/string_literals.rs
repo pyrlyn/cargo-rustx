@@ -34,21 +34,27 @@ use crate::tokens::syntax::{is_str_literal, is_string, std_argument};
 // Every AST pass has this signature; this one has nothing to report.
 #[expect(clippy::unnecessary_wraps)]
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
-    walk_file(file, &mut Strings);
+    walk_file(file, &mut Strings(from_literal));
     Ok(())
 }
 
-struct Strings;
+/// The places where a literal becomes a `String`, and what happens at each: `.0` gets every
+/// expression a literal written there would be converted at, and returns whether it changed it.
+/// Shared with the reverse rule (`sugar/string_literals.rs`), so both directions agree on the
+/// places.
+pub(crate) struct Strings<F>(pub(crate) F);
 
-impl Convert for Strings {
+impl<F: FnMut(&mut Expr) -> bool> Convert for Strings<F> {
     const STRUCT_FIELDS: bool = true;
     // `String += &str` is valid Rust, and `String += String` is not.
     const COMPOUND_ASSIGNMENTS: bool = false;
 
+    /// The value itself for `String`, the argument of `Some(..)` for `Option<String>`, the
+    /// elements of `vec![..]` (or the value of `vec![x; n]`) for `Vec<String>`.
     fn convert(&mut self, target: &Type, value: &mut Expr, _source: Option<&Type>) {
         let holds_string = |module, name| std_argument(target, module, name).is_some_and(is_string);
         if is_string(target) {
-            from_literal(value);
+            (self.0)(value);
         } else if holds_string("option", "Option") {
             if let Expr::Call(call) = value
                 && let Expr::Path(func) = &*call.func
@@ -56,27 +62,32 @@ impl Convert for Strings {
                 && func.path.is_ident("Some")
                 && call.args.len() == 1
             {
-                call.args.iter_mut().for_each(from_literal);
+                for arg in &mut call.args {
+                    (self.0)(arg);
+                }
             }
         } else if holds_string("vec", "Vec") {
-            vec_literals(value);
+            vec_elements(value, &mut self.0);
         }
     }
 }
 
 /// `"text"` → `::std::string::String::from("text")`, at the literal's span.
-fn from_literal(value: &mut Expr) {
-    if is_str_literal(value) {
-        let literal = mem::replace(value, Expr::PLACEHOLDER);
-        *value = syn::parse_quote_spanned! {literal.span()=>
-            ::std::string::String::from(#literal)
-        };
+fn from_literal(value: &mut Expr) -> bool {
+    if !is_str_literal(value) {
+        return false;
     }
+    let literal = mem::replace(value, Expr::PLACEHOLDER);
+    *value = syn::parse_quote_spanned! {literal.span()=>
+        ::std::string::String::from(#literal)
+    };
+    true
 }
 
-/// Converts the literal elements of `vec![a, b]`, or the value of `vec![a; n]`. Other elements
-/// keep their own type: in plain Rust they already had to be `String`.
-fn vec_literals(value: &mut Expr) {
+/// Calls `at` on the elements of `vec![a, b]`, or the value of `vec![a; n]`. Other elements keep
+/// their own type: in plain Rust they already had to be `String`. The body is re-emitted only
+/// when `at` changed an element.
+fn vec_elements(value: &mut Expr, at: &mut impl FnMut(&mut Expr) -> bool) {
     let Expr::Macro(mac) = value else {
         return;
     };
@@ -90,8 +101,11 @@ fn vec_literals(value: &mut Expr) {
         MacroArgs::List(list) => list.iter_mut().collect(),
         MacroArgs::Repeat(element, ..) => vec![&mut **element],
     };
-    if elements.iter().any(|element| is_str_literal(element)) {
-        elements.into_iter().for_each(from_literal);
+    // Every element is visited, so no short-circuiting `any`.
+    let changed = elements
+        .into_iter()
+        .fold(false, |changed, element| at(element) | changed);
+    if changed {
         mac.mac.tokens = args.into_token_stream();
     }
 }

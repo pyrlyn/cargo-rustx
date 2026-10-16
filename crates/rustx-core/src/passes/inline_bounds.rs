@@ -53,6 +53,10 @@ mod marker;
 
 use proc_macro2::TokenStream;
 
+// The reverse rule refuses the names the pass would read as types, judged exactly as here.
+#[cfg(feature = "sugar")]
+pub(crate) use hoist::Known as KnownTypes;
+
 pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
     marker::rewrite(tokens)
 }

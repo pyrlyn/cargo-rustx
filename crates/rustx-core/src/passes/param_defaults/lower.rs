@@ -128,7 +128,7 @@ fn unwrap(param: &mut PatType, index: usize, eq: Span, expr: &Expr) -> syn::Resu
 }
 
 /// Whether `expr` is a literal, a path, or arithmetic, casts, tuples and arrays of those.
-fn is_constant(expr: &Expr) -> bool {
+pub(crate) fn is_constant(expr: &Expr) -> bool {
     match expr {
         Expr::Lit(_) | Expr::Path(_) => true,
         Expr::Unary(unary) => {
@@ -144,7 +144,7 @@ fn is_constant(expr: &Expr) -> bool {
     }
 }
 
-fn has_impl_trait(ty: &Type) -> bool {
+pub(crate) fn has_impl_trait(ty: &Type) -> bool {
     // Searching a copy through `VisitMut` because the crate enables only that visitor.
     struct Finds(bool);
     impl VisitMut for Finds {
