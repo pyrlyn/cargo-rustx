@@ -65,6 +65,10 @@ fn generics_bounded_in_where_become_inline_bounds() {
     assert_eq!(
         success(&["expand", rustx.to_str().unwrap()]),
         success(&["expand", "tests/fixtures/sugar_bounds.rs"])
+    );
+}
+
+#[test]
 fn option_parameters_with_a_default_become_parameter_defaults_with_their_calls() {
     let converted = success(&["sugar", "tests/fixtures/sugar_defaults.rs"]);
     insta::assert_snapshot!("sugar_defaults_rs", converted);
