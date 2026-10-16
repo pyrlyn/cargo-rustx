@@ -5,13 +5,25 @@
 //! original source, so everything they do not touch (comments, layout) survives byte for byte.
 //! The driver never trusts a rule: the edited text must expand back to the original tokens, and
 //! an edit for which it does not is dropped. Tokens are compared with paths to std items written
-//! in any spelling the file gives one meaning (`std_paths`), since passes emit full paths.
+//! in any spelling the file gives one meaning (`std_paths`), since passes emit full paths, and
+//! without the trailing commas rustfmt adds to lists it breaks over lines (`commas`), since
+//! passes write none: a comma before a closing delimiter, before the `>` of generics, or before
+//! the body of a `where` list, but never inside the tokens a macro reads, nor the comma that
+//! makes a one-element tuple.
 
+mod commas;
+mod inline_bounds;
+mod into_params;
+mod param_defaults;
 mod rc_types;
 mod rc_values;
 mod std_paths;
+mod string_literals;
+mod throws;
 mod turbofish;
 mod var;
+
+pub use commas::{MacroTokens, without_trailing_commas};
 
 use std::ops::Range;
 
@@ -23,6 +35,15 @@ pub(crate) trait ReverseRule {
     /// Edits turning the shapes this rule recognises in `file`, parsed from `source`, into sugar.
     /// They may overlap other rules' edits; the driver keeps the first of overlapping edits.
     fn edits(&self, file: &syn::File, source: &str) -> Vec<Edit>;
+
+    /// The edits in sets the driver keeps or drops as a whole, for a rule whose edits keep the
+    /// meaning only together; by default each edit is a set of its own.
+    fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
+        self.edits(file, source)
+            .into_iter()
+            .map(|edit| vec![edit])
+            .collect()
+    }
 }
 
 /// Registered rules, in priority order for overlapping edits.
@@ -30,11 +51,26 @@ pub(crate) trait ReverseRule {
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
 // it and is dropped whatever the order: such a value keeps its plain spelling.
 // `rc_types` edits types and `rc_values` expressions, so their edits never overlap.
+// it and is dropped whatever the order: such a value keeps its plain spelling. An inline bounds
+// edit spans a signature from its generics to its `where`, so it wins any edit inside that span.
+// it and is dropped whatever the order: such a value keeps its plain spelling. A parameter
+// default's statement removal starts at its body's `{`, so it wins over a `var` edit inside it.
+// it and is dropped whatever the order: such a value keeps its plain spelling. `throws` edits a
+// return type and the bytes around a tail's value, which no other rule edits.
+// it and is dropped whatever the order: such a value keeps its plain spelling. An `into` edit
+// starts in the signature, before any edit of the rebindings it removes, so it wins those too.
+// it and is dropped whatever the order: such a value keeps its plain spelling. A string literal
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
     &rc_types::RcTypes,
+    &inline_bounds::InlineBounds,
+    &param_defaults::ParamDefaults,
+    &throws::Throws,
+    &into_params::IntoParams,
+    &string_literals::StringLiterals,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
@@ -77,9 +113,13 @@ fn convert(source: &str, rules: &[&dyn ReverseRule]) -> syn::Result<String> {
     let file: syn::File = syn::parse_str(text)?;
     let original = file.to_token_stream();
     let expanded = crate::try_expand(text.parse()?)?.into_token_stream();
-    if expanded.to_string() != original.to_string() {
+    // A pass that rebuilds a list (call arguments) writes it without a trailing comma, which
+    // changes nothing, so rustfmt's commas must not make every multi-line call an error.
+    let written = without_trailing_commas(original.clone(), MacroTokens::Kept);
+    let expanded = without_trailing_commas(expanded, MacroTokens::Kept);
+    if expanded.to_string() != written.to_string() {
         return Err(syn::Error::new(
-            first_difference(original, expanded),
+            first_difference(written, expanded),
             "expansion already changes this code as written, so it would mean something else as \
              sugar",
         ));
@@ -94,42 +134,73 @@ fn convert(source: &str, rules: &[&dyn ReverseRule]) -> syn::Result<String> {
             .and_then(|tokens| crate::try_expand(tokens).ok())
             .is_some_and(|file| paths.normalise(file.into_token_stream()) == expected)
     };
-    let edits = non_overlapping(text, rules.iter().flat_map(|rule| rule.edits(&file, text)));
-    let accepted = if round_trips(&apply(text, &edits)) {
-        edits
+    let groups = non_overlapping(
+        text,
+        rules.iter().flat_map(|rule| rule.edit_groups(&file, text)),
+    );
+    let accepted = if round_trips(&apply(text, &flatten(&groups))) {
+        groups
     } else {
-        // Some edit changes the meaning; keep each edit only if it does not, together with the
-        // ones kept before it, so one bad edit does not cost the good ones.
+        // Some edit changes the meaning; keep each set of edits only if it does not, together
+        // with the ones kept before it, so one bad set does not cost the good ones. A set is
+        // never split: part of it may keep the meaning while not being what the rule meant.
         let mut kept = Vec::new();
-        for edit in edits {
-            kept.push(edit);
-            if !round_trips(&apply(text, &kept)) {
+        for group in groups {
+            kept.push(group);
+            if !round_trips(&apply(text, &flatten(&kept))) {
                 kept.pop();
             }
         }
         kept
     };
-    Ok(format!("{bom}{}", apply(text, &accepted)))
+    Ok(format!("{bom}{}", apply(text, &flatten(&accepted))))
 }
 
-/// Sorts edits by position and drops each one that overlaps an edit kept before it, or that is
-/// not a range of `text` at all, so applying them cannot slice off a character.
-fn non_overlapping(text: &str, edits: impl Iterator<Item = Edit>) -> Vec<Edit> {
-    let mut edits: Vec<Edit> = edits
-        .filter(|edit| text.get(edit.range.clone()).is_some())
+/// Sorts sets of edits by their first position and drops each set with an edit that overlaps an
+/// edit kept before it or of its own, or that is not a range of `text` at all, so applying them
+/// cannot slice off a character.
+fn non_overlapping(text: &str, groups: impl Iterator<Item = Vec<Edit>>) -> Vec<Vec<Edit>> {
+    let mut groups: Vec<Vec<Edit>> = groups
+        .map(|mut group| {
+            group.sort_by_key(|edit| edit.range.start);
+            group
+        })
+        .filter(|group| {
+            group
+                .iter()
+                .all(|edit| text.get(edit.range.clone()).is_some())
+                && group.windows(2).all(|pair| !overlap(&pair[0], &pair[1]))
+        })
         .collect();
-    // Stable, so of two edits at one position the earlier rule wins.
-    edits.sort_by_key(|edit| edit.range.start);
-    let mut kept: Vec<Edit> = Vec::with_capacity(edits.len());
-    for edit in edits {
-        if kept
-            .last()
-            .is_none_or(|last| last.range.end <= edit.range.start)
-        {
-            kept.push(edit);
+    // Stable, so of two sets at one position the earlier rule wins.
+    groups.sort_by_key(|group| group.first().map(|edit| edit.range.start));
+    let mut kept: Vec<Vec<Edit>> = Vec::with_capacity(groups.len());
+    for group in groups {
+        let free = group
+            .iter()
+            .all(|edit| kept.iter().flatten().all(|old| !overlap(old, edit)));
+        if free {
+            kept.push(group);
         }
     }
     kept
+}
+
+/// Whether `new` touches bytes `old`, kept before it, replaces. An insertion right where a
+/// replacement starts goes before it when it was kept first.
+fn overlap(old: &Edit, new: &Edit) -> bool {
+    if old.range.start <= new.range.start {
+        new.range.start < old.range.end
+    } else {
+        old.range.start < new.range.end
+    }
+}
+
+/// The edits of non-overlapping sets in source order, as [`apply`] takes them.
+fn flatten(groups: &[Vec<Edit>]) -> Vec<Edit> {
+    let mut edits: Vec<Edit> = groups.iter().flatten().cloned().collect();
+    edits.sort_by_key(|edit| edit.range.start);
+    edits
 }
 
 /// `text` with sorted, non-overlapping `edits` applied.
@@ -156,6 +227,13 @@ fn first_difference(original: TokenStream, expanded: TokenStream) -> Span {
         .map(|(_, leaf)| leaf)
         .or(a.last())
         .map_or_else(Span::call_site, |(_, span)| *span)
+}
+
+/// The spans of the first and last token of `tokens`.
+pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
+    let mut all = Vec::new();
+    leaves(tokens, &mut all);
+    Some((all.first()?.1, all.last()?.1))
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.
@@ -236,6 +314,77 @@ pub(crate) mod tests {
         );
     }
 
+    /// Edits every occurrence of each word, all of them as one set.
+    struct Together(&'static [(&'static str, &'static str)]);
+
+    impl ReverseRule for Together {
+        fn edits(&self, file: &syn::File, source: &str) -> Vec<Edit> {
+            self.edit_groups(file, source).concat()
+        }
+
+        fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
+            let edits = self
+                .0
+                .iter()
+                .flat_map(|&(from, to)| Replace(from, to).edits(file, source));
+            vec![edits.collect()]
+        }
+    }
+
+    #[test]
+    fn a_set_of_edits_is_kept_or_dropped_as_a_whole() {
+        let source = "fn f() { let a = 1; }\nfn g() { let b = 2; }\n";
+        // The first edit keeps the meaning on its own, the second does not: the set goes.
+        let partial = Together(&[("let a = 1;", "let a = 1 ;"), ("f()", "h()")]);
+        let out = convert(source, &[&partial, &Replace("let b = 2;", "let b = 2 ;")]);
+        assert_eq!(
+            out.unwrap(),
+            "fn f() { let a = 1; }\nfn g() { let b = 2 ; }\n"
+        );
+        // One edit of the set overlaps an edit kept before it: the other goes with it.
+        let late = Together(&[("fn f()", "fn f ()"), ("let b", "let  b")]);
+        let out = convert(source, &[&Replace("fn f", "fn  f"), &late]);
+        assert_eq!(
+            out.unwrap(),
+            "fn  f() { let a = 1; }\nfn g() { let b = 2; }\n"
+        );
+        let whole = Together(&[("let a = 1;", "let a = 1 ;"), ("let b", "let  b")]);
+        assert_eq!(
+            convert(source, &[&whole]).unwrap(),
+            "fn f() { let a = 1 ; }\nfn g() { let  b = 2; }\n"
+        );
+    }
+
+    #[test]
+    fn a_set_whose_edits_keep_the_meaning_only_together_is_kept_one_at_a_time() {
+        let source = "fn f() { let a = 1; let b = 2; }\n";
+        // Either edit alone drops or repeats `let a`; together they only move a line break.
+        let moved = Together(&[
+            ("let a = 1; ", ""),
+            ("let b = 2;", "let a = 1;\n    let b = 2;"),
+        ]);
+        // The renamed fn fails the whole-file check, so every set is checked on its own.
+        let out = convert(source, &[&moved, &Replace("f()", "h()")]);
+        assert_eq!(out.unwrap(), "fn f() { let a = 1;\n    let b = 2; }\n");
+    }
+
+    #[test]
+    fn two_sets_of_edits_in_one_fn_both_apply_over_rustfmt_commas() {
+        let source = "fn f<T>(\n    t: T,\n) -> u8\nwhere\n    T: Clone,\n{\n    let mut a = 1;\n    \
+                      let mut b = 2;\n    a + b\n}\n";
+        let expected = "fn f<T>(\n    t: T\n) -> u8\nwhere\n    T: Clone\n{\n    var a = 1;\n    \
+                        var b = 2;\n    a + b\n}\n";
+        // Each set edits two places, the sets interleave, and each drops one of rustfmt's
+        // trailing commas, which the check must not count as a change.
+        let first = Together(&[("t: T,\n)", "t: T\n)"), ("let mut a", "var a")]);
+        let second = Together(&[("T: Clone,\n{", "T: Clone\n{"), ("let mut b", "var b")]);
+        assert_eq!(convert(source, &[&first, &second]).unwrap(), expected);
+        // A set between them that changes the return type sends the driver to its
+        // one-at-a-time check; it goes whole, its harmless edit too, and both sets stay.
+        let bad = Together(&[("-> u8", "-> i8"), ("a + b", "a+b")]);
+        assert_eq!(convert(source, &[&first, &bad, &second]).unwrap(), expected);
+    }
+
     #[test]
     fn of_overlapping_edits_the_earlier_rule_wins() {
         let source = "fn f() {}\n";
@@ -261,7 +410,10 @@ pub(crate) mod tests {
                 text: String::new(),
             },
         ];
-        assert_eq!(non_overlapping(source, edits.into_iter()), []);
+        assert_eq!(
+            non_overlapping(source, edits.into_iter().map(|edit| vec![edit])),
+            Vec::<Vec<Edit>>::new()
+        );
     }
 
     #[test]
@@ -284,5 +436,16 @@ pub(crate) mod tests {
         assert!(err.to_string().contains("as written"), "{err}");
         let start = err.span().start();
         assert_eq!((start.line, start.column), (2, 9));
+    }
+
+    #[test]
+    fn rustfmt_trailing_commas_neither_block_the_file_nor_the_check() {
+        // The call-argument pass rewrites `g(1,)` without its comma, and passes write lists
+        // without one; neither may stop a rustfmt-formatted file from converting.
+        let source = "fn f<T>(\n    t: T,\n) -> u8\nwhere\n    T: Clone,\n{\n    let mut x = g(\n        \
+                      1,\n    );\n    x\n}\n";
+        assert_sugar(source, &source.replace("let mut", "var"));
+        let out = convert(source, &[&Replace("t: T,\n)", "t: T\n)")]);
+        assert_eq!(out.unwrap(), source.replace("t: T,\n)", "t: T\n)"));
     }
 }

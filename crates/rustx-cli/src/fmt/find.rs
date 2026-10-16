@@ -96,9 +96,17 @@ impl Finder<'_> {
                 {
                     self.head(seq, i, "&'", " ");
                 }
-                "fn" => self.throws(seq, i),
+                "fn" => {
+                    self.throws(seq, i);
+                    self.parameters(seq, i);
+                }
+                "bound" | "derive" => self.preset(seq, i),
+                "move" => self.capture_list(seq, i),
                 _ => {}
             },
+            TokenTree::Group(group) if group.delimiter() == Delimiter::Parenthesis => {
+                self.named_arguments(seq, i, group);
+            }
             TokenTree::Punct(punct) => match punct.as_char() {
                 '~' => {
                     let post = match next {
@@ -136,6 +144,109 @@ impl Finder<'_> {
         if block && statement_start(seq, i) && !seq[i..].iter().any(|t| is_punct(Some(t), ';')) {
             let end = seq.last().map_or(0, |last| range(last).end);
             self.push(end..end, "; ", "");
+        }
+    }
+
+    /// `x: T: Bound` and `x: T = v` in the parameters of `fn name<..>(..)`: the suffix from the
+    /// second top-level `:` or the top-level `=` leaves, and an attribute stands in for it.
+    fn parameters(&mut self, seq: &[TokenTree], i: usize) {
+        let Some(TokenTree::Group(list)) = parameter_list(seq, i).map(|at| &seq[at]) else {
+            return;
+        };
+        let params: Vec<TokenTree> = list.stream().into_iter().collect();
+        let (mut start, mut depth) = (0, 0);
+        for at in 0..=params.len() {
+            if at == params.len() || (depth == 0 && is_punct(params.get(at), ',')) {
+                self.parameter(&params[start..at]);
+                start = at + 1;
+            } else {
+                depth = angle_depth(&params, at, depth);
+            }
+        }
+    }
+
+    fn parameter(&mut self, param: &[TokenTree]) {
+        let (mut depth, mut colons) = (0, 0);
+        for at in 0..param.len() {
+            depth = angle_depth(param, at, depth);
+            if depth > 0 {
+                continue;
+            }
+            let colon = single_colon(param, at + 1);
+            colons += usize::from(colon);
+            if at > 0 && ((colon && colons == 2) || lone_equals(param, at)) {
+                // The cut starts right after the type, so no blank is left before the comma.
+                let (first, last) = (range(&param[0]), range(&param[param.len() - 1]));
+                let suffix = range(&param[at - 1]).end..last.end;
+                let cut = Placeholder::suffix(self.source, first.start, suffix, !colon);
+                self.found.extend(cut);
+                return;
+            }
+        }
+    }
+
+    /// `bound Name = ..;` and `derive Name = ..;` stay as written behind a macro-call item.
+    fn preset(&mut self, seq: &[TokenTree], i: usize) {
+        let named = matches!(seq.get(i + 1), Some(TokenTree::Ident(_)));
+        if !named || !lone_equals(seq, i + 2) {
+            return;
+        }
+        let public = |k: usize| is_named(seq.get(k), "pub").then_some(k);
+        let start = public(i.wrapping_sub(1))
+            .or_else(|| {
+                public(i.wrapping_sub(2)).filter(|_| group(seq.get(i - 1), Delimiter::Parenthesis))
+            })
+            .unwrap_or(i);
+        if !statement_start(seq, start) {
+            return;
+        }
+        if let Some(end) = (i..seq.len()).find(|&k| is_punct(seq.get(k), ';')) {
+            self.push(range(&seq[start]).start..range(&seq[end]).end, "", "!();");
+        }
+    }
+
+    /// `move[..] |x|` keeps a closure: the list and the first `|` become `|id, `, and with
+    /// `||` the list and both bars become `|id|`, the id padded to the width of the list.
+    fn capture_list(&mut self, seq: &[TokenTree], i: usize) {
+        if !group(seq.get(i + 1), Delimiter::Bracket) || !is_punct(seq.get(i + 2), '|') {
+            return;
+        }
+        let empty = is_joint_punct(seq.get(i + 2)) && is_punct(seq.get(i + 3), '|');
+        let end = range(&seq[i + 2 + usize::from(empty)]).end;
+        let at = range(&seq[i + 1]).start..end;
+        let pad = "_".repeat(at.len().saturating_sub(6));
+        let post = if empty {
+            format!("{pad}|")
+        } else {
+            format!("{pad}, ")
+        };
+        self.push(at, " |", &post);
+    }
+
+    /// `f(name: v)` in a call: a parenthesised group after a name not declared by `fn`, or after
+    /// another `(..)` or `[..]`. `name:` becomes an assignment to the id, padded to the name.
+    fn named_arguments(&mut self, seq: &[TokenTree], i: usize, args: &proc_macro2::Group) {
+        let call = match seq.get(i.wrapping_sub(1)) {
+            Some(TokenTree::Ident(name)) => {
+                name != "fn" && !is_named(seq.get(i.wrapping_sub(2)), "fn")
+            }
+            Some(TokenTree::Group(before)) => before.delimiter() != Delimiter::Brace,
+            _ => false,
+        };
+        if !call {
+            return;
+        }
+        let args: Vec<TokenTree> = args.stream().into_iter().collect();
+        let mut start = 0;
+        while start < args.len() {
+            if let Some(TokenTree::Ident(name)) = args.get(start)
+                && single_colon(&args, start + 2)
+            {
+                let at = range(&args[start]).start..range(&args[start + 1]).end;
+                let pad = "_".repeat(name.to_string().len());
+                self.push(at, "", &format!("{pad} ="));
+            }
+            start = argument_end(&args, start) + 1;
         }
     }
 
@@ -273,6 +384,47 @@ fn type_follows(seq: &[TokenTree], i: usize) -> bool {
         || ((after_arrow(seq, i) || after_prefix) && type_punct(next))
 }
 
+/// The comma after the argument that starts at `from`, past the parameters of a closure, which
+/// hold commas and `name: Type` of their own.
+fn argument_end(args: &[TokenTree], from: usize) -> usize {
+    let mut at = from;
+    while is_named(args.get(at), "move") || is_named(args.get(at), "async") {
+        at += 1;
+    }
+    if is_punct(args.get(at), '|') {
+        at = if is_joint_punct(args.get(at)) && is_punct(args.get(at + 1), '|') {
+            at + 2
+        } else {
+            (at + 1..args.len())
+                .find(|&k| is_punct(args.get(k), '|'))
+                .map_or(args.len(), |close| close + 1)
+        };
+    }
+    (at..args.len())
+        .find(|&k| is_punct(args.get(k), ','))
+        .unwrap_or(args.len())
+}
+
+/// A `=` at `i` that is neither part of `==`, `=>`, `<=` and the like nor followed by one.
+fn lone_equals(seq: &[TokenTree], i: usize) -> bool {
+    let next = seq.get(i + 1);
+    is_punct(seq.get(i), '=')
+        && !is_joint_punct(seq.get(i.wrapping_sub(1)))
+        && !(is_joint_punct(seq.get(i)) && (is_punct(next, '=') || is_punct(next, '>')))
+}
+
+/// The parameter group when `fn` stands at `i`: `fn name(..)` or `fn name<..>(..)`.
+fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
+    if !matches!(seq.get(i + 1), Some(TokenTree::Ident(_))) {
+        return None;
+    }
+    let mut at = i + 2;
+    if is_punct(seq.get(at), '<') {
+        at = matching_close(seq, at)? + 1;
+    }
+    group(seq.get(at), Delimiter::Parenthesis).then_some(at)
+}
+
 /// A single `:` right before `i`, not part of `::`.
 fn single_colon(seq: &[TokenTree], i: usize) -> bool {
     let before = |k: usize| seq.get(i.wrapping_sub(k));
@@ -403,6 +555,33 @@ mod tests {
     fn a_long_throws_type_gets_a_comment_as_wide_as_itself() {
         let text = round_trip("fn f() -> u8 throws std::io::Error { 1 }");
         assert_eq!(text, "fn f() -> u8 /*_R0______________*/ { 1 }");
+    }
+
+    #[test]
+    fn presets_become_macro_call_items() {
+        let source = "pub bound Key = Clone + Send; derive Id = Debug, Clone;";
+        assert_eq!(round_trip(source), "_R0!(); _R1!();");
+    }
+
+    #[test]
+    fn inline_bounds_and_defaults_leave_for_an_attribute_on_their_parameter() {
+        let source = "fn run(x: T: Clone + Send, (a, b): (u8, u8) = (1, 2), s: &str = \"s\") {}";
+        let expected = "fn run(#[_R0_______] x: T, #[_R1__] (a, b): (u8, u8), #[_R2] s: &str) {}";
+        assert_eq!(round_trip(source), expected);
+    }
+
+    #[test]
+    fn named_arguments_become_assignments_but_closure_parameters_stay() {
+        let source = "fn f(port: u8 = 1) {} fn g() { f(port: 2); h(|a: u8, b: u8| a); }";
+        let expected = "fn f(#[_R0] port: u8) {} fn g() { f(_R1____ = 2); h(|a: u8, b: u8| a); }";
+        assert_eq!(round_trip(source), expected);
+    }
+
+    #[test]
+    fn capture_lists_become_a_closure_parameter_as_wide_as_the_list() {
+        let source = "fn f() { let c = move[a.clone()] || a; let d = move[b] |x: u8| x; }";
+        let expected = "fn f() { let c = move |_R0________| a; let d = move |_R1, x: u8| x; }";
+        assert_eq!(round_trip(source), expected);
     }
 
     #[test]

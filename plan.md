@@ -15,11 +15,8 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
-| T19.11 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.12 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.13 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
-| T31.2 | in progress | P3 | 3 | 100% | Claude / opus-5.5 |
-| T33 | in progress | P3 | 2 | 100% | Claude / opus-5.5 |
 
 ### T19. Convert plain Rust into rustx sugar
 
@@ -77,12 +74,6 @@ Inverts the type half of problem 16 (`prefix_types`): a type written `Rc<RefCell
 
 Plan: read `passes/prefix_types.rs` (which positions it reads, the `__rustx_rc` marker) and `passes/rc_borrows.rs` (which bindings it tracks); `sugar/prefix_types.rs` implementing `ReverseRule`; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
-### T19.11. Sugar driver: trailing commas and edit groups
-
-Two limits found by T19.6 and T19.9. First, code formatted by rustfmt never converts when a rule spans a list rustfmt ends with a trailing comma (a multi-line `where`, generics, parameters), because the check compares tokens exactly; a trailing comma before a closing delimiter or before the body brace of a `where` list never changes meaning outside macro calls, so the check should ignore it there (never inside a macro invocation's tokens, never the comma of a one-element tuple). Second, the driver has no edit groups, so multi-place rules (T19.6, T19.9) emit one edit spanning the whole signature, and other rules' edits inside that span are dropped. Done when the check accepts rustfmt's trailing commas, the driver keeps or drops a group of edits as one unit (including in its one-at-a-time fallback), and a test shows `into T` and inline bounds converting in the same fn.
-
-Plan: in `crates/rustx-core/src/sugar/mod.rs`, extend the token comparison (next to the `std_paths` normaliser) with the trailing comma rule above, and add an edit group to `ReverseRule` output (e.g. `Vec<Vec<Edit>>` or an `Edit` group id) with the fallback adding whole groups. Keep the existing rules working unchanged; moving T19.6/T19.9 onto groups is done when their branches merge, not here. Edit groups already landed with T19.7 (`ReverseRule::edit_groups`, commit `be71ac6`): merge that commit and build on it instead of a second mechanism. Also fix a `std_paths` gap T19.7 found: enum variants are not recorded as declarations, so `use self::Outcome::Ok;` does not shadow the prelude `Ok`. Verify: unit tests for the comparison (where, generics, params, 1-tuple, macro tokens), a failing-first test for the enum variant gap, `just check`.
-
 ### T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
 
 Inverts the field half of problem 17 (`field_defaults`): a struct followed by the exact `impl Default` the pass generates becomes the struct with `field: T = e` defaults and no impl, and struct expressions ending in `..Default::default()` for such a struct become a bare `..`. Done when the pass output turns back into the sugar on ordinary code, and an `impl Default` the pass would not generate (other statements, a field not set, a `derive(Default)`) is left alone.
@@ -94,15 +85,3 @@ Plan: read `passes/field_defaults.rs` for the emitted shapes (generics, `where`,
 Inverts the other two type prefixes of `prefix_types` (problems 04 and 09): `Box<dyn Trait + Send + Sync>` becomes `~Trait`, and `impl Iterator<Item = T> + '_` becomes `iter T`, in any spelling the normaliser equates and in the positions `prefix_types` reads. Done when both convert on ordinary code and shapes the pass does not write (other bounds, bound order the pass does not emit, a missing `+ '_`, `dyn Trait` without both markers) are left alone.
 
 Plan: build on T19.10 (`sugar/rc_types.rs`): reuse its position logic and single-candidate expansion check, extending it to the two other prefixes rather than adding a parallel walker; register in `RULES` if it is a separate rule; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
-
-### T31.2. M9: `rustx-cli fmt` for the remaining sugar
-
-The rest of T31 after T31.1: placeholders for `bound`/`derive` presets, inline bounds `x: T: Bound`, parameter defaults `x: T = v`, call defaults and named arguments `f(name: v)`, capture lists `move[..] |x|`, and formatting `sugar!` bodies inside `.rs` files. Done when the `NOT_YET` list in `crates/rustx-cli/tests/fmt.rs` holds only the cases that do not expand, and `.rs` files with `sugar!` bodies format with the same guarantees as `.rustx` files.
-
-Plan: extend `crates/rustx-cli/src/fmt/find.rs` with the four remaining spellings (presets as an item kept verbatim behind an `<id>!();` macro-call item; inline bounds and parameter defaults as a `#[<id>]` attribute on the parameter with the suffix cut and restored at the parameter end; named and default call arguments as `<id>name = v` only after a non-`fn` ident; capture lists as `move |<id>, x|`), porting the working draft from T31.1 onto the current code instead of copying it. Then format `sugar! { .. }` bodies in `.rs` files: find each invocation, format its body as a `.rustx` source at the invocation's indentation, and splice it back; the rest of the file goes through plain rustfmt only if the user asks (not by default). Verify: unit tests per spelling, the integration test with a shrunk `NOT_YET` list, a `.rs` fixture with two `sugar!` bodies, `just check`. Split again if it exceeds the task size.
-
-### T33. M9: user documentation
-
-A user guide: one page per sugar item with the plain Rust it desugars to, the entry points (`sugar!`, the attribute macros, `#[sugared]`, the CLI, `build.rs`) and the limits from ARCHITECTURE h, built from the problem files without duplicating them. Done when the guide builds, every example in it is compiled by a doc test or a `pass/` test, and README links to it.
-
-Plan: an mdBook-free guide in `docs/guide/` (plain Markdown, rendered by GitHub): `README.md` index, one page per sugar item (what it is, a short sugar example, the plain Rust it becomes, its limits from ARCHITECTURE h, a link to the problem file instead of repeating its motivation), and pages for the entry points (`sugar!`, attribute macros, `#[sugared]`, `rustx-cli expand`/`sugar`, `build.rs` via `rustx-build`). Every example is compiled: each page is included into a `rustx` doc-test module through `#[doc = include_str!(..)]` under `cfg(doctest)`, so `rust` blocks run as doc tests (expansions that are not standalone use `ignore` only when the same code is already a `pass/` test, named next to the block). README links to the guide. Also fixes the stale "string literals into `String` fields are M8" comments in `tests/pass/into_params.rs` and `tests/cases/into_params.rustx` (re-blessed; only the comment line changes). The `rustx-cli fmt` page is added when T31 merges. Verify: `just check` runs every guide example; every sugar item in `passes/mod.rs` has a page.
