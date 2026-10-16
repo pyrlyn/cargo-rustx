@@ -88,6 +88,21 @@ fn boxed_trait_objects_and_iterator_types_become_tilde_and_iter() {
 }
 
 #[test]
+fn option_parameters_with_a_default_become_parameter_defaults_with_their_calls() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_defaults.rs"]);
+    insta::assert_snapshot!("sugar_defaults_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_defaults.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains(
+            "connect(\"db\", ::core::option::Option::None, ::core::option::Option::None)"
+        ),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn result_fns_with_an_ok_tail_become_throws_fns() {
     let converted = success(&["sugar", "tests/fixtures/sugar_throws.rs"]);
     insta::assert_snapshot!("sugar_throws_rs", converted);

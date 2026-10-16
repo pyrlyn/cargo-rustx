@@ -188,6 +188,24 @@ The first reverse rule that needs T19.3: `Rc::new(RefCell::new(e))` in any spell
 
 Done: merged in #15. `sugar/rc_values.rs` turns `Rc::new(RefCell::new(e))` in any spelling `std_paths` equates into `rc e`, refuses positions where `rc e` reads differently, and the driver check refuses bindings whose field accesses `rc_borrows` would rewrite.
 
+### T19.5. Reverse rule: string literal conversions back to a bare literal
+
+Inverts T29: `String::from("lit")`, `"lit".to_string()`, `"lit".to_owned()` and `"lit".into()` where the position is written `String` (and the `Some(..)` / `vec![..]` shapes of `Option<String>` / `Vec<String>`) become the bare literal, because `string_literals` turns it back into `String::from`. Done when the rule fires in every position T29 converts and nowhere else.
+
+Done: merged in #18. `sugar/string_literals.rs` turns `String::from("lit")` back into `"lit"` only where the pass converts: places whose type is written `String`, `Option<String>` (inside `Some(..)`) or `Vec<String>` (inside `vec![..]`), found with the pass's own `Strings` and `typed_positions` walker. Only `String::from` with one plain or raw string literal converts, in any spelling `std_paths` resolves; `.to_string()`, `.to_owned()` and `.into()` expand to other tokens, so they are left alone, and so are a shadowed `String`, byte and C strings, and a call with a comment outside the literal.
+
+### T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
+
+Inverts the `into T` parameter pass (problem 15): a parameter `x: impl Into<T>` whose body starts with the exact rebinding the pass emits becomes `x: into T` with the rebinding removed. Done when the rule turns the pass output back into the sugar on ordinary code and leaves any other use of `impl Into<T>` alone.
+
+Done: merged in #19. `sugar/into_params.rs` turns `x: impl Into<T>` back into `x: into T` only when the body starts with exactly the rebinding the pass writes, `let x: T = Into::into(x);`, after the rebindings of earlier parameters. It compares tokens with std paths resolved, and moves `mut`, `ref` and attributes back onto the parameter. A generic `S: Into<T>`, a rebinding that uses `.into()`, a declaration without a body and a `T` starting with `<` or `::` stay as written. The parameter and its rebinding are one edit spanning the fn, so both are kept or dropped together. Moving this rule onto the edit groups from T19.7 is a follow-up.
+
+### T19.7. Reverse rule: `Result` functions back to `throws`
+
+Inverts T20 for the explicit form: a fn returning `Result<T, E>` whose every tail and `return` value the `throws` pass would have wrapped (`Ok(..)` around values, `Err(..)`/`?` kept) becomes `-> T throws E` with the wrappers removed. Done when the pass output turns back into the sugar on ordinary code and a fn the pass would not produce (a tail that is already a `Result` expression, `Ok` used as a value elsewhere in a way the pass would not emit) is left alone.
+
+Done: merged in #20. The driver gained edit groups: `ReverseRule::edit_groups` returns sets of edits that are kept or dropped as one unit, also in the one-at-a-time fallback. `sugar/throws.rs` turns a fn returning `Result<T, E>`, in any spelling `std_paths` resolves, into `-> T throws E` when its body is one the pass builds. A tail `Ok(v)` keeps only `v` where the pass would wrap `v` again, and a tail `Ok(())` goes where the pass appends it. The return type and the tail are one edit set. Left alone: other `Result` tails, aliases such as `io::Result<T>` and `anyhow::Result<T>`, `return Err(e)`, and a comment among the removed tokens.
+
 ### T24. M6: `shared` bindings and `shared T` types
 
 Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type position becomes `Shared<T>`, and field access on such bindings goes through the lock, one lock per access, as the problem file shows; read-only data becomes a plain `Arc`. Depends on T23. The access rewriting is written so T26 can reuse it. Done when the problem's detailed example compiles and runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.
@@ -209,6 +227,18 @@ Formatting for sugar sources, so `.rustx` files and `sugar!` bodies get a consis
 Decided with the creator: format through rustfmt: replace the sugar with reversible placeholders that are valid Rust, run rustfmt, then restore the sugar, so the layout matches ordinary Rust and comments survive. Split into subtasks at claim time if it exceeds the task size.
 
 Done: `rustx-cli fmt <file.rustx> [--check]` in `crates/rustx-cli/src/fmt/`. Each sugar spelling is replaced by a placeholder that is valid Rust of the same syntactic role and carries an id (`<marker><n>`, the marker chosen so the source never contains it); rustfmt (`--edition 2024`, import and module reordering off) formats the result through stdin, and the original text is put back. The output is accepted only if its expansion equals the input's; a placeholder that rustfmt moved, dropped or duplicated is an error at `path:line:col`. Covered: `var`/`shared` bindings, `throw e`, `rc e`, the type prefixes (`iter`, `rc`, `weak`, `shared`, `into T`, `from T`, `&from(a) T`), `~T`/`~(..)`, `#[dyn]`, `.m<T>(` and `throws E`. 19 of the core snapshot cases format idempotently with comments kept; the rest are pinned in a `NOT_YET` list. Uses `rustx_build::{expand_source, render, Kind}`; `rustx-cli` depends on `proc-macro2` with `span-locations` again. A missing rustfmt gives an install hint. Non-test code: 498 lines without comments and blank lines (about 615 raw).
+
+### T31.2. M9: `rustx-cli fmt` for the remaining sugar
+
+The rest of T31 after T31.1: placeholders for `bound`/`derive` presets, inline bounds `x: T: Bound`, parameter defaults `x: T = v`, call defaults and named arguments `f(name: v)`, capture lists `move[..] |x|`, and formatting `sugar!` bodies inside `.rs` files. Done when the `NOT_YET` list in `crates/rustx-cli/tests/fmt.rs` holds only the cases that do not expand, and `.rs` files with `sugar!` bodies format with the same guarantees as `.rustx` files.
+
+Done: merged in #16. `crates/rustx-cli/src/fmt/find.rs` covers the remaining spellings (`bound`/`derive` presets, inline bounds, parameter defaults, call defaults and named arguments, capture lists), so `NOT_YET` in `crates/rustx-cli/tests/fmt.rs` holds only the two cases that do not expand. `sugar! { .. }` bodies in `.rs` files are formatted at the indentation of the invocation, nested in `mod` levels so a second run changes nothing; the rest of the file is left as written. The fmt equality check ignores the trailing commas rustfmt adds in macro arguments, but keeps the comma of a one-element tuple.
+
+### T33. M9: user documentation
+
+A user guide: one page per sugar item with the plain Rust it desugars to, the entry points (`sugar!`, the attribute macros, `#[sugared]`, the CLI, `build.rs`) and the limits from ARCHITECTURE h, built from the problem files without duplicating them. Done when the guide builds, every example in it is compiled by a doc test or a `pass/` test, and README links to it.
+
+Done: merged in #17. `docs/guide/` has 31 plain Markdown pages: an index, one page per sugar item, and pages for the entry points `sugar!`, the attribute macros, `#[sugared]`, `build.rs`, `rustx-cli expand`/`sugar`, `rustx-cli fmt` and the `dyn` feature. Each page links to its problem file instead of repeating it. A `#[cfg(doctest)] mod guide` in `crates/rustx` includes every page through a `pages!` macro, so all 54 `rust` blocks run as doc tests. README links to the guide, and the stale M8 comments in `into_params` are fixed.
 
 ### T32. M9: file-level `.rustx` via `build.rs`
 

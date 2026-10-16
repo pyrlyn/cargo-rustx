@@ -16,8 +16,9 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
+use proc_macro2::TokenStream;
 use rustx_build::Kind;
+use rustx_core::{MacroTokens, without_trailing_commas};
 
 use mapped::Mapped;
 
@@ -107,41 +108,22 @@ fn unnest(formatted: &str, levels: usize) -> Option<&str> {
     Some(inner)
 }
 
-/// Whether two expansions mean the same, up to a trailing comma before a closing delimiter.
+/// Whether two expansions mean the same, up to trailing commas that mean nothing.
 ///
 /// prettyplease settles trailing commas in syntax it knows, but prints macro arguments as they
-/// are written, and rustfmt adds a trailing comma when it breaks `vec![..]` over lines. A comma
-/// that makes a one-element tuple, `(x,)`, is kept, because without it the meaning changes.
+/// are written, and rustfmt adds a trailing comma when it breaks `vec![..]` over lines, so here
+/// they are ignored inside macro arguments too. A comma that makes a one-element tuple, `(x,)`,
+/// is kept, because without it the meaning changes.
 fn same_expansion(before: &str, after: &str) -> bool {
     let tokens = |text: &str| {
         text.parse::<TokenStream>()
             .ok()
-            .map(|t| without_trailing_commas(t, Delimiter::None))
+            .map(|t| without_trailing_commas(t, MacroTokens::Ignored))
     };
     match (tokens(before), tokens(after)) {
         (Some(before), Some(after)) => before.to_string() == after.to_string(),
         _ => before == after,
     }
-}
-
-fn without_trailing_commas(stream: TokenStream, delimiter: Delimiter) -> TokenStream {
-    let mut trees: Vec<TokenTree> = stream
-        .into_iter()
-        .map(|tree| match tree {
-            TokenTree::Group(group) => {
-                let stream = without_trailing_commas(group.stream(), group.delimiter());
-                TokenTree::Group(Group::new(group.delimiter(), stream))
-            }
-            tree => tree,
-        })
-        .collect();
-    let comma = |tree: &TokenTree| matches!(tree, TokenTree::Punct(p) if p.as_char() == ',');
-    let tuple =
-        delimiter == Delimiter::Parenthesis && trees.iter().filter(|t| comma(t)).count() == 1;
-    if trees.last().is_some_and(comma) && !tuple {
-        trees.pop();
-    }
-    trees.into_iter().collect()
 }
 
 const NOT_FOUND: &str =

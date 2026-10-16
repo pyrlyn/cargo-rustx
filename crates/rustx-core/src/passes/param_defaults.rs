@@ -59,6 +59,11 @@ mod marker;
 use proc_macro2::{Span, TokenStream};
 use syn::{Attribute, Expr};
 
+#[cfg(feature = "sugar")]
+pub(crate) use lower::{has_impl_trait, is_constant};
+#[cfg(feature = "sugar")]
+pub(crate) use marker::MARKER;
+
 /// The default the token half put on a parameter: the span of its `=` and the expression.
 pub(super) struct ParamDefault {
     pub(super) eq: Span,
