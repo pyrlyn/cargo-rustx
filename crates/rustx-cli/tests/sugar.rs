@@ -57,6 +57,37 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn rc_and_weak_types_written_with_short_std_names_become_prefixes() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_rc_types.rs"]);
+    insta::assert_snapshot!("sugar_rc_types_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_rc_types.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("::std::rc::Weak<::core::cell::RefCell<Node>>"),
+        "{expanded}"
+    );
+}
+
+#[test]
+fn boxed_trait_objects_and_iterator_types_become_tilde_and_iter() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_box_iter.rs"]);
+    insta::assert_snapshot!("sugar_box_iter_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_box_iter.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded
+            .contains("::std::boxed::Box<dyn Sink + ::core::marker::Send + ::core::marker::Sync>"),
+        "{expanded}"
+    );
+    assert!(
+        expanded.contains("impl ::core::iter::Iterator<Item = &String> + '_"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn generics_bounded_in_where_become_inline_bounds() {
     let converted = success(&["sugar", "tests/fixtures/sugar_bounds.rs"]);
     insta::assert_snapshot!("sugar_bounds_rs", converted);

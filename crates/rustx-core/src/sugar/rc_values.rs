@@ -98,16 +98,10 @@ impl Finder<'_> {
             edits: Vec::new(),
         };
         nested.value(value);
-        nested.edits.sort_by_key(|edit| edit.range.start);
-        let nested: Vec<Edit> = nested
-            .edits
-            .into_iter()
-            .map(|edit| Edit {
-                range: edit.range.start - start..edit.range.end - start,
-                text: edit.text,
-            })
-            .collect();
-        let text = format!("rc {}", apply(self.source.get(start..end)?, &nested));
+        let text = format!(
+            "rc {}",
+            apply_inside(self.source, start..end, nested.edits)?
+        );
         let (func_start, _) = bounds(outer.func.to_token_stream())?;
         Some(Edit::between(
             func_start,
@@ -131,6 +125,23 @@ impl Finder<'_> {
             && !call.args.trailing_punct();
         (plain && self.paths.normalise(path.path.to_token_stream()) == func).then_some(call)
     }
+}
+
+/// The text of `source[range]` with `edits`, which a nested search found inside it, applied.
+pub(super) fn apply_inside(
+    source: &str,
+    range: Range<usize>,
+    mut edits: Vec<Edit>,
+) -> Option<String> {
+    edits.sort_by_key(|edit| edit.range.start);
+    let relative: Vec<Edit> = edits
+        .into_iter()
+        .map(|edit| Edit {
+            range: edit.range.start - range.start..edit.range.end - range.start,
+            text: edit.text,
+        })
+        .collect();
+    Some(apply(source.get(range)?, &relative))
 }
 
 /// Whether the token passes read `rc value` as the sugar for exactly this value.
@@ -233,7 +244,7 @@ mod tests {
                  match 0 { 0 => Rc::new(RefCell::new(4)), _ => Rc::new(RefCell::new(5)) }\n}\n",
             ),
             &with_uses(
-                "fn f(v: Vec<u8>) -> Rc<RefCell<u8>> {\n    let a = rc v;\n    \
+                "fn f(v: Vec<u8>) -> rc u8 {\n    let a = rc v;\n    \
                  g(rc 1, [rc 2]);\n    \
                  let c = || rc 3;\n    \
                  match 0 { 0 => rc 4, _ => rc 5 }\n}\n",

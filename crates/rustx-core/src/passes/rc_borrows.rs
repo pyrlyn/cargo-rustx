@@ -156,6 +156,13 @@ impl VisitMut for Lowering {
     }
 }
 
+/// Whether this pass would add borrows to `scope` if `name` were an `rc` binding, so a reverse
+/// rule can leave such a binding's type plain without expanding the file.
+#[cfg(feature = "sugar")]
+pub(crate) fn would_borrow(name: &Ident, scope: &[Stmt]) -> bool {
+    access::scan(name, &mut scope.to_vec(), &BORROW).accesses
+}
+
 fn borrow_params(sig: &Signature, body: &mut [Stmt]) {
     for input in &sig.inputs {
         if let FnArg::Typed(typed) = input
