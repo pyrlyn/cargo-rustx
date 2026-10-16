@@ -57,6 +57,19 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn result_fns_with_an_ok_tail_become_throws_fns() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_throws.rs"]);
+    insta::assert_snapshot!("sugar_throws_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_throws.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("::core::result::Result::Ok(map)"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn impl_into_parameters_with_their_conversion_become_into_sugar() {
     let converted = success(&["sugar", "tests/fixtures/sugar_into.rs"]);
     insta::assert_snapshot!("sugar_into_rs", converted);
