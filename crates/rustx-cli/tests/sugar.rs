@@ -57,6 +57,20 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn a_generated_impl_default_becomes_field_defaults() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_field_defaults.rs"]);
+    insta::assert_snapshot!("sugar_field_defaults_rs", converted);
+    let rustx =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_field_defaults.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("impl ::core::default::Default for Config"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn rc_and_weak_types_written_with_short_std_names_become_prefixes() {
     let converted = success(&["sugar", "tests/fixtures/sugar_rc_types.rs"]);
     insta::assert_snapshot!("sugar_rc_types_rs", converted);

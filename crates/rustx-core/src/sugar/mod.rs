@@ -12,6 +12,7 @@
 //! makes a one-element tuple.
 
 mod commas;
+mod field_defaults;
 mod inline_bounds;
 mod into_params;
 mod param_defaults;
@@ -49,19 +50,21 @@ pub(crate) trait ReverseRule {
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
-// it and is dropped whatever the order: such a value keeps its plain spelling. `prefix_types`
-// edits types and `rc_values` expressions, so their edits never overlap; a `prefix_types` edit
-// inside an inline bounds signature, a parameter default's type or a `throws` return type
-// overlaps that rule's edit and, listed first, wins. An inline bounds edit spans a signature from
-// its generics to its `where`, so it wins any later rule's edit inside that span. A parameter
-// default's statement removal starts at its body's `{`, so it wins over a `var` edit inside it.
-// `throws` edits a return type and the bytes around a tail's value. An `into` edit starts in the
+// it and is dropped whatever the order: such a value keeps its plain spelling. Likewise an edit
+// inside a default that `field_defaults` moves from an impl into its struct. `prefix_types` edits
+// types and `rc_values` expressions, so their edits never overlap; a `prefix_types` edit inside an
+// inline bounds signature, a parameter default's type or a `throws` return type overlaps that
+// rule's edit and, listed first, wins. An inline bounds edit spans a signature from its generics
+// to its `where`, so it wins any later rule's edit inside that span. A parameter default's
+// statement removal starts at its body's `{`, so it wins over a `var` edit inside it. `throws`
+// edits a return type and the bytes around a tail's value. An `into` edit starts in the
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
 // edit replaces one `String::from(lit)` call, which holds no other rule's shape.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
+    &field_defaults::FieldDefaults,
     &prefix_types::PrefixTypes,
     &inline_bounds::InlineBounds,
     &param_defaults::ParamDefaults,
