@@ -417,10 +417,11 @@ mod tests {
     }
 
     #[test]
-    fn a_literal_without_the_trailing_comma_the_pass_writes_is_left_alone() {
-        // rustfmt's one-line `Self { a: 1 }`; T19.11 is to make the check ignore that comma.
-        unchanged(
+    fn a_literal_without_the_trailing_comma_the_pass_writes_still_converts() {
+        // rustfmt's one-line `Self { a: 1 }` drops the comma, which the driver check ignores.
+        assert_sugar(
             "struct A { a: u8 }\nimpl Default for A { fn default() -> Self { Self { a: 1 } } }\n",
+            "struct A { a: u8 = 1 }\n",
         );
     }
 
