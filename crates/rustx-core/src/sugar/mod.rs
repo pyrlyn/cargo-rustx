@@ -12,6 +12,7 @@
 //! makes a one-element tuple.
 
 mod commas;
+mod inline_bounds;
 mod into_params;
 mod param_defaults;
 mod rc_values;
@@ -47,6 +48,8 @@ pub(crate) trait ReverseRule {
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
+// it and is dropped whatever the order: such a value keeps its plain spelling. An inline bounds
+// edit spans a signature from its generics to its `where`, so it wins any edit inside that span.
 // it and is dropped whatever the order: such a value keeps its plain spelling. A parameter
 // default's statement removal starts at its body's `{`, so it wins over a `var` edit inside it.
 // it and is dropped whatever the order: such a value keeps its plain spelling. `throws` edits a
@@ -59,6 +62,7 @@ const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
     &rc_values::RcValues,
+    &inline_bounds::InlineBounds,
     &param_defaults::ParamDefaults,
     &throws::Throws,
     &into_params::IntoParams,

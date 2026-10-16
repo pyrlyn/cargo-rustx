@@ -31,7 +31,7 @@ use syn::{
     Signature, Stmt, TraitItemFn, Type,
 };
 
-use super::rc_values::bounds;
+use super::bounds;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule};
 use crate::passes::throws::{diverging_macro, is_ok_or_err, is_unit, produces_no_value};
