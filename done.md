@@ -200,6 +200,12 @@ Inverts the `into T` parameter pass (problem 15): a parameter `x: impl Into<T>` 
 
 Done: merged in #19. `sugar/into_params.rs` turns `x: impl Into<T>` back into `x: into T` only when the body starts with exactly the rebinding the pass writes, `let x: T = Into::into(x);`, after the rebindings of earlier parameters. It compares tokens with std paths resolved, and moves `mut`, `ref` and attributes back onto the parameter. A generic `S: Into<T>`, a rebinding that uses `.into()`, a declaration without a body and a `T` starting with `<` or `::` stay as written. The parameter and its rebinding are one edit spanning the fn, so both are kept or dropped together. Moving this rule onto the edit groups from T19.7 is a follow-up.
 
+### T19.7. Reverse rule: `Result` functions back to `throws`
+
+Inverts T20 for the explicit form: a fn returning `Result<T, E>` whose every tail and `return` value the `throws` pass would have wrapped (`Ok(..)` around values, `Err(..)`/`?` kept) becomes `-> T throws E` with the wrappers removed. Done when the pass output turns back into the sugar on ordinary code and a fn the pass would not produce (a tail that is already a `Result` expression, `Ok` used as a value elsewhere in a way the pass would not emit) is left alone.
+
+Done: merged in #20. The driver gained edit groups: `ReverseRule::edit_groups` returns sets of edits that are kept or dropped as one unit, also in the one-at-a-time fallback. `sugar/throws.rs` turns a fn returning `Result<T, E>`, in any spelling `std_paths` resolves, into `-> T throws E` when its body is one the pass builds. A tail `Ok(v)` keeps only `v` where the pass would wrap `v` again, and a tail `Ok(())` goes where the pass appends it. The return type and the tail are one edit set. Left alone: other `Result` tails, aliases such as `io::Result<T>` and `anyhow::Result<T>`, `return Err(e)`, and a comment among the removed tokens.
+
 ### T24. M6: `shared` bindings and `shared T` types
 
 Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type position becomes `Shared<T>`, and field access on such bindings goes through the lock, one lock per access, as the problem file shows; read-only data becomes a plain `Arc`. Depends on T23. The access rewriting is written so T26 can reuse it. Done when the problem's detailed example compiles and runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.

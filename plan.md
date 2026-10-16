@@ -7,7 +7,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T19.7 | in progress | P2 | 4 | 100% | Claude / opus-5.5 |
 | T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.10 | in progress | P2 | 2 | 100% | Claude / opus-5.5 |
@@ -22,12 +21,6 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
-
-### T19.7. Reverse rule: `Result` functions back to `throws`
-
-Inverts T20 for the explicit form: a fn returning `Result<T, E>` whose every tail and `return` value the `throws` pass would have wrapped (`Ok(..)` around values, `Err(..)`/`?` kept) becomes `-> T throws E` with the wrappers removed. Done when the pass output turns back into the sugar on ordinary code and a fn the pass would not produce (a tail that is already a `Result` expression, `Ok` used as a value elsewhere in a way the pass would not emit) is left alone.
-
-Plan: read `passes/throws.rs` (and `throw.rs` for `return Err(..)` back to `throw e` if it fits the size) for the exact emitted shapes; `sugar/throws.rs` implementing `ReverseRule`, all edits of one fn kept or dropped together; the anyhow default form (`throws` without `E`) is out of scope unless the normaliser already equates its path. Register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T19.8. Reverse rule: `Option` parameters with `unwrap_or` back to parameter defaults
 
