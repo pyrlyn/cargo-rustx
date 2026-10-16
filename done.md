@@ -176,18 +176,6 @@ The first rule on the T19.1 driver after `var`: `.m::<T>(..)` back to `.m<T>(..)
 
 Done: `sugar/turbofish.rs`, second in `sugar::RULES` (its edits cannot overlap `var`'s). A method call with non-empty explicit generic arguments, `.m::<..>(..)`, loses only the `::` bytes, so comments in the arguments survive. Before emitting an edit the rule runs the forward token passes on `receiver.m<args>()` and keeps it only if they read it back to the same call, so it follows the pass without copying its tables. Left alone: path turbofish (`Vec::<u8>::new()`, `g::<u8>()`), an empty `::<>`, a bare std collection the pass would fill (`collect::<Vec>()`), and calls inside macro arguments. Ideas for later rules: a shared `reads_back(sugar, plain)` helper on the driver, and shortening `collect::<Vec<_>>()` to `collect<Vec>()` as problem 06 shows.
 
-### T19.3. Std path equivalence in the sugar check
-
-Passes emit fully qualified std paths (`::std::rc::Rc::new`, `::core::option::Option`), so the T19.1 check `expand(sugar(x)) == x` never matches ordinary code. Decided with the creator: the check treats a short std name (`Rc`, `RefCell`, `Option`, `Some`, `String`, `Vec`, `Box`, `Arc`, `Mutex`, `Result`, `Ok`, `Err`, `Into`, `From`, `Default`, ...) as equal to its fully qualified path when the file declares no item or `use` that shadows that name. Done when the shared driver applies this normalisation and a test shows a shadowing `use`/item turns it off. Split at implementation time because the whole exceeded the task size: the first rule that needs it is T19.4.
-
-Done: merged in #15. `sugar/std_paths.rs` normalises std paths in both token streams of the driver check only, after collecting the names the file shadows (items, `use` trees, generic parameters); a shadowing item or `use` turns it off for that name.
-
-### T19.4. Reverse rule: `Rc::new(RefCell::new(e))` back to `rc e`
-
-The first reverse rule that needs T19.3: `Rc::new(RefCell::new(e))` in any spelling the normaliser equates becomes `rc e` in ordinary code. Done when the rule fires on ordinary code, refuses positions where `rc e` reads differently, and the driver check refuses bindings whose field accesses `rc_borrows` would rewrite.
-
-Done: merged in #15. `sugar/rc_values.rs` turns `Rc::new(RefCell::new(e))` in any spelling `std_paths` equates into `rc e`, refuses positions where `rc e` reads differently, and the driver check refuses bindings whose field accesses `rc_borrows` would rewrite.
-
 ### T24. M6: `shared` bindings and `shared T` types
 
 Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type position becomes `Shared<T>`, and field access on such bindings goes through the lock, one lock per access, as the problem file shows; read-only data becomes a plain `Arc`. Depends on T23. The access rewriting is written so T26 can reuse it. Done when the problem's detailed example compiles and runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.
