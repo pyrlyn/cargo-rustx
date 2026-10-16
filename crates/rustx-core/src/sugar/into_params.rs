@@ -308,6 +308,15 @@ mod tests {
     }
 
     #[test]
+    fn a_trailing_comma_in_the_generic_arguments_converts() {
+        // A comma before `>` means nothing, so the driver check ignores it (T19.11).
+        assert_sugar(
+            "fn f(x: impl Into<String,>) { let x: String = Into::into(x); }\n",
+            "fn f(x: into String) { }\n",
+        );
+    }
+
+    #[test]
     fn parameters_convert_in_order_with_their_binding_mode_and_attributes() {
         assert_sugar(
             "impl S {\n    fn f(&mut self, #[cfg(unix)] a: impl Into<String>, n: u8, b: impl Into<(u8, u8)>, \
@@ -381,7 +390,6 @@ mod tests {
             "fn f<S: Into<String>>(x: S) { let x: String = Into::into(x); }\n",
             "fn f(mut x: impl Into<String>) { let x: String = Into::into(x); }\n",
             "fn f(x: impl Into<String> + Send) { let x: String = Into::into(x); }\n",
-            "fn f(x: impl Into<String,>) { let x: String = Into::into(x); }\n",
             "fn f(x: impl ?Sized + Into<String>) { let x: String = Into::into(x); }\n",
             "fn f(x: impl From<String>) { let x: String = From::from(x); }\n",
             // A declaration has no rebinding to show the type came from the sugar.
