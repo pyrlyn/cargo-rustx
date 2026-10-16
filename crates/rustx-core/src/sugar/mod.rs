@@ -163,7 +163,7 @@ fn first_difference(original: TokenStream, expanded: TokenStream) -> Span {
 }
 
 /// The spans of the first and last token of `tokens`.
-fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
+pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
     let mut all = Vec::new();
     leaves(tokens, &mut all);
     Some((all.first()?.1, all.last()?.1))
