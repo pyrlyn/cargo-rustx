@@ -14,23 +14,23 @@ use crate::passes::param_defaults::default_of;
 
 /// The parameters a call has to supply, the receiver left out.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(in crate::passes) struct Shape {
-    pub(in crate::passes) params: Vec<Param>,
+pub(crate) struct Shape {
+    pub(crate) params: Vec<Param>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub(in crate::passes) struct Param {
+pub(crate) struct Param {
     /// The binding, when the parameter is a plain name a call can refer to.
-    pub(super) name: Option<String>,
+    pub(crate) name: Option<String>,
     /// How errors refer to the parameter: its name or its pattern as written.
     pub(super) label: String,
-    pub(super) default: bool,
+    pub(crate) default: bool,
     /// The type as written.
     pub(in crate::passes) ty: Type,
 }
 
 impl Shape {
-    pub(super) fn has_default(&self) -> bool {
+    pub(crate) fn has_default(&self) -> bool {
         self.params.iter().any(|param| param.default)
     }
 }
@@ -49,14 +49,14 @@ struct Entry {
 }
 
 #[derive(Default)]
-pub(in crate::passes) struct Fns {
+pub(crate) struct Fns {
     by_name: HashMap<String, Vec<Entry>>,
 }
 
 impl Fns {
     /// Records a signature; `owner` is the name of the enclosing `impl` or trait type, `None`
     /// for a free fn.
-    pub(in crate::passes) fn add(&mut self, sig: &Signature, owner: Option<String>) {
+    pub(crate) fn add(&mut self, sig: &Signature, owner: Option<String>) {
         let params = sig
             .inputs
             .iter()
@@ -83,7 +83,7 @@ impl Fns {
 
     /// The shapes `qualifier::name(..)` can call: free fns (the qualifier may be a module) and
     /// associated fns of a type named `qualifier`; a bare `name(..)` only reaches free fns.
-    pub(in crate::passes) fn path_call(&self, name: &str, qualifier: Option<&str>) -> Vec<&Shape> {
+    pub(crate) fn path_call(&self, name: &str, qualifier: Option<&str>) -> Vec<&Shape> {
         self.matching(name, |entry| {
             !entry.receiver
                 && match (&entry.owner, qualifier) {
@@ -95,7 +95,7 @@ impl Fns {
     }
 
     /// The shapes `x.name(..)` can call: every method with a receiver, whatever its type.
-    pub(super) fn method_call(&self, name: &str) -> Vec<&Shape> {
+    pub(crate) fn method_call(&self, name: &str) -> Vec<&Shape> {
         self.matching(name, |entry| entry.receiver)
     }
 
@@ -112,10 +112,7 @@ impl Fns {
 
 /// The name a path call is resolved by, and its qualifier with `Self` replaced by `owner`, the
 /// enclosing type; `None` for anything else that is called.
-pub(in crate::passes) fn path_target(
-    func: &Expr,
-    owner: Option<&str>,
-) -> Option<(Ident, Option<String>)> {
+pub(crate) fn path_target(func: &Expr, owner: Option<&str>) -> Option<(Ident, Option<String>)> {
     let Expr::Path(ExprPath {
         qself: None, path, ..
     }) = func
@@ -132,7 +129,7 @@ pub(in crate::passes) fn path_target(
 }
 
 /// The last path segment of an `impl`'s self type, empty when it is not a path.
-pub(in crate::passes) fn type_name(ty: &Type) -> String {
+pub(crate) fn type_name(ty: &Type) -> String {
     match ty {
         Type::Path(path) => path
             .path

@@ -1,0 +1,35 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! A connection helper with optional arguments, written without sugar.
+
+pub struct Pool {
+    size: usize,
+}
+
+impl Pool {
+    /// A pool of `size` connections.
+    pub fn new(size: usize = 4) -> Self {
+        Pool { size }
+    }
+}
+
+pub fn connect(host: &str, port: u16 = 5432, name: String = host.to_owned()) -> String {
+    // The name labels the connection in logs.
+    format!("{name}@{host}:{port}")
+}
+
+pub fn demo() -> Vec<String> {
+    let pool = Pool::new();
+    vec![
+        connect("db"),
+        connect("db", 6432),
+        connect("db", name: format!("pool of {}", pool.size)),
+    ]
+}
+
+/// Unwraps without a `let` of its own, so it stays as written.
+pub fn retries(limit: Option<u8>) -> u8 {
+    limit.unwrap_or(3)
+}

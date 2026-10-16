@@ -307,8 +307,8 @@ mod tests {
              vec![Rc::new(RefCell::new(x))];\n}\n",
         );
         assert_eq!(sugar(&source).unwrap(), source);
-        // Checked without the driver, which would also drop these edits; a trailing comma in a
-        // call is one the driver refuses to read at all.
+        // Checked without the driver, which would also drop these edits; the rule itself does
+        // not match a call with a trailing comma.
         let source = source.replace("let m", "let l = Rc::new(RefCell::new(x,));\n    let m");
         let file = syn::parse_file(&source).unwrap();
         assert_eq!(RcValues.edits(&file, &source), []);

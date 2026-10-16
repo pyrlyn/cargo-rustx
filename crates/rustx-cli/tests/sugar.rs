@@ -65,6 +65,17 @@ fn generics_bounded_in_where_become_inline_bounds() {
     assert_eq!(
         success(&["expand", rustx.to_str().unwrap()]),
         success(&["expand", "tests/fixtures/sugar_bounds.rs"])
+fn option_parameters_with_a_default_become_parameter_defaults_with_their_calls() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_defaults.rs"]);
+    insta::assert_snapshot!("sugar_defaults_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_defaults.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains(
+            "connect(\"db\", ::core::option::Option::None, ::core::option::Option::None)"
+        ),
+        "{expanded}"
     );
 }
 
