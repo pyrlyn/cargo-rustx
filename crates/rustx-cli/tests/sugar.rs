@@ -57,6 +57,19 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn impl_into_parameters_with_their_conversion_become_into_sugar() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_into.rs"]);
+    insta::assert_snapshot!("sugar_into_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_into.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("let mut more: Vec<String> = ::core::convert::Into::into(more);"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
     let converted = success(&["sugar", "tests/fixtures/sugar_strings.rs"]);
     insta::assert_snapshot!("sugar_strings_rs", converted);

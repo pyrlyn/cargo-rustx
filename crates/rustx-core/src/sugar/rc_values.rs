@@ -22,7 +22,6 @@
 
 use std::ops::Range;
 
-use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
 use syn::{
@@ -31,7 +30,7 @@ use syn::{
 };
 
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, apply, leaves};
+use super::{Edit, ReverseRule, apply, bounds};
 
 pub(crate) struct RcValues;
 
@@ -132,13 +131,6 @@ impl Finder<'_> {
             && !call.args.trailing_punct();
         (plain && self.paths.normalise(path.path.to_token_stream()) == func).then_some(call)
     }
-}
-
-/// The spans of the first and last token of `tokens`.
-pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
-    let mut all = Vec::new();
-    leaves(tokens, &mut all);
-    Some((all.first()?.1, all.last()?.1))
 }
 
 /// Whether the token passes read `rc value` as the sugar for exactly this value.
