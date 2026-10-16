@@ -194,6 +194,12 @@ Inverts T29: `String::from("lit")`, `"lit".to_string()`, `"lit".to_owned()` and 
 
 Done: merged in #18. `sugar/string_literals.rs` turns `String::from("lit")` back into `"lit"` only where the pass converts: places whose type is written `String`, `Option<String>` (inside `Some(..)`) or `Vec<String>` (inside `vec![..]`), found with the pass's own `Strings` and `typed_positions` walker. Only `String::from` with one plain or raw string literal converts, in any spelling `std_paths` resolves; `.to_string()`, `.to_owned()` and `.into()` expand to other tokens, so they are left alone, and so are a shadowed `String`, byte and C strings, and a call with a comment outside the literal.
 
+### T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
+
+Inverts the `into T` parameter pass (problem 15): a parameter `x: impl Into<T>` whose body starts with the exact rebinding the pass emits becomes `x: into T` with the rebinding removed. Done when the rule turns the pass output back into the sugar on ordinary code and leaves any other use of `impl Into<T>` alone.
+
+Done: merged in #19. `sugar/into_params.rs` turns `x: impl Into<T>` back into `x: into T` only when the body starts with exactly the rebinding the pass writes, `let x: T = Into::into(x);`, after the rebindings of earlier parameters. It compares tokens with std paths resolved, and moves `mut`, `ref` and attributes back onto the parameter. A generic `S: Into<T>`, a rebinding that uses `.into()`, a declaration without a body and a `T` starting with `<` or `::` stay as written. The parameter and its rebinding are one edit spanning the fn, so both are kept or dropped together. Moving this rule onto the edit groups from T19.7 is a follow-up.
+
 ### T24. M6: `shared` bindings and `shared T` types
 
 Problem 12. `shared s = e;` becomes a `Shared<T>` binding, `shared T` in type position becomes `Shared<T>`, and field access on such bindings goes through the lock, one lock per access, as the problem file shows; read-only data becomes a plain `Arc`. Depends on T23. The access rewriting is written so T26 can reuse it. Done when the problem's detailed example compiles and runs through `sugar!`, with unit tests, a snapshot case and `pass/` and `fail/` tests.

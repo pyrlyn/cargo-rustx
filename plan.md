@@ -7,7 +7,6 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 0% | |
-| T19.6 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.7 | in progress | P2 | 4 | 100% | Claude / opus-5.5 |
 | T19.8 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
 | T19.9 | in progress | P2 | 3 | 100% | Claude / opus-5.5 |
@@ -23,12 +22,6 @@ The reverse of `expand`: take existing Rust written without sugar and rewrite it
 Done when: a `rustx-cli sugar <file>` command (or the M9 CLI, if it lands first) prints the converted source; for every reverse rule a test shows `expand(sugar(x))` is token-equal to `x` after normalisation, and valid Rust with no matching shape comes back unchanged; snapshot cases cover each rule. Too big for one task: split into a shared driver plus one subtask per sugar item when claimed.
 
 Split when claimed: T19.1 is the shared driver with the first rule; the other reverse rules become T19.2 onward, one per sugar item, once the driver has landed.
-
-### T19.6. Reverse rule: `impl Into<T>` parameters back to `into T`
-
-Inverts the `into T` parameter pass (problem 15): a parameter `x: impl Into<T>` whose body starts with the exact rebinding the pass emits becomes `x: into T` with the rebinding removed. Done when the rule turns the pass output back into the sugar on ordinary code and leaves any other use of `impl Into<T>` alone.
-
-Plan: read `passes/into_params.rs` for the exact emitted shape (rebinding statement, generic or `impl` form); `sugar/into_params.rs` implementing `ReverseRule` with two edits per parameter (the type and the rebinding), both kept or both dropped; register in `RULES`; README rule list; `assert_sugar` tests and a CLI fixture. Verify with `just check`.
 
 ### T19.7. Reverse rule: `Result` functions back to `throws`
 
