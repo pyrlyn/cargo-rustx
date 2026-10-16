@@ -12,8 +12,10 @@
 //! makes a one-element tuple.
 
 mod commas;
+mod into_params;
 mod rc_values;
 mod std_paths;
+mod string_literals;
 mod turbofish;
 mod var;
 
@@ -43,8 +45,17 @@ pub(crate) trait ReverseRule {
 /// Registered rules, in priority order for overlapping edits.
 // `var` edits `let mut` and `turbofish` edits a `::` inside an expression, so their edits never
 // overlap each other. An `rc` edit replaces its whole call, so an edit inside its value overlaps
-// it and is dropped whatever the order: such a value keeps its plain spelling.
-const RULES: &[&dyn ReverseRule] = &[&var::LetMut, &turbofish::Turbofish, &rc_values::RcValues];
+// it and is dropped whatever the order: such a value keeps its plain spelling. An `into` edit
+// starts in the signature, before any edit of the rebindings it removes, so it wins those too.
+// it and is dropped whatever the order: such a value keeps its plain spelling. A string literal
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
+const RULES: &[&dyn ReverseRule] = &[
+    &var::LetMut,
+    &turbofish::Turbofish,
+    &rc_values::RcValues,
+    &into_params::IntoParams,
+    &string_literals::StringLiterals,
+];
 
 /// Replaces the bytes `range` of the source with `text`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -200,6 +211,13 @@ fn first_difference(original: TokenStream, expanded: TokenStream) -> Span {
         .map(|(_, leaf)| leaf)
         .or(a.last())
         .map_or_else(Span::call_site, |(_, span)| *span)
+}
+
+/// The spans of the first and last token of `tokens`.
+pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
+    let mut all = Vec::new();
+    leaves(tokens, &mut all);
+    Some((all.first()?.1, all.last()?.1))
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.
