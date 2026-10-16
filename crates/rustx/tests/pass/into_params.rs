@@ -29,7 +29,10 @@ rustx::sugar! {
             }
         }
 
-        // String literals into `String` fields are M8; they keep their conversions here.
+        // The struct literal's conversions are no longer needed (string literals into `String`
+        // fields of a struct of the input are converted, see `string_literals.rs`); they stay so
+        // this test covers `into T` alone. The `insert` keys still need `.into()`: method call
+        // arguments stay explicit.
         pub fn demo() -> HashMap<String, Contact> {
             var book = HashMap::new();
             let ann = Contact {
