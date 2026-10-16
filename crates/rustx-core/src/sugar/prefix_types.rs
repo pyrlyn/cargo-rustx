@@ -41,7 +41,8 @@ use syn::{
     Stmt, Token, TraitItemFn, Type, TypeImplTrait, TypeParamBound, TypePath, TypeTraitObject,
 };
 
-use super::rc_values::{apply_inside, bounds};
+use super::bounds;
+use super::rc_values::apply_inside;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule};
 

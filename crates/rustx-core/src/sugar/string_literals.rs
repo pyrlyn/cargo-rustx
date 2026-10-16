@@ -21,7 +21,7 @@ use proc_macro2::Span;
 use quote::{ToTokens, quote};
 use syn::Expr;
 
-use super::rc_values::bounds;
+use super::bounds;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule};
 use crate::passes::{Strings, walk_file};
