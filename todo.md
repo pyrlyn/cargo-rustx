@@ -8,4 +8,3 @@
 - T19.11. Sugar driver: trailing commas and edit groups
 - T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
 - T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
-- T33. M9: user documentation

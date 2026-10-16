@@ -216,6 +216,12 @@ The rest of T31 after T31.1: placeholders for `bound`/`derive` presets, inline b
 
 Done: merged in #16. `crates/rustx-cli/src/fmt/find.rs` covers the remaining spellings (`bound`/`derive` presets, inline bounds, parameter defaults, call defaults and named arguments, capture lists), so `NOT_YET` in `crates/rustx-cli/tests/fmt.rs` holds only the two cases that do not expand. `sugar! { .. }` bodies in `.rs` files are formatted at the indentation of the invocation, nested in `mod` levels so a second run changes nothing; the rest of the file is left as written. The fmt equality check ignores the trailing commas rustfmt adds in macro arguments, but keeps the comma of a one-element tuple.
 
+### T33. M9: user documentation
+
+A user guide: one page per sugar item with the plain Rust it desugars to, the entry points (`sugar!`, the attribute macros, `#[sugared]`, the CLI, `build.rs`) and the limits from ARCHITECTURE h, built from the problem files without duplicating them. Done when the guide builds, every example in it is compiled by a doc test or a `pass/` test, and README links to it.
+
+Done: merged in #17. `docs/guide/` has 31 plain Markdown pages: an index, one page per sugar item, and pages for the entry points `sugar!`, the attribute macros, `#[sugared]`, `build.rs`, `rustx-cli expand`/`sugar`, `rustx-cli fmt` and the `dyn` feature. Each page links to its problem file instead of repeating it. A `#[cfg(doctest)] mod guide` in `crates/rustx` includes every page through a `pages!` macro, so all 54 `rust` blocks run as doc tests. README links to the guide, and the stale M8 comments in `into_params` are fixed.
+
 ### T32. M9: file-level `.rustx` via `build.rs`
 
 A build helper that desugars `.rustx` files into `OUT_DIR` from `build.rs`, so a whole file can use the sugar and be `include!`d, with `rerun-if-changed` lines and errors that name the `.rustx` file and line. Done when an example crate in the workspace builds from a `.rustx` file and a test shows a sugar error pointing at the right `.rustx` line.
