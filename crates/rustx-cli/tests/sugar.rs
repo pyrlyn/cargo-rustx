@@ -65,6 +65,10 @@ fn generics_bounded_in_where_become_inline_bounds() {
     assert_eq!(
         success(&["expand", rustx.to_str().unwrap()]),
         success(&["expand", "tests/fixtures/sugar_bounds.rs"])
+    );
+}
+
+#[test]
 fn result_fns_with_an_ok_tail_become_throws_fns() {
     let converted = success(&["sugar", "tests/fixtures/sugar_throws.rs"]);
     insta::assert_snapshot!("sugar_throws_rs", converted);
