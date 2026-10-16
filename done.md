@@ -212,6 +212,12 @@ Inverts parameter defaults (problem 17, from the T19 card): `x: Option<T>` plus 
 
 Done: merged in #21. `sugar/param_defaults.rs` turns `x: Option<T>` back into `x: T = v` when the body starts with exactly the statements `param_defaults` emits for a suffix of the parameters (`unwrap_or(v)` for a constant `v`, `unwrap_or_else(|| v)` otherwise). The calls come back too: they are resolved with the `call_defaults` pass's own `Fns`, trailing `None`s are dropped, `Some(e)` becomes `e`, and values after a `None` that has to stay become named arguments. If any call to a name cannot be written back, no fn of that name converts and none of its calls do. The fn and its calls are separate edits that the driver check keeps or drops together. An edit that would delete a comment, or inner attributes before the unwrapping statements, is not made.
 
+### T19.9. Reverse rule: generic bounds back to inline bounds
+
+Inverts inline bounds (problem 3): a generic parameter used by exactly one fn parameter, declared with bounds the `inline_bounds` pass would have generated, becomes `x: T: Bound` with the generic removed. Done when the pass output turns back into the sugar and generics used elsewhere (return type, other parameters, body turbofish, where clauses the pass would not write) are left alone.
+
+Done: `sugar/inline_bounds.rs` turns a generic used by exactly one parameter, with the bounds the `inline_bounds` pass writes, back into `x: T: Bound` and removes the generic; generics used anywhere else stay. CLI fixture `sugar_bounds.rs`. Merged in PR #22.
+
 ### T19.11. Sugar driver: trailing commas and edit groups
 
 Two limits found by T19.6 and T19.9. First, code formatted by rustfmt never converts when a rule spans a list rustfmt ends with a trailing comma (a multi-line `where`, generics, parameters), because the check compares tokens exactly; a trailing comma before a closing delimiter or before the body brace of a `where` list never changes meaning outside macro calls, so the check should ignore it there (never inside a macro invocation's tokens, never the comma of a one-element tuple). Second, the driver has no edit groups, so multi-place rules (T19.6, T19.9) emit one edit spanning the whole signature, and other rules' edits inside that span are dropped. Done when the check accepts rustfmt's trailing commas, the driver keeps or drops a group of edits as one unit (including in its one-at-a-time fallback), and a test shows `into T` and inline bounds converting in the same fn.
