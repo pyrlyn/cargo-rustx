@@ -29,9 +29,10 @@ enum Command {
         /// A Rust file; only code that sugar expands back to exactly is rewritten.
         file: PathBuf,
     },
-    /// Format a `.rustx` file in place with rustfmt, keeping its sugar.
+    /// Format a `.rustx` file, or the `sugar!` bodies of a Rust file, in place with rustfmt,
+    /// keeping the sugar.
     Fmt {
-        /// The `.rustx` file to format.
+        /// The `.rustx` or `.rs` file to format.
         file: PathBuf,
         /// Write nothing; exit with 1 when the file is not formatted.
         #[arg(long)]
