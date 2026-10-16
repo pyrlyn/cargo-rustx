@@ -104,6 +104,11 @@ const AST_PASSES: &[AstPass] = &[
 
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
 pub(crate) use newtype::VALIDATOR_NOT_FOUND;
+// The reverse rule for string literals finds its places exactly as the pass does.
+#[cfg(feature = "sugar")]
+pub(crate) use string_literals::Strings;
+#[cfg(feature = "sugar")]
+pub(crate) use typed_positions::walk_file;
 
 pub(crate) fn rewrite_tokens(mut tokens: TokenStream) -> syn::Result<TokenStream> {
     for pass in TOKEN_PASSES {
