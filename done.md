@@ -192,7 +192,7 @@ Done: merged in #15. `sugar/rc_values.rs` turns `Rc::new(RefCell::new(e))` in an
 
 Inverts T29: `String::from("lit")`, `"lit".to_string()`, `"lit".to_owned()` and `"lit".into()` where the position is written `String` (and the `Some(..)` / `vec![..]` shapes of `Option<String>` / `Vec<String>`) become the bare literal, because `string_literals` turns it back into `String::from`. Done when the rule fires in every position T29 converts and nowhere else.
 
-Done: merged in #18. `sugar/string_literals.rs` turns `String::from("lit")` back into a bare literal only in the places the `string_literals` pass fills: fields and parameters typed `String`. It finds them with the same walker the pass uses (`Strings` and `walk_file` are shared with the pass). `.to_string()`, `.into()` and `String::from` on a non-literal are left alone.
+Done: merged in #18. `sugar/string_literals.rs` turns `String::from("lit")` back into `"lit"` only where the pass converts: places whose type is written `String`, `Option<String>` (inside `Some(..)`) or `Vec<String>` (inside `vec![..]`), found with the pass's own `Strings` and `typed_positions` walker. Only `String::from` with one plain or raw string literal converts, in any spelling `std_paths` resolves; `.to_string()`, `.to_owned()` and `.into()` expand to other tokens, so they are left alone, and so are a shadowed `String`, byte and C strings, and a call with a comment outside the literal.
 
 ### T24. M6: `shared` bindings and `shared T` types
 
