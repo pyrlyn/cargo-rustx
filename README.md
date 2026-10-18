@@ -2,7 +2,7 @@
 
 cargo-rustx is a syntax layer over Rust. It stays as close to Rust as possible and only simplifies the places people find hardest to read and write. Everything desugars into ordinary Rust through procedural macros built on `syn`; there is no custom compiler. There are two entry points: `sugar! { .. }` for the full vocabulary and attribute macros (`#[data]`, `#[display]`, `#[delegate]`, `#[newtype]`, `#[sugared]`) for code that is already valid Rust.
 
-Status: early implementation. M0–M9 are in: every item of the catalog below works in `sugar!`, the attribute-shaped ones also as attribute macros and under `#[sugared]`; `.rustx` files desugar through `build.rs`; `rustx-cli` expands, formats (`fmt`) and converts plain Rust back into sugar (`sugar`, so far for `var` and method generics). Valid Rust passes through unchanged. See the [user guide](docs/guide/README.md); later work is in [roadmap.md](roadmap.md).
+Status: early implementation. M0–M9 are in: every item of the catalog below works in `sugar!`, the attribute-shaped ones also as attribute macros and under `#[sugared]`; `.rustx` files desugar through `build.rs`; `rustx-cli` expands, formats (`fmt`) and converts plain Rust back into sugar (`sugar`: `var`, method generics, `rc`/`weak`, `~Trait`, `iter`, string literals, `into`, `throws`, parameter and field defaults, inline bounds). Valid Rust passes through unchanged. See the [user guide](docs/guide/README.md); later work is in [roadmap.md](roadmap.md).
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it will be built.
 - [research.md](research.md): why these items were chosen, with sources, and what upstream Rust already fixes.

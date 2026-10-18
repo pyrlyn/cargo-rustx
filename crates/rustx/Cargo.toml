@@ -4,6 +4,7 @@ description = "cargo-rustx: a thin syntax layer over Rust that desugars into ord
 readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 

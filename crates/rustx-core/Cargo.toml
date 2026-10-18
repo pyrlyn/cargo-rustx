@@ -3,6 +3,7 @@ name = "rustx-core"
 description = "Parser and desugarer behind cargo-rustx; works on proc_macro2 tokens so it is testable outside the compiler"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 

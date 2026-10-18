@@ -3,6 +3,7 @@ name = "rustx-macros"
 description = "Procedural macros for cargo-rustx: `sugar!` and the attribute macros"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
