@@ -1,4 +1,1 @@
 - T19. Convert plain Rust into rustx sugar
-- T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
-- T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
-- T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`

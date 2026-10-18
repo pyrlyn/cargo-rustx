@@ -751,4 +751,47 @@ mod tests {
         stays_plain("trait Send {}\nstruct S { a: Box<dyn A + Send + Sync> }\n");
         stays_plain("struct S<Sync> { a: Box<dyn A + Send + Sync>, b: Sync }\n");
     }
+
+    #[test]
+    fn references_to_prefixed_types_and_trait_methods_convert() {
+        assert_sugar(
+            &with_uses(
+                "trait Tree {\n    fn root(&self) -> Rc<RefCell<u8>>;\n    \
+                 fn up(&self, to: &mut Weak<RefCell<u8>>) -> Option<Weak<RefCell<u8>>>;\n}\n",
+            ),
+            &with_uses(
+                "trait Tree {\n    fn root(&self) -> rc u8;\n    \
+                 fn up(&self, to: &mut weak u8) -> Option<weak u8>;\n}\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn a_box_and_an_iterator_in_the_same_signature_both_convert() {
+        assert_sugar(
+            "fn run(h: &[Box<dyn Job + Send + Sync>]) -> impl Iterator<Item = Box<dyn Job + Send + Sync>> + '_ {\n    \
+             h.iter().map(|_| todo!())\n}\n",
+            "fn run(h: &[~Job]) -> iter ~Job {\n    h.iter().map(|_| todo!())\n}\n",
+        );
+    }
+
+    #[test]
+    fn several_traits_and_a_lifetime_before_the_markers_become_a_group() {
+        assert_sugar(
+            "struct S {\n    a: Box<dyn A + B + Send + Sync>,\n    \
+             b: Box<dyn A + 'static + Send + Sync>,\n}\n",
+            "struct S {\n    a: ~(A + B),\n    b: ~(A + 'static),\n}\n",
+        );
+    }
+
+    #[test]
+    fn source_that_does_not_parse_is_an_error_not_a_panic() {
+        assert!(sugar("struct S { a: Rc<RefCell<u8> }").is_err());
+        assert!(sugar("fn f() -> impl Iterator<Item = u8 + '_ {").is_err());
+    }
+
+    #[test]
+    fn a_file_without_any_prefix_shape_is_returned_byte_for_byte() {
+        stays_plain("// nothing here\nstruct S { a: Vec<u8>, b: Option<String> }\n");
+    }
 }

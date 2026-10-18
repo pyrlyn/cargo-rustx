@@ -275,3 +275,15 @@ Done: AST pass `passes/rc_borrows.rs` tracks `let` bindings and fn, method and c
 Problem 15. A string literal gets `.to_string()` where the target type is written as `String` in the same input (struct fields, `Option<String>`, `Vec<String>`, `let x: String`), on the machinery of T28 and the shared `is_string`. Depends on T28. Done when the problem's `Contact` example compiles, with unit tests, a snapshot case and `pass/` tests, and positions whose type is not written stay unchanged.
 
 Done: AST pass `passes/string_literals.rs`, always on. A string literal (plain or raw; not byte or C strings) that meets a written `String`, `Option<String>` or `Vec<String>` becomes `::std::string::String::from(lit)`. This also covers `Some(lit)` and the literal elements of `vec![..]`, including `vec![lit; n]`. Positions, in every fn, method and trait default body: `let` annotations, assignment to typed locals, declared struct fields and `*r`, arguments of calls to fns of the input, and struct-literal fields (a converted shorthand gets its `name:` back). Compound assignment is left alone, because `String += &str` is already valid Rust. `typed_positions` now drives both this pass and `widen` through one `walk_file`, with `Convert::{STRUCT_FIELDS, COMPOUND_ASSIGNMENTS, marks, attribute}`; `widen`'s behaviour is unchanged. `is_str_literal` and the new `std_argument` live in `tokens::syntax`. Not reached: `const`/`static` items, method-call arguments, returns, struct literals inside macro arguments.
+
+### T19.10. Reverse rule: `Rc<RefCell<T>>` and `Weak<RefCell<T>>` types back to `rc T` and `weak T`
+
+Done: `sugar/prefix_types.rs` turns `Rc<RefCell<T>>` and `Weak<RefCell<T>>` (any spelling `std_paths` equates) into `rc T` and `weak T` in every position where `prefix_types` reads the prefix, and leaves bindings that `rc_borrows` would rewrite, group starts and shadowed names alone. Unit tests, the CLI fixture `sugar_rc_types.rs` and its snapshot cover it.
+
+### T19.12. Reverse rule: `impl Default` and `..Default::default()` back to field defaults
+
+Done: merged in #24, `sugar/field_defaults.rs`; the CLI fixture `sugar_field_defaults.rs` covers it.
+
+### T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
+
+Done: the same rule as T19.10 (`sugar/prefix_types.rs`) also turns `Box<dyn Trait + Send + Sync>` into `~Trait` (several traits or a lifetime become `~(A + B)`) and `impl Iterator<Item = T> + '_` into `iter T`; boxes without both markers, other bound orders and iterators without `+ '_` stay plain. Unit tests, the CLI fixture `sugar_box_iter.rs` and its snapshot cover it.

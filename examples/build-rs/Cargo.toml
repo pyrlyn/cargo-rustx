@@ -4,6 +4,7 @@ description = "Example: a library written as a `.rustx` file, desugared by `rust
 publish = false
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
