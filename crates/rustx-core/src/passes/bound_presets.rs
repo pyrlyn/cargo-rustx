@@ -54,9 +54,9 @@ use crate::tokens::syntax::{combine, introduced_span};
 use crate::tokens::{map_sequences, map_sequences_reporting};
 
 /// Name of the blanket impl's type parameter.
-pub(crate) const PARAM: &str = "__RustxSelf";
+const PARAM: &str = "__RustxSelf";
 
-pub(super) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
+pub(crate) fn rewrite(tokens: TokenStream) -> syn::Result<TokenStream> {
     map_sequences_reporting(tokens, rewrite_sequence)
 }
 

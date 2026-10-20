@@ -8,12 +8,12 @@
 //! impl<__RustxSelf: ?::core::marker::Sized + Clone + Eq + Hash> Key for __RustxSelf {}
 //! ```
 //!
-//! becomes `pub bound Key = Clone + Eq + Hash;`, the bounds copied as written. The trait keeps its
-//! attributes and visibility, since the pass keeps them. Only the shape is matched here: a trait
-//! with no items, generics, `where` clause or `unsafe`, and an impl of it with one type parameter
-//! named as the pass names it, for that parameter, with no items. The rest of the impl (`?Sized`,
-//! the bounds with `Self` replaced, `#[cfg]` copies and no other attributes) is left to the
-//! driver's check, which drops the edit unless the preset expands to exactly the pair.
+//! becomes `pub bound Key = Clone + Eq + Hash;`, the bounds copied as written. The shape is not
+//! matched here piece by piece: the rule runs the pass on the preset it would write, attributes
+//! and visibility included, and keeps the edit only when that gives back exactly the trait and
+//! the impl. So items, generics, a `where` clause or `unsafe` on the trait, and an impl with
+//! another parameter, no `?Sized`, other bounds or attributes the pass would not copy, are left
+//! alone.
 //!
 //! Refused as well: a trait any other impl in the file may implement, since the preset would
 //! hide that the trait is more than its bounds; an impl that is not the next item after its trait
@@ -21,12 +21,14 @@
 
 use std::collections::HashMap;
 
-use quote::ToTokens;
+use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
-use syn::{Block, GenericParam, Item, ItemImpl, ItemMod, ItemTrait, Stmt, Type};
+use syn::{Block, Item, ItemImpl, ItemMod, ItemTrait, Stmt};
 
+use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule, has_comment, span_range};
-use crate::passes::bound_presets::PARAM;
+use crate::passes::rewrite_bound_presets;
 
 pub(crate) struct BoundPresets;
 
@@ -36,6 +38,7 @@ impl ReverseRule for BoundPresets {
         impls.visit_file(file);
         let mut pairs = Pairs {
             source,
+            paths: &StdPaths::of(file),
             impls: impls.0,
             edits: Vec::new(),
         };
@@ -63,6 +66,7 @@ impl<'ast> Visit<'ast> for Impls {
 /// Finds trait and blanket impl pairs in every item list.
 struct Pairs<'a> {
     source: &'a str,
+    paths: &'a StdPaths,
     impls: HashMap<String, usize>,
     edits: Vec<Edit>,
 }
@@ -83,19 +87,12 @@ impl Pairs<'_> {
     /// One edit from the `trait` keyword to the end of the impl, so the trait never becomes a
     /// preset while its impl stays, which would implement it twice.
     fn preset(&self, item: &ItemTrait, imp: &ItemImpl) -> Option<Edit> {
-        let bare = item.unsafety.is_none()
-            && item.modifiers.auto_token.is_none()
-            && item.generics.params.is_empty()
-            && item.generics.where_clause.is_none()
-            && item.items.is_empty();
-        if !bare
-            || item.supertraits.is_empty()
-            || self.impls.get(&item.ident.to_string()) != Some(&1)
-            || !blanket(item, imp)
-        {
+        let implements = matches!(&imp.trait_, Some((path, _)) if path.is_ident(&item.ident));
+        if !implements || self.impls.get(&item.ident.to_string()) != Some(&1) {
             return None;
         }
         let bounds = span_range(item.supertraits.to_token_stream())?;
+        let item_start = span_range(item.to_token_stream())?.start;
         let start = item.trait_token.span.byte_range().start;
         let end = span_range(imp.to_token_stream())?.end;
         let mut lost = self.source.get(start..end)?.to_owned();
@@ -103,31 +100,28 @@ impl Pairs<'_> {
         if has_comment(&lost) {
             return None;
         }
-        Some(Edit {
+        let text = format!("bound {} = {};", item.ident, self.source.get(bounds)?);
+        let sugar = format!("{}{text}", self.source.get(item_start..start)?);
+        self.reads_back(&sugar, item, imp).then_some(Edit {
             range: start..end,
-            text: format!("bound {} = {};", item.ident, self.source.get(bounds)?),
+            text,
         })
     }
-}
 
-/// Whether `imp` is `impl<PARAM: ..> Name for PARAM {}` for the trait `item`.
-fn blanket(item: &ItemTrait, imp: &ItemImpl) -> bool {
-    let param = match imp.generics.params.first() {
-        Some(GenericParam::Type(param)) if imp.generics.params.len() == 1 => param,
-        _ => return false,
-    };
-    let for_param = match &*imp.self_ty {
-        Type::Path(ty) => ty.qself.is_none() && ty.path.is_ident(PARAM),
-        _ => false,
-    };
-    param.ident == PARAM
-        && for_param
-        && imp.unsafety.is_none()
-        && imp.modifiers.defaultness.is_none()
-        && imp.modifiers.polarity.is_none()
-        && imp.generics.where_clause.is_none()
-        && imp.items.is_empty()
-        && matches!(&imp.trait_, Some((path, _)) if path.is_ident(&item.ident))
+    /// Whether the pass turns `sugar`, the preset with the trait's attributes and visibility,
+    /// into exactly `item` and `imp`. Its output is re-printed through `syn` first, as the pair
+    /// is, since the pass leaves a `>>` it splits with other spacing than the source has.
+    fn reads_back(&self, sugar: &str, item: &ItemTrait, imp: &ItemImpl) -> bool {
+        sugar
+            .parse::<TokenStream>()
+            .ok()
+            .and_then(|tokens| rewrite_bound_presets(tokens).ok())
+            .and_then(|plain| syn::parse2::<syn::File>(plain).ok())
+            .is_some_and(|plain| {
+                self.paths.normalise(plain.into_token_stream())
+                    == self.paths.normalise(quote!(#item #imp))
+            })
+    }
 }
 
 impl<'ast> Visit<'ast> for Pairs<'_> {
@@ -180,7 +174,10 @@ mod tests {
 
     const KEY_SUGAR: &str = "bound Key = Clone + Eq + Hash;\n";
 
+    /// The rule itself proposes no edit, so the driver's check is not what keeps `source`.
     fn unchanged(source: &str) {
+        let file = syn::parse_file(source).unwrap();
+        assert_eq!(BoundPresets.edits(&file, source), Vec::new(), "{source}");
         assert_eq!(sugar(source).unwrap(), source);
     }
 
@@ -253,6 +250,7 @@ mod tests {
         // Another parameter name, no `?Sized`, other bounds, items, a `where` clause.
         unchanged(&KEY.replace("__RustxSelf", "T"));
         unchanged(&KEY.replace("?::core::marker::Sized + ", ""));
+        unchanged("trait Key: Clone {}\nimpl<__RustxSelf: Clone> Key for __RustxSelf {}\n");
         unchanged(&KEY.replace("+ Hash> Key", "> Key"));
         unchanged(&KEY.replace("__RustxSelf {}", "__RustxSelf { fn f() {} }"));
         unchanged(&KEY.replace(

@@ -7,7 +7,7 @@
 mod access;
 mod attr_flags;
 mod borrows;
-pub(crate) mod bound_presets;
+mod bound_presets;
 mod call_defaults;
 mod capture_lists;
 mod data;
@@ -102,6 +102,9 @@ const AST_PASSES: &[AstPass] = &[
     throws::lower,
 ];
 
+// The reverse rule for bound presets keeps a trait only when this pass writes it back.
+#[cfg(feature = "sugar")]
+pub(crate) use bound_presets::rewrite as rewrite_bound_presets;
 pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
 #[cfg(feature = "sugar")]
 pub(crate) use inline_bounds::KnownTypes;
