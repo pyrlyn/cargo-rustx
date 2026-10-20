@@ -7,7 +7,7 @@
 mod access;
 mod attr_flags;
 mod borrows;
-mod bound_presets;
+pub(crate) mod bound_presets;
 mod call_defaults;
 mod capture_lists;
 mod data;

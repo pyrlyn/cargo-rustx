@@ -11,6 +11,7 @@
 //! the body of a `where` list, but never inside the tokens a macro reads, nor the comma that
 //! makes a one-element tuple.
 
+mod bound_presets;
 mod commas;
 mod field_defaults;
 mod inline_bounds;
@@ -59,7 +60,8 @@ pub(crate) trait ReverseRule {
 // statement removal starts at its body's `{`, so it wins over a `var` edit inside it. `throws`
 // edits a return type and the bytes around a tail's value. An `into` edit starts in the
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
-// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape. A bound preset
+// edit spans a trait and its blanket impl, so an earlier rule's edit inside its bounds wins.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
@@ -71,6 +73,7 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    &bound_presets::BoundPresets,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
@@ -234,6 +237,16 @@ pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
     let mut all = Vec::new();
     leaves(tokens, &mut all);
     Some((all.first()?.1, all.last()?.1))
+}
+
+/// The byte range of `tokens` in the source, from its first token to its last.
+pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
+    let (first, last) = bounds(tokens)?;
+    Some(first.byte_range().start..last.byte_range().end)
+}
+
+pub(super) fn has_comment(text: &str) -> bool {
+    text.contains("//") || text.contains("/*")
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.
