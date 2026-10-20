@@ -265,30 +265,66 @@ pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
     Some(first.byte_range().start..last.byte_range().end)
 }
 
-/// Whether removing `text`, a run of whole tokens, would drop a comment, a doc comment included.
-/// `//` or `/*` inside a string or char literal is no comment, so this lexes `text` rather than
-/// searching it: the lexer drops comments, so a byte outside every token that is not whitespace
-/// is one. Text that does not lex counts as a comment, so the caller keeps it.
+/// Whether removing `text`, any run of source bytes between tokens or across them, would drop a
+/// comment, a doc comment included. `//` or `/*` inside a string or char literal is no comment,
+/// so literals are skipped rather than searched. A literal `text` ends inside counts as a
+/// comment, so the caller keeps the code rather than guess.
 pub(super) fn has_comment(text: &str) -> bool {
-    let Ok(tokens) = text.parse::<TokenStream>() else {
-        return true;
-    };
-    let mut all = Vec::new();
-    leaves(tokens, &mut all);
-    let mut covered = vec![false; text.len()];
-    for (_, span) in all {
-        let range = span.byte_range();
-        let Some(written) = text.get(range.clone()) else {
+    let mut rest = text;
+    while let Some(at) = rest.find(['/', '"', '\'']) {
+        let (before, from) = rest.split_at(at);
+        let after = if from.starts_with("//") || from.starts_with("/*") {
+            return true;
+        } else if let Some(body) = from.strip_prefix('"') {
+            past_string(before, body)
+        } else if let Some(body) = from.strip_prefix('\'') {
+            past_char(body)
+        } else {
+            from.get(1..)
+        };
+        let Some(after) = after else {
             return true;
         };
-        // A doc comment lexes into `#[doc = ".."]` tokens spanning the comment.
-        if written.starts_with("//") || written.starts_with("/*") {
-            return true;
-        }
-        covered[range].fill(true);
+        rest = after;
     }
-    text.char_indices()
-        .any(|(at, c)| !covered[at] && !c.is_whitespace())
+    false
+}
+
+/// What follows a string literal whose opening quote ends `before`, its body starting `body`.
+fn past_string<'a>(before: &str, body: &'a str) -> Option<&'a str> {
+    let hashes = before.len() - before.trim_end_matches('#').len();
+    // `r"..."`, `br#"..."#`: no escapes, closed by the quote and as many `#`.
+    if before[..before.len() - hashes].ends_with('r') {
+        let close = format!("\"{}", "#".repeat(hashes));
+        let end = body.find(&close)?;
+        return body.get(end + close.len()..);
+    }
+    let mut chars = body.char_indices();
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '\\' => {
+                chars.next();
+            }
+            '"' => return body.get(at + 1..),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// What follows a char literal, or the quote of a lifetime, whose quote comes right before `body`.
+fn past_char(body: &str) -> Option<&str> {
+    let mut chars = body.char_indices();
+    match chars.next()? {
+        (_, '\\') => {
+            let (escaped, c) = chars.next()?;
+            let end = body.get(escaped + c.len_utf8()..)?.find('\'')?;
+            body.get(escaped + c.len_utf8() + end + 1..)
+        }
+        (_, c) if body[c.len_utf8()..].starts_with('\'') => body.get(c.len_utf8() + 1..),
+        // A lifetime or a label: its name holds no quote or slash.
+        _ => Some(body),
+    }
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.
@@ -499,12 +535,25 @@ pub(crate) mod tests {
             " impl A { fn f() { g(\"http://x/*\", '/', b\"//\", r\"/*\") } }\n"
         ));
         assert!(!has_comment("  \n"));
+        // Fragments between tokens, with unbalanced delimiters, lifetimes and escapes.
+        for bare in [
+            "{\n    let ",
+            "; move || {",
+            "fn f<'a>(s: &'a str) -> char { '\\'' }",
+            "'/' '\\u{2f}' \"\\\"//\" br##\"\"# //\"##",
+            "a / b",
+        ] {
+            assert!(!has_comment(bare), "{bare}");
+        }
         for commented in [
+            "{ // why",
+            "&'a str /* why */",
             "fn f() {} // why",
             "fn f() { /* why */ }",
             "/// why\nfn f() {}",
             "//! why",
             "fn f() { \"",
+            "r#\"x\"",
         ] {
             assert!(has_comment(commented), "{commented}");
         }
