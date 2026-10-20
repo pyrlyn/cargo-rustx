@@ -54,6 +54,8 @@ fn check(s: &String) -> Result<(), &'static str> {
 
 Flags, applied in the order written: `deref`, `as_ref`, `display` (forwarding, or `display = "{} m"`), `from_str`, `into` (`From<Newtype> for Inner`), and the operators `add`, `sub`, `mul`, `div`, `rem`. With `validate = f`, `new` returns `Result<Self, E>` and `from_str` goes through it; without it `new` is infallible. On valid Rust the same is [`#[rustx::newtype]`](attribute-macros.md).
 
+[`rustx-cli sugar`](cli.md) turns a one-field tuple struct followed by exactly the impls this generates back into `#[newtype(..)]`; an impl after them that it would not generate stays as written.
+
 ## Limits
 
 - The validator's error type is read from its signature, so `validate = f` needs `fn f(..) -> Result<(), E>` in the same item list as the struct. A standalone `#[rustx::newtype]` cannot see it: use `sugar!` or [`#[sugared]`](sugared.md) on the module.

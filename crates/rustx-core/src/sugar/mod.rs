@@ -15,6 +15,7 @@ mod commas;
 mod field_defaults;
 mod inline_bounds;
 mod into_params;
+mod newtype;
 mod param_defaults;
 mod prefix_types;
 mod rc_values;
@@ -59,7 +60,8 @@ pub(crate) trait ReverseRule {
 // statement removal starts at its body's `{`, so it wins over a `var` edit inside it. `throws`
 // edits a return type and the bytes around a tail's value. An `into` edit starts in the
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
-// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape. A newtype's
+// edits start at its struct, before the impls they remove, so they win any edit inside those.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
@@ -71,6 +73,7 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    &newtype::Newtypes,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
@@ -234,6 +237,53 @@ pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
     let mut all = Vec::new();
     leaves(tokens, &mut all);
     Some((all.first()?.1, all.last()?.1))
+}
+
+/// The byte range of `tokens` in the source, from its first token to its last.
+pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
+    let (first, last) = bounds(tokens)?;
+    Some(first.byte_range().start..last.byte_range().end)
+}
+
+/// Whether removing `text` would drop a comment.
+pub(super) fn has_comment(text: &str) -> bool {
+    text.contains("//") || text.contains("/*")
+}
+
+/// Every item list of `file`: the file, inline modules and blocks, at any depth, each before the
+/// lists nested in it. `None` stands for a block statement that is not an item, so a rule
+/// matching an item and the items right after it does not see past such a statement.
+pub(super) fn item_lists(file: &syn::File) -> Vec<Vec<Option<&syn::Item>>> {
+    use syn::visit::{self, Visit};
+
+    struct Lists<'ast>(Vec<Vec<Option<&'ast syn::Item>>>);
+
+    impl<'ast> Visit<'ast> for Lists<'ast> {
+        fn visit_file(&mut self, file: &'ast syn::File) {
+            self.0.push(file.items.iter().map(Some).collect());
+            visit::visit_file(self, file);
+        }
+
+        fn visit_item_mod(&mut self, module: &'ast syn::ItemMod) {
+            if let Some((_, items)) = &module.content {
+                self.0.push(items.iter().map(Some).collect());
+            }
+            visit::visit_item_mod(self, module);
+        }
+
+        fn visit_block(&mut self, block: &'ast syn::Block) {
+            let items = block.stmts.iter().map(|stmt| match stmt {
+                syn::Stmt::Item(item) => Some(item),
+                _ => None,
+            });
+            self.0.push(items.collect());
+            visit::visit_block(self, block);
+        }
+    }
+
+    let mut lists = Lists(Vec::new());
+    lists.visit_file(file);
+    lists.0
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.

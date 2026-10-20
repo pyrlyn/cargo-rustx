@@ -1,0 +1,32 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! Typed ids, an email address and a length, written without sugar.
+
+use std::fmt;
+
+/// A user id.
+#[newtype(display, from_str)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserId(u64);
+
+/// An address with an `@`.
+#[newtype(deref, from_str, validate = check_email)]
+#[derive(Debug)]
+pub struct Email(String);
+
+fn check_email(s: &String) -> Result<(), &'static str> {
+    if s.contains('@') { Ok(()) } else { Err("no @") }
+}
+
+/// A length.
+#[newtype(add)]
+pub struct Meters(f64);
+
+// Rounded, which no `display` flag writes, so this impl stays.
+impl fmt::Display for Meters {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:.1} m", self.0)
+    }
+}
