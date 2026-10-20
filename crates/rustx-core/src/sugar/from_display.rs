@@ -49,7 +49,7 @@ use syn::{
 
 use super::item_lists::for_each_list;
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, apply, bounds};
+use super::{Edit, ReverseRule, apply, has_comment, span_range};
 
 pub(crate) struct FromDisplay;
 
@@ -181,7 +181,7 @@ impl Unit<'_> {
             let local = literal.start - whole.end..literal.end - whole.end;
             removed.replace_range(local, " ");
         }
-        if removed.contains("//") || removed.contains("/*") {
+        if has_comment(&removed) {
             return None;
         }
         edits.push(Edit {
@@ -403,12 +403,6 @@ fn unformat(text: &str, names: &[&str]) -> Option<String> {
 
 fn last_is(path: &Path, name: &str) -> bool {
     path.segments.last().is_some_and(|last| last.ident == name)
-}
-
-/// The byte range of `tokens` in the source, from its first token to its last.
-fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
-    let (first, last) = bounds(tokens)?;
-    Some(first.byte_range().start..last.byte_range().end)
 }
 
 #[cfg(test)]

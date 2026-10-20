@@ -24,8 +24,9 @@ use std::collections::HashMap;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
-use syn::{Block, Item, ItemImpl, ItemMod, ItemTrait, Stmt};
+use syn::{Item, ItemImpl, ItemTrait};
 
+use super::item_lists::for_each_list;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule, has_comment, span_range};
 use crate::passes::rewrite_bound_presets;
@@ -42,7 +43,7 @@ impl ReverseRule for BoundPresets {
             impls: impls.0,
             edits: Vec::new(),
         };
-        pairs.visit_file(file);
+        for_each_list(file, |items| pairs.list(items));
         pairs.edits
     }
 }
@@ -63,7 +64,7 @@ impl<'ast> Visit<'ast> for Impls {
     }
 }
 
-/// Finds trait and blanket impl pairs in every item list.
+/// Finds trait and blanket impl pairs in an item list.
 struct Pairs<'a> {
     source: &'a str,
     paths: &'a StdPaths,
@@ -73,8 +74,7 @@ struct Pairs<'a> {
 
 impl Pairs<'_> {
     /// `None` marks a statement between items, which breaks adjacency.
-    fn list<'i>(&mut self, items: impl Iterator<Item = Option<&'i Item>>) {
-        let items: Vec<Option<&Item>> = items.collect();
+    fn list(&mut self, items: &[Option<&Item>]) {
         for pair in items.windows(2) {
             if let [Some(Item::Trait(item)), Some(Item::Impl(imp))] = pair
                 && let Some(edit) = self.preset(item, imp)
@@ -121,28 +121,6 @@ impl Pairs<'_> {
                 self.paths.normalise(plain.into_token_stream())
                     == self.paths.normalise(quote!(#item #imp))
             })
-    }
-}
-
-impl<'ast> Visit<'ast> for Pairs<'_> {
-    fn visit_file(&mut self, file: &'ast syn::File) {
-        self.list(file.items.iter().map(Some));
-        visit::visit_file(self, file);
-    }
-
-    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
-        if let Some((_, items)) = &module.content {
-            self.list(items.iter().map(Some));
-        }
-        visit::visit_item_mod(self, module);
-    }
-
-    fn visit_block(&mut self, block: &'ast Block) {
-        self.list(block.stmts.iter().map(|stmt| match stmt {
-            Stmt::Item(item) => Some(item),
-            _ => None,
-        }));
-        visit::visit_block(self, block);
     }
 }
 
