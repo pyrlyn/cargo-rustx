@@ -13,6 +13,7 @@
 
 mod commas;
 mod field_defaults;
+mod from_display;
 mod inline_bounds;
 mod into_params;
 mod item_lists;
@@ -72,6 +73,9 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    // Its first edit sits inside an enum, so another rule's edit of a variant type wins there and
+    // the enum keeps its impls; its removal of the impls wins any later edit inside them.
+    &from_display::FromDisplay,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
