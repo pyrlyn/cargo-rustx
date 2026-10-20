@@ -14,6 +14,7 @@
 mod commas;
 mod delegate;
 mod field_defaults;
+mod from_display;
 mod inline_bounds;
 mod into_params;
 mod item_lists;
@@ -74,6 +75,10 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    // Its `from` edit ends where another rule's edit of a variant type starts, so both are kept
+    // and the driver's check keeps whichever expands back; its removal of the impls wins any
+    // later edit inside them.
+    &from_display::FromDisplay,
     // Its set inserts attributes at fields and removes the impls after the struct. Another rule's
     // edit of the struct that overlaps none of these, such as a field type, is kept with it. A set
     // starting earlier that overlaps one of its edits drops all of it; it wins any set starting

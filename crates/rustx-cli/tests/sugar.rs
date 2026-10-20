@@ -181,6 +181,19 @@ fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
 }
 
 #[test]
+fn generated_from_and_display_impls_become_from_variants_and_display_attributes() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_from_display.rs"]);
+    insta::assert_snapshot!("sugar_from_display_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_from_display.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("impl ::std::error::Error for LoadError {}"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn forwarding_impls_after_a_struct_become_delegate_attributes() {
     let converted = success(&["sugar", "tests/fixtures/sugar_delegate.rs"]);
     insta::assert_snapshot!("sugar_delegate_rs", converted);
