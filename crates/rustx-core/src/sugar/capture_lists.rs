@@ -14,13 +14,15 @@
 //! layout inside a capture or the closure survive and other rules' edits there do not overlap.
 //! A comment anywhere else in the block, which those edits would drop, keeps the block as written.
 //! Where the block sits decides where the sugar's closure ends (`{ .. }()` would call the body);
-//! the driver's round trip drops an edit read that way. Blocks inside a macro call's arguments
-//! stay, as for `var`: `syn` does not parse macro bodies.
+//! the driver's round trip drops an edit read that way. A match arm whose block body has no `,`
+//! and another arm after it stays too: the sugar would run into the next arm with nothing between
+//! them, and a `,` added there is a token the expansion does not write, so the check refuses it.
+//! Blocks inside a macro call's arguments stay, as for `var`: `syn` does not parse macro bodies.
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprBlock, ExprClosure, Pat, Stmt};
+use syn::{Expr, ExprBlock, ExprClosure, ExprMatch, Pat, Stmt};
 
 use super::{Edit, ReverseRule, bounds};
 
@@ -35,6 +37,7 @@ impl ReverseRule for CaptureLists {
     fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
         let mut finder = Finder {
             source,
+            unseparated: Vec::new(),
             groups: Vec::new(),
         };
         finder.visit_file(file);
@@ -44,12 +47,28 @@ impl ReverseRule for CaptureLists {
 
 struct Finder<'a> {
     source: &'a str,
+    /// Where the arm bodies that end without a `,` before the next arm start.
+    unseparated: Vec<usize>,
     groups: Vec<Vec<Edit>>,
 }
 
 impl<'ast> Visit<'ast> for Finder<'_> {
+    fn visit_expr_match(&mut self, expr: &'ast ExprMatch) {
+        let followed = expr.arms.split_last().map_or(&[][..], |(_, rest)| rest);
+        for arm in followed.iter().filter(|arm| arm.comma.is_none()) {
+            if let Expr::Block(block) = &*arm.body {
+                let open = block.block.brace_token.span.open();
+                self.unseparated.push(open.byte_range().start);
+            }
+        }
+        visit::visit_expr_match(self, expr);
+    }
+
     fn visit_expr_block(&mut self, block: &'ast ExprBlock) {
-        self.groups.extend(capture_list(self.source, block));
+        let open = block.block.brace_token.span.open().byte_range().start;
+        if !self.unseparated.contains(&open) {
+            self.groups.extend(capture_list(self.source, block));
+        }
         visit::visit_expr_block(self, block);
     }
 }
@@ -231,6 +250,37 @@ mod tests {
         assert_sugar(
             "fn f() { let g = { let mut a = a.clone(); move || a }; }",
             "fn f() { let g = { var a = a.clone(); move || a }; }",
+        );
+    }
+
+    #[test]
+    fn a_match_arm_body_converts_where_a_comma_or_the_match_end_follows_it() {
+        assert_sugar(
+            "fn f(x: Option<u8>) {\n    let g = match x {\n        Some(_) => {\n            \
+             let a = a.clone();\n            move || *a\n        },\n        \
+             None => { let b = b.clone(); move || *b }\n    };\n}\n",
+            "fn f(x: Option<u8>) {\n    let g = match x {\n        \
+             Some(_) => move[a.clone()] || *a,\n        \
+             None => move[b.clone()] || *b\n    };\n}\n",
+        );
+    }
+
+    #[test]
+    fn a_match_arm_body_without_a_comma_before_the_next_arm_stays() {
+        assert_no_edits(
+            "fn f(x: Option<u8>) {\n    let g = match x {\n        Some(_) => {\n            \
+             let a = a.clone();\n            move || *a\n        }\n        \
+             None => unreachable!(),\n    };\n}\n",
+        );
+    }
+
+    #[test]
+    fn a_block_in_statement_position_converts_with_its_semicolon_or_as_a_tail() {
+        assert_sugar(
+            "fn f() { { let a = a.clone(); move || a }; }\n\
+             fn g() -> impl Fn() -> u8 { let n = 1; { let a = a; move || a + n } }\n",
+            "fn f() { move[a.clone()] || a; }\n\
+             fn g() -> impl Fn() -> u8 { let n = 1; move[a] || a + n }\n",
         );
     }
 

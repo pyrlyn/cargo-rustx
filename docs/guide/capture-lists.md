@@ -33,7 +33,7 @@ fn counter(name: Arc<String>, log: Arc<Vec<String>>) -> impl Fn() -> usize {
 
 `async move[..] || ..` works the same way, and lists nest. The form stays close to `move(expr)` (RFC 3968), so it can switch to the native syntax once that is stable.
 
-[`rustx-cli sugar`](cli.md) turns a block of `let a = a.clone();` bindings before a `move` closure back into `move[a.clone()] || ..`.
+[`rustx-cli sugar`](cli.md) turns a block of `let a = a.clone();` bindings before a `move` closure back into `move[a.clone()] || ..`. A fn body made of such bindings, a block with a comment between them, and a match arm body with no `,` before the next arm stay as written.
 
 ## Limits
 
