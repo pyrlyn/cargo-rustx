@@ -14,6 +14,7 @@
 mod bound_presets;
 mod capture_lists;
 mod commas;
+mod delegate;
 mod field_defaults;
 mod from_display;
 mod inline_bounds;
@@ -84,6 +85,11 @@ const RULES: &[&dyn ReverseRule] = &[
     &from_display::FromDisplay,
     &bound_presets::BoundPresets,
     &capture_lists::CaptureLists,
+    // Its set inserts attributes at fields and removes the impls after the struct. Another rule's
+    // edit of the struct that overlaps none of these, such as a field type, is kept with it. A set
+    // starting earlier that overlaps one of its edits drops all of it; it wins any set starting
+    // later, such as an edit inside the impls.
+    &delegate::Delegate,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
