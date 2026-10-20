@@ -37,7 +37,7 @@ use syn::{
 
 use super::item_lists::for_each_list;
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, apply, bounds};
+use super::{Edit, ReverseRule, apply, has_comment, span_range};
 use crate::tokens::syntax::{is_str_literal, is_string};
 
 pub(crate) struct FieldDefaults;
@@ -292,18 +292,8 @@ impl<'ast> Visit<'ast> for Rests<'_> {
     }
 }
 
-/// The byte range of `tokens` in the source, from its first token to its last.
-fn span_range(tokens: TokenStream) -> Option<std::ops::Range<usize>> {
-    let (first, last) = bounds(tokens)?;
-    Some(first.byte_range().start..last.byte_range().end)
-}
-
 fn span_of(tokens: TokenStream) -> Option<(usize, usize)> {
     span_range(tokens).map(|range| (range.start, range.end))
-}
-
-fn has_comment(text: &str) -> bool {
-    text.contains("//") || text.contains("/*")
 }
 
 #[cfg(test)]
