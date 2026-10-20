@@ -12,8 +12,10 @@
 //! makes a one-element tuple.
 
 mod bound_presets;
+mod capture_lists;
 mod commas;
 mod data;
+mod delegate;
 mod field_defaults;
 mod from_display;
 mod inline_bounds;
@@ -66,6 +68,7 @@ pub(crate) trait ReverseRule {
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
 // edit replaces one `String::from(lit)` call, which holds no other rule's shape. A bound preset
 // edit spans a trait and its blanket impl, so an earlier rule's edit inside its bounds wins.
+// A capture list's edits leave out its captures and closure, so edits inside them never overlap.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
@@ -82,6 +85,12 @@ const RULES: &[&dyn ReverseRule] = &[
     // later edit inside them.
     &from_display::FromDisplay,
     &bound_presets::BoundPresets,
+    &capture_lists::CaptureLists,
+    // Its set inserts attributes at fields and removes the impls after the struct. Another rule's
+    // edit of the struct that overlaps none of these, such as a field type, is kept with it. A set
+    // starting earlier that overlaps one of its edits drops all of it; it wins any set starting
+    // later, such as an edit inside the impls.
+    &delegate::Delegate,
     // Its first edit adds the attribute before the struct's `struct` or visibility, so it wins any
     // later edit inside the generated items it removes, and edits inside the struct stay.
     &data::Data,

@@ -287,3 +287,27 @@ Done: merged in #24, `sugar/field_defaults.rs`; the CLI fixture `sugar_field_def
 ### T19.13. Reverse rule: boxed trait objects and iterator types back to `~Trait` and `iter T`
 
 Done: the same rule as T19.10 (`sugar/prefix_types.rs`) also turns `Box<dyn Trait + Send + Sync>` into `~Trait` (several traits or a lifetime become `~(A + B)`) and `impl Iterator<Item = T> + '_` into `iter T`; boxes without both markers, other bound orders and iterators without `+ '_` stay plain. Unit tests, the CLI fixture `sugar_box_iter.rs` and its snapshot cover it.
+
+### T19.15. Reverse rule: drop the borrows on `rc` bindings
+
+`passes/rc_borrows.rs` (problem 16) adds `.borrow()` / `.borrow_mut()` on field accesses and value-method calls of a binding typed `rc T`, `&rc T` or bound to an `rc e` value. Today the `rc_values` and `prefix_types` rules keep such a binding plain when the pass would borrow on it (`would_borrow`), so converted code keeps `Rc<RefCell<T>>`. The rule removes exactly the borrows the pass would add back, so the binding can become `rc`.
+
+Done when: a binding converts to `rc` together with its accesses when removing every explicit borrow and expanding gives the original tokens; a binding with a borrow the pass would not add back (a held guard, `try_borrow`, a borrow passed on) stays as today; unit tests, a snapshot case, and `docs/guide/rc.md` and `docs/guide/cli.md` updated.
+
+Done: merged in #38. `sugar/rc_borrows.rs` strips the explicit `.borrow()` / `.borrow_mut()` on a binding's accesses and re-adds them with the pass's own `access::rewrite`; the removals join the `rc_values` / `prefix_types` edit set only when the result is token-identical, so they are kept or dropped with the type or value edit. A held guard, `try_borrow`, a borrow passed on, or a shadowing `let` / closure parameter keeps every borrow. Unit tests, the CLI fixtures and `docs/guide/rc.md` cover it.
+
+### T19.16. Reverse rule: supertrait plus blanket impl back to `bound` presets
+
+`passes/bound_presets.rs` (problem 21) turns `bound Name = A + B;` into a trait with those supertraits and a blanket impl for every type that meets them. The rule turns that pair back into the preset.
+
+Done when: a trait with no items whose only impl is the blanket impl the pass generates converts to `bound`; a trait with items, another impl, generics the pass does not write or a different blanket impl stays; unit tests, a snapshot case, and `docs/guide/bound-presets.md` and `docs/guide/cli.md` updated.
+
+Done: merged in #37. `sugar/bound_presets.rs` builds the preset it would write (with the trait's attributes and visibility), runs the forward pass on it and converts only when that gives the trait and blanket impl token for token; negative tests assert the rule itself returns no edits. The PR also moved `span_range` / `has_comment` into `sugar/mod.rs` and switched the item-level rules to `item_lists::for_each_list`. CLI fixture `sugar_bound_presets.rs` and `docs/guide/bound-presets.md` cover it.
+
+### T19.17. Reverse rule: `From`, `Display` and `Error` impls back to `from` variants and `#[display]`
+
+`passes/from_display.rs` (problem 05) turns `Io(from io::Error)` into a `From` impl and `#[display(..)]` into `Display` and `Error` impls. The rule turns hand-written impls of exactly that shape back into the sugar, the way `thiserror` users write it.
+
+Done when: a `From<X> for E` impl whose body is `E::V(e)` for a one-field variant of `X` becomes `V(from X)` and the impl is removed; `Display` and `Error` impls the `#[display]` lowering would generate become the attribute; anything the pass would generate differently (extra statements, other bounds, a second `From` source for the variant) stays; unit tests, a snapshot case, and `docs/guide/from-display.md` and `docs/guide/cli.md` updated.
+
+Done: merged in #39. `sugar/from_display.rs` turns `From` impls into `V(from X)` and `Display` / `Error` impls into `#[display(..)]`, checking each candidate against the forward pass; `sugar/item_lists.rs` (`for_each_list`) was extracted for it. When `prefix_types` would also rewrite a variant's type (`Box<dyn Error + ..>`), `from` wins because `from ~T` does not expand back. rustfmt layouts (trailing commas in `where` lists, broken `write!`) convert; arms rustfmt wraps in `{ }` stay. Unit tests, a CLI fixture and `docs/guide/from-display.md` cover it.

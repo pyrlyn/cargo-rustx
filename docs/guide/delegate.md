@@ -40,6 +40,8 @@ impl ::std::io::Write for Logged {
 
 A field may list several traits. The methods come from a built-in table (`Read`, `Write`, `BufRead`, `Seek`, `Iterator`, `DoubleEndedIterator`, `Display`, `Debug`, `Hash`), from a trait declared in the same input, or from a list written out: `#[delegate(Area { fn area(&self) -> f64; })]`. `except(m, ..)` forwards everything but the listed methods and adds the rest to a hand-written `impl Trait for Type` next to the struct. On valid Rust the struct takes [`#[rustx::delegate]`](attribute-macros.md).
 
+[`rustx-cli sugar`](cli.md) turns a struct followed by the forwarding impls this generates back into `#[delegate(..)]` on the field, for a trait in the table or declared in the file.
+
 ## Limits
 
 - Only required items are forwarded (`Write::write`, not `write_all`), so provided methods go through the wrapper's own methods, hand-written overrides included.
