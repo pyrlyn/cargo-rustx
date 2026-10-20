@@ -12,6 +12,7 @@
 //! makes a one-element tuple.
 
 mod bound_presets;
+mod capture_lists;
 mod commas;
 mod field_defaults;
 mod from_display;
@@ -65,6 +66,7 @@ pub(crate) trait ReverseRule {
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
 // edit replaces one `String::from(lit)` call, which holds no other rule's shape. A bound preset
 // edit spans a trait and its blanket impl, so an earlier rule's edit inside its bounds wins.
+// A capture list's edits leave out its captures and closure, so edits inside them never overlap.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
@@ -81,6 +83,7 @@ const RULES: &[&dyn ReverseRule] = &[
     // later edit inside them.
     &from_display::FromDisplay,
     &bound_presets::BoundPresets,
+    &capture_lists::CaptureLists,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
