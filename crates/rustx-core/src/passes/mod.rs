@@ -107,7 +107,7 @@ pub(crate) use delegate::{EXCEPT_WITHOUT_IMPL, UNKNOWN_TRAIT};
 pub(crate) use inline_bounds::KnownTypes;
 pub(crate) use newtype::VALIDATOR_NOT_FOUND;
 #[cfg(feature = "sugar")]
-pub(crate) use rc_borrows::would_borrow;
+pub(crate) use rc_borrows::{add_borrows, would_borrow};
 // The reverse rule for parameter defaults resolves calls and reads defaults as these passes do.
 #[cfg(feature = "sugar")]
 pub(crate) use {

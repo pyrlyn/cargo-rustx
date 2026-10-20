@@ -1,1 +1,12 @@
 - T19. Convert plain Rust into rustx sugar
+- T19.14. Reverse rule: closures after clone lets back to capture lists
+- T19.15. Reverse rule: drop the borrows on `rc` bindings
+- T19.16. Reverse rule: supertrait plus blanket impl back to `bound` presets
+- T19.17. Reverse rule: `From`, `Display` and `Error` impls back to `from` variants and `#[display]`
+- T19.18. Reverse rule: newtype impls back to `#[newtype]`
+- T19.19. Reverse rule: forwarding impls back to `#[delegate]`
+- T19.20. Reverse rule: constructor, getters and builder back to `#[data]`
+- T19.21. Round-trip tests over every expansion
+- T19.22. User docs: migrating plain Rust to rustx
+- T19.23. Specification of the rustx syntax and the conversion contract
+- T19.24. Agent skills for converting plain Rust to rustx
