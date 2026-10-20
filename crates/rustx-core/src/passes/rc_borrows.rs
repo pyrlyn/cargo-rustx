@@ -163,6 +163,13 @@ pub(crate) fn would_borrow(name: &Ident, scope: &[Stmt]) -> bool {
     access::scan(name, &mut scope.to_vec(), &BORROW).accesses
 }
 
+/// Adds to `scope` the borrows this pass adds for an `rc` binding `name`, so a reverse rule can
+/// check that it removes exactly those.
+#[cfg(feature = "sugar")]
+pub(crate) fn add_borrows(name: &Ident, scope: &mut [Stmt]) {
+    access::rewrite(name, scope, &BORROW);
+}
+
 fn borrow_params(sig: &Signature, body: &mut [Stmt]) {
     for input in &sig.inputs {
         if let FnArg::Typed(typed) = input

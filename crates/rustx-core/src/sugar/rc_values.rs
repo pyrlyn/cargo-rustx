@@ -18,17 +18,21 @@
 //! inside a value is dropped by the driver, since the `rc` edit covers it. On a `let` binding,
 //! `rc e` makes `rc_borrows` borrow on field accesses and value-method calls of the name
 //! (problem 16), which changes plain code such as `x.replace(v)`; the driver's check refuses
-//! those edits, so the rule does not repeat that analysis.
+//! those edits, so the rule does not repeat that analysis. Explicit borrows the pass would add
+//! back (`x.borrow().len()`) are removed in the same set of edits as the value (`sugar/rc_borrows`,
+//! T19.15).
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
 use syn::{
-    Arm, Expr, ExprArray, ExprAssign, ExprBreak, ExprCall, ExprClosure, ExprMethodCall, ExprParen,
-    ExprReturn, ExprTuple, Local, Stmt,
+    Arm, Block, Expr, ExprArray, ExprAssign, ExprBreak, ExprCall, ExprClosure, ExprMethodCall,
+    ExprParen, ExprReturn, ExprTuple, Local, LocalInit, Pat, PatIdent, Stmt,
 };
 
+use super::rc_borrows::removals;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule, apply, bounds};
 
@@ -36,16 +40,29 @@ pub(crate) struct RcValues;
 
 impl ReverseRule for RcValues {
     fn edits(&self, file: &syn::File, source: &str) -> Vec<Edit> {
+        self.edit_groups(file, source).concat()
+    }
+
+    fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
         let paths = StdPaths::of(file);
         let mut finder = Finder {
             source,
             rc_new: paths.normalise(quote!(::std::rc::Rc::new)),
             ref_cell_new: paths.normalise(quote!(::std::cell::RefCell::new)),
             paths: &paths,
+            borrows: HashMap::new(),
             edits: Vec::new(),
         };
         finder.visit_file(file);
-        finder.edits
+        let mut borrows = finder.borrows;
+        finder
+            .edits
+            .into_iter()
+            .map(|edit| {
+                let removed = borrows.remove(&edit.range.start).unwrap_or_default();
+                [vec![edit], removed].concat()
+            })
+            .collect()
     }
 }
 
@@ -54,6 +71,8 @@ struct Finder<'a> {
     paths: &'a StdPaths,
     rc_new: Vec<String>,
     ref_cell_new: Vec<String>,
+    /// Explicit borrows to remove with the edit of the `let` value that starts at the key.
+    borrows: HashMap<usize, Vec<Edit>>,
     edits: Vec<Edit>,
 }
 
@@ -95,6 +114,7 @@ impl Finder<'_> {
             paths: self.paths,
             rc_new: self.rc_new.clone(),
             ref_cell_new: self.ref_cell_new.clone(),
+            borrows: HashMap::new(),
             edits: Vec::new(),
         };
         nested.value(value);
@@ -155,6 +175,39 @@ fn reads_back(value: &Expr) -> bool {
 }
 
 impl<'ast> Visit<'ast> for Finder<'_> {
+    fn visit_block(&mut self, block: &'ast Block) {
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            // `rc_borrows` tracks a `let` without a type whose value is the `rc` call itself.
+            let Stmt::Local(Local {
+                pat:
+                    Pat::Ident(PatIdent {
+                        ident,
+                        subpat: None,
+                        ..
+                    }),
+                init:
+                    Some(LocalInit {
+                        expr,
+                        diverge: None,
+                        ..
+                    }),
+                ..
+            }) = stmt
+            else {
+                continue;
+            };
+            if self.call_of(expr, &self.rc_new).is_some()
+                && let Some((first, _)) = bounds(expr.to_token_stream())
+            {
+                let removed = removals(ident, &block.stmts[i + 1..], self.source);
+                if !removed.is_empty() {
+                    self.borrows.insert(first.byte_range().start, removed);
+                }
+            }
+        }
+        visit::visit_block(self, block);
+    }
+
     fn visit_local(&mut self, local: &'ast Local) {
         match &local.init {
             Some(init) if init.diverge.is_none() => {
@@ -265,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_methods_on_the_binding_keep_the_conversion() {
+    fn handle_methods_on_the_binding_keep_the_conversion_and_access_borrows_go() {
         assert_sugar(
             &with_uses(
                 "fn f() -> usize {\n    let x = Rc::new(RefCell::new(Vec::new()));\n    \
@@ -274,8 +327,8 @@ mod tests {
             ),
             &with_uses(
                 "fn f() -> usize {\n    let x = rc Vec::new();\n    \
-                 x.borrow_mut().push(1);\n    let y = x.clone();\n    \
-                 let n = Rc::strong_count(&y);\n    x.borrow().len() + n\n}\n",
+                 x.push(1);\n    let y = x.clone();\n    \
+                 let n = Rc::strong_count(&y);\n    x.len() + n\n}\n",
             ),
         );
     }
