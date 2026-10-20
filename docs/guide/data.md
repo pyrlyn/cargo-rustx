@@ -94,6 +94,8 @@ impl UserBuilder {
 
 Flags: `setters` (`set_*`), `with` (`with_*`, by value) and `builder` (`NameBuilder`, whose `build` reports a missing field). A field with `#[default(expr)]`, or inside `sugar!` a [field default](field-defaults.md) `field: T = expr`, is left out of `new`. `#[data]` is valid Rust, so it also works as an [attribute macro](attribute-macros.md) outside `sugar!`.
 
+[`rustx-cli sugar`](cli.md) turns a struct followed by exactly what `#[data]` generates for one flag set back into `#[data(..)]` with those flags; anything else after it, such as a doc comment on a method or one more method, stays as written.
+
 ## Limits
 
 - Getters follow the written type, not the problem file's "by value for `Copy`": primitives and shared references are returned by value, `String` as `&str`, anything else as `&T`, so a user `Copy` type gets a `&T` getter.

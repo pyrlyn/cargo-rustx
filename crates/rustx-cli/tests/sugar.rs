@@ -168,6 +168,19 @@ fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
 }
 
 #[test]
+fn a_struct_with_its_generated_methods_and_builder_becomes_data() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_data.rs"]);
+    insta::assert_snapshot!("sugar_data_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_data.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("pub fn set_name(&mut self, name: String)"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =
