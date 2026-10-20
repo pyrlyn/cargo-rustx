@@ -39,6 +39,9 @@ use quote::ToTokens;
 use syn::visit::{self, Visit};
 use syn::{ForeignItem, GenericParam, Item, ItemExternCrate, ItemUse, PatIdent, UseTree, Variant};
 
+use crate::tokens::angle::matching_close;
+use crate::tokens::punct::is_punct;
+
 /// The std items whose spellings are equated, by their path from the crate that defines them,
 /// and whether the prelude brings their name into scope.
 const ITEMS: &[(&str, bool)] = &[
@@ -81,7 +84,12 @@ const ITEMS: &[(&str, bool)] = &[
     ("alloc::sync::Arc", false),
     ("std::collections::HashMap", false),
     ("std::collections::HashSet", false),
+    ("std::io::BufRead", false),
+    ("std::io::Read", false),
     ("std::io::Result", false),
+    ("std::io::Seek", false),
+    ("std::io::SeekFrom", false),
+    ("std::io::Write", false),
     ("std::sync::Mutex", false),
     ("std::sync::RwLock", false),
 ];
@@ -261,10 +269,13 @@ fn starts_a_path(seq: &[TokenTree], at: usize, leading: bool) -> bool {
     if leading {
         return match before {
             TokenTree::Ident(ident) => BEFORE_A_PATH.iter().any(|kw| ident == kw),
-            // `->` and `=>` end in `>` as well as generic arguments do.
-            TokenTree::Punct(punct) if punct.as_char() == '>' => at.checked_sub(2).is_some_and(
-                |p| matches!(&seq[p], TokenTree::Punct(arrow) if matches!(arrow.as_char(), '-' | '=') && arrow.spacing() == Spacing::Joint),
-            ),
+            // `->` and `=>` end in `>` as well as generic arguments do, and so do the generics of
+            // an impl, after which its trait's path starts: `impl<T> ::core::fmt::Debug for ..`.
+            TokenTree::Punct(punct) if punct.as_char() == '>' => {
+                at.checked_sub(2).is_some_and(
+                    |p| matches!(&seq[p], TokenTree::Punct(arrow) if matches!(arrow.as_char(), '-' | '=') && arrow.spacing() == Spacing::Joint),
+                ) || closes_impl_generics(seq, at - 1)
+            }
             _ => true,
         };
     }
@@ -274,6 +285,15 @@ fn starts_a_path(seq: &[TokenTree], at: usize, leading: bool) -> bool {
         && matches!(&seq[at - 2], TokenTree::Punct(dot) if dot.as_char() == '.' && dot.spacing() == Spacing::Joint);
     let names_a_member = matches!(before, TokenTree::Punct(punct) if matches!(punct.as_char(), '$' | '\'' | '#') || punct.as_char() == '.' && !after_dots);
     !continues && !names_a_member
+}
+
+/// Whether the `>` at `close` ends the generics of an `impl<..>`.
+fn closes_impl_generics(seq: &[TokenTree], close: usize) -> bool {
+    (0..close).any(|open| {
+        matches!(&seq[open], TokenTree::Ident(keyword) if keyword == "impl")
+            && is_punct(&seq[open + 1], '<')
+            && matching_close(seq, open + 1) == Some(close)
+    })
 }
 
 /// Whether the tokens name the `alloc` crate, which a crate without `std` uses.
@@ -499,6 +519,20 @@ mod tests {
             "0..::core::default::Default::default()"
         ));
         assert!(!same("", "x.Default", "x.::core::default::Default"));
+    }
+
+    #[test]
+    fn a_trait_path_after_impl_generics_is_equal_and_a_path_after_type_arguments_is_not() {
+        assert!(same(
+            "",
+            "impl<T: Fn() -> u8> Default for S<T> {}",
+            "impl<T: Fn() -> u8> ::core::default::Default for S<T> {}"
+        ));
+        assert!(!same(
+            "",
+            "Vec::<u8>::std::default::Default",
+            "Vec::<u8>::core::default::Default"
+        ));
     }
 
     #[test]

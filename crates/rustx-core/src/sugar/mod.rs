@@ -12,9 +12,11 @@
 //! makes a one-element tuple.
 
 mod commas;
+mod delegate;
 mod field_defaults;
 mod inline_bounds;
 mod into_params;
+mod item_lists;
 mod param_defaults;
 mod prefix_types;
 mod rc_values;
@@ -71,6 +73,9 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    // Its first edit sits at a field inside the struct, so another rule's edit earlier in the
+    // struct wins and the impls stay; its removal of the impls wins any later edit inside them.
+    &delegate::Delegate,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
@@ -234,6 +239,16 @@ pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
     let mut all = Vec::new();
     leaves(tokens, &mut all);
     Some((all.first()?.1, all.last()?.1))
+}
+
+/// The byte range of `tokens` in the source, from its first token to its last.
+pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
+    let (first, last) = bounds(tokens)?;
+    Some(first.byte_range().start..last.byte_range().end)
+}
+
+pub(super) fn has_comment(text: &str) -> bool {
+    text.contains("//") || text.contains("/*")
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.
