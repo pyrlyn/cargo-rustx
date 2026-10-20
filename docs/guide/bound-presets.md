@@ -39,6 +39,8 @@ fn count<K: Key>(keys: &[K]) -> HashMap<K, usize> {
 
 `pub bound` gives the trait that visibility, so a preset can be exported. `Self` in the bounds (`Add<Output = Self>`) maps to the impl's type parameter, and `#[cfg]` on the preset is copied to the impl.
 
+[`rustx-cli sugar`](cli.md) turns a trait with only supertraits, followed by exactly this blanket impl and implemented nowhere else in the file, back into `bound Name = ..;`.
+
 ## Limits
 
 - A preset is used where a bound is written (`<K: Key>`, `where K: Key`, or an [inline bound](inline-bounds.md) `k: K: Key`); `&[K: Key]` as problem 21 sketches it is not supported.
