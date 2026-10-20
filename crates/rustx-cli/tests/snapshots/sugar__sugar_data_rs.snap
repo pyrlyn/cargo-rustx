@@ -1,0 +1,18 @@
+---
+source: crates/rustx-cli/tests/sugar.rs
+expression: converted
+---
+//! A user record with a constructor, getters, setters and a builder, written without sugar.
+
+/// Someone who can sign in.
+#[derive(Debug, Clone)]
+#[data(setters, builder)]
+pub struct User {
+    id: u64,
+    // Shown in the UI, never empty.
+    name: String,
+}
+
+pub fn guest() -> User {
+    User::builder().id(0).name(String::from("guest")).build().unwrap()
+}
