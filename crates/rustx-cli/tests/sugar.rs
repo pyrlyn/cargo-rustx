@@ -194,6 +194,21 @@ fn generated_from_and_display_impls_become_from_variants_and_display_attributes(
 }
 
 #[test]
+fn a_trait_with_its_blanket_impl_becomes_a_bound_preset() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_bound_presets.rs"]);
+    insta::assert_snapshot!("sugar_bound_presets_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_bound_presets.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains(
+            "impl<__RustxSelf: ?::core::marker::Sized + Clone + Eq + Hash> Key for __RustxSelf {}"
+        ),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =
