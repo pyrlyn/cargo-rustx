@@ -139,10 +139,14 @@ impl Unit<'_> {
             let Fields::Unnamed(fields) = &variants[index].fields else {
                 return None;
             };
+            // Rewrites the character before the type rather than inserting at its start, which
+            // is where another rule's edit of the type starts: the driver then sees two edits
+            // that do not overlap and keeps whichever expands back, instead of dropping this set.
             let at = span_range(fields.unnamed.first()?.ty.to_token_stream())?.start;
+            let before = self.source.get(..at)?.chars().next_back()?;
             edits.push(Edit {
-                range: at..at,
-                text: "from ".to_owned(),
+                range: at - before.len_utf8()..at,
+                text: format!("{before}from "),
             });
         }
         if let Some(display) = display {
@@ -432,15 +436,15 @@ mod tests {
 
     const ERROR: &str = "impl ::std::error::Error for E {}\n";
 
-    /// Puts a space after the first `u8`, an edit that keeps the meaning.
-    struct SpaceAfterU8;
+    /// Puts a space after the first `(`, an edit that keeps the meaning.
+    struct SpaceInParen;
 
-    impl ReverseRule for SpaceAfterU8 {
+    impl ReverseRule for SpaceInParen {
         fn edits(&self, _: &syn::File, source: &str) -> Vec<Edit> {
-            let at = source.find("u8").unwrap();
+            let at = source.find('(').unwrap();
             vec![Edit {
-                range: at..at + 2,
-                text: "u8 ".to_owned(),
+                range: at..at + 1,
+                text: "( ".to_owned(),
             }]
         }
     }
@@ -628,8 +632,43 @@ mod tests {
         assert_eq!(groups[0].len(), 2);
         // An earlier edit overlapping the `from` drops the removal of the impl with it.
         assert_eq!(
-            convert(&source, &[&SpaceAfterU8, &FromDisplay]).unwrap(),
-            source.replacen("u8", "u8 ", 1)
+            convert(&source, &[&SpaceInParen, &FromDisplay]).unwrap(),
+            source.replacen('(', "( ", 1)
+        );
+    }
+
+    #[test]
+    fn a_variant_type_another_rule_rewrites_still_takes_from_with_the_other_variants() {
+        // `prefix_types` would write `~std::error::Error` there, but `from ~T` does not expand
+        // back (`from` before a path is a type named `from`), so the driver keeps `from` instead.
+        let boxed = "Box<dyn std::error::Error + Send + Sync>";
+        assert_sugar(
+            &format!(
+                "enum E {{ Other({boxed}), A(u8) }}\n{}{}",
+                from(boxed, "Other"),
+                from("u8", "A")
+            ),
+            &format!("enum E {{ Other(from {boxed}), A(from u8) }}\n"),
+        );
+    }
+
+    #[test]
+    fn rustfmt_layout_with_trailing_commas_in_where_lists_converts() {
+        let source = "pub enum E<T>\nwhere\n    T: Copy,\n{\n    A(T),\n    B(u8, u16),\n}\n\
+            impl<T> ::core::convert::From<T> for E<T>\nwhere\n    T: Copy,\n{\n    \
+            fn from(__rustx_value: T) -> Self {\n        Self::A(__rustx_value)\n    }\n}\n\
+            impl<T> ::core::fmt::Display for E<T>\nwhere\n    T: Copy,\n{\n    \
+            fn fmt(&self, __rustx_f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n        \
+            match self {\n            Self::A(_) => ::core::write!(__rustx_f, \"a\"),\n            \
+            Self::B(__rustx_arg0, __rustx_arg1) => ::core::write!(\n                __rustx_f,\n                \
+            \"a long message about {0} and then {1}, long enough for rustfmt to break it\",\n                \
+            __rustx_arg0,\n                __rustx_arg1\n            ),\n        }\n    }\n}\n\
+            impl<T> ::std::error::Error for E<T>\nwhere\n    T: Copy,\n{\n}\n";
+        assert_sugar(
+            source,
+            "pub enum E<T>\nwhere\n    T: Copy,\n{\n    #[display(\"a\")]\n    A(from T),\n    \
+             #[display(\"a long message about {0} and then {1}, long enough for rustfmt to break it\")]\n    \
+             B(u8, u16),\n}\n",
         );
     }
 

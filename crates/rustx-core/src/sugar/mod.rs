@@ -73,8 +73,9 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
-    // Its first edit sits inside an enum, so another rule's edit of a variant type wins there and
-    // the enum keeps its impls; its removal of the impls wins any later edit inside them.
+    // Its `from` edit ends where another rule's edit of a variant type starts, so both are kept
+    // and the driver's check keeps whichever expands back; its removal of the impls wins any
+    // later edit inside them.
     &from_display::FromDisplay,
 ];
 
