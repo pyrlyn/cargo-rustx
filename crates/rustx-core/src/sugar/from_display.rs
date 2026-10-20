@@ -35,8 +35,6 @@
 //! arm in `{ .. }` stays. Refused as well: an enum with a variant two `From` impls build, and
 //! removed impls holding a comment, or with a comment between them.
 
-use std::ops::Range;
-
 use proc_macro2::{Literal, TokenStream};
 use quote::{ToTokens, quote};
 use syn::ext::IdentExt;
@@ -94,11 +92,9 @@ struct Unit<'a> {
     item: &'a ItemEnum,
 }
 
-/// What a `Display` impl says per variant: the `#[display]` string, and where its `write!`
-/// string sits in the source.
+/// What a `Display` impl says per variant: the `#[display]` string.
 struct Display {
     strings: Vec<String>,
-    literals: Vec<Range<usize>>,
 }
 
 impl Unit<'_> {
@@ -175,13 +171,7 @@ impl Unit<'_> {
         }
 
         let last = span_range(impls.last()?.to_token_stream())?;
-        let mut removed = self.source.get(whole.end..last.end)?.to_owned();
-        // A `write!` string is not a comment, whatever it holds.
-        for literal in display.map_or(&[][..], |display| &display.literals) {
-            let local = literal.start - whole.end..literal.end - whole.end;
-            removed.replace_range(local, " ");
-        }
-        if has_comment(&removed) {
+        if has_comment(self.source.get(whole.end..last.end)?) {
             return None;
         }
         edits.push(Edit {
@@ -231,16 +221,13 @@ impl Unit<'_> {
         if matched.arms.len() != self.item.variants.len() {
             return None;
         }
-        let mut display = Display {
-            strings: Vec::new(),
-            literals: Vec::new(),
-        };
-        for (arm, variant) in matched.arms.iter().zip(&self.item.variants) {
-            let (string, literal) = display_string(arm, variant)?;
-            display.strings.push(string);
-            display.literals.push(literal);
-        }
-        Some(display)
+        let strings = matched
+            .arms
+            .iter()
+            .zip(&self.item.variants)
+            .map(|(arm, variant)| display_string(arm, variant))
+            .collect::<Option<Vec<String>>>()?;
+        Some(Display { strings })
     }
 
     /// Whether `imp` implements a trait whose last segment is `name` for this enum. The rest of
@@ -289,10 +276,10 @@ fn is_error(imp: &ItemImpl) -> bool {
             .is_some_and(|(path, _)| last_is(path, "Error"))
 }
 
-/// The `#[display]` string of `variant` from its arm `Self::V(a, _) => write!(f, "..", a),`
-/// and the source range of the `write!` string: each placeholder `{k}` names the field the `k`th
+/// The `#[display]` string of `variant` from its arm `Self::V(a, _) => write!(f, "..", a),`:
+/// each placeholder `{k}` names the field the `k`th
 /// argument binds, `{0}` for a tuple field and `{name}` for a named one.
-fn display_string(arm: &Arm, variant: &Variant) -> Option<(String, Range<usize>)> {
+fn display_string(arm: &Arm, variant: &Variant) -> Option<String> {
     // Each binding of the pattern with the placeholder that names its field.
     let mut bindings: Vec<(String, String)> = Vec::new();
     let path = match (&arm.pat, &variant.fields) {
@@ -352,8 +339,7 @@ fn display_string(arm: &Arm, variant: &Variant) -> Option<(String, Range<usize>)
             Some(name.as_str())
         })
         .collect::<Option<Vec<&str>>>()?;
-    let string = unformat(&text.value(), &names)?;
-    Some((string, span_range(text.to_token_stream())?))
+    unformat(&text.value(), &names)
 }
 
 /// The name a pattern binds, when it is a plain binding.

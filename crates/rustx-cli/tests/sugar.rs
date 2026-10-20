@@ -247,6 +247,19 @@ fn forwarding_impls_after_a_struct_become_delegate_attributes() {
 }
 
 #[test]
+fn a_struct_with_the_impls_newtype_generates_becomes_a_newtype() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_newtype.rs"]);
+    insta::assert_snapshot!("sugar_newtype_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_newtype.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("Self::new(::core::convert::From::from(__rustx_s))"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =

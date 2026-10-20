@@ -21,6 +21,7 @@ mod from_display;
 mod inline_bounds;
 mod into_params;
 mod item_lists;
+mod newtype;
 mod param_defaults;
 mod prefix_types;
 mod rc_borrows;
@@ -69,6 +70,8 @@ pub(crate) trait ReverseRule {
 // edit replaces one `String::from(lit)` call, which holds no other rule's shape. A bound preset
 // edit spans a trait and its blanket impl, so an earlier rule's edit inside its bounds wins.
 // A capture list's edits leave out its captures and closure, so edits inside them never overlap.
+// A newtype's edits start at its struct, before the impls they remove, so they win any edit
+// inside those.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
@@ -91,6 +94,7 @@ const RULES: &[&dyn ReverseRule] = &[
     // starting earlier that overlaps one of its edits drops all of it; it wins any set starting
     // later, such as an edit inside the impls.
     &delegate::Delegate,
+    &newtype::Newtypes,
     // Its first edit adds the attribute before the struct's `struct` or visibility, so it wins any
     // later edit inside the generated items it removes, and edits inside the struct stay.
     &data::Data,
@@ -265,8 +269,66 @@ pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
     Some(first.byte_range().start..last.byte_range().end)
 }
 
+/// Whether removing `text`, any run of source bytes between tokens or across them, would drop a
+/// comment, a doc comment included. `//` or `/*` inside a string or char literal is no comment,
+/// so literals are skipped rather than searched. A literal `text` ends inside counts as a
+/// comment, so the caller keeps the code rather than guess.
 pub(super) fn has_comment(text: &str) -> bool {
-    text.contains("//") || text.contains("/*")
+    let mut rest = text;
+    while let Some(at) = rest.find(['/', '"', '\'']) {
+        let (before, from) = rest.split_at(at);
+        let after = if from.starts_with("//") || from.starts_with("/*") {
+            return true;
+        } else if let Some(body) = from.strip_prefix('"') {
+            past_string(before, body)
+        } else if let Some(body) = from.strip_prefix('\'') {
+            past_char(body)
+        } else {
+            from.get(1..)
+        };
+        let Some(after) = after else {
+            return true;
+        };
+        rest = after;
+    }
+    false
+}
+
+/// What follows a string literal whose opening quote ends `before`, its body starting `body`.
+fn past_string<'a>(before: &str, body: &'a str) -> Option<&'a str> {
+    let hashes = before.len() - before.trim_end_matches('#').len();
+    // `r"..."`, `br#"..."#`: no escapes, closed by the quote and as many `#`.
+    if before[..before.len() - hashes].ends_with('r') {
+        let close = format!("\"{}", "#".repeat(hashes));
+        let end = body.find(&close)?;
+        return body.get(end + close.len()..);
+    }
+    let mut chars = body.char_indices();
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '\\' => {
+                chars.next();
+            }
+            '"' => return body.get(at + 1..),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// What follows a char literal, or the quote of a lifetime, whose quote comes right before `body`.
+fn past_char(body: &str) -> Option<&str> {
+    let mut chars = body.char_indices();
+    match chars.next()? {
+        (_, '\\') => {
+            let (escaped, c) = chars.next()?;
+            let end = body.get(escaped + c.len_utf8()..)?.find('\'')?;
+            body.get(escaped + c.len_utf8() + end + 1..)
+        }
+        (_, c) if body[c.len_utf8()..].starts_with('\'') => body.get(c.len_utf8() + 1..),
+        // A lifetime or a label: its name holds no quote or slash.
+        _ => Some(body),
+    }
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.
@@ -469,6 +531,36 @@ pub(crate) mod tests {
         assert!(err.to_string().contains("as written"), "{err}");
         let start = err.span().start();
         assert_eq!((start.line, start.column), (2, 9));
+    }
+
+    #[test]
+    fn comment_markers_inside_literals_are_no_comments() {
+        assert!(!has_comment(
+            " impl A { fn f() { g(\"http://x/*\", '/', b\"//\", r\"/*\") } }\n"
+        ));
+        assert!(!has_comment("  \n"));
+        // Fragments between tokens, with unbalanced delimiters, lifetimes and escapes.
+        for bare in [
+            "{\n    let ",
+            "; move || {",
+            "fn f<'a>(s: &'a str) -> char { '\\'' }",
+            "'/' '\\u{2f}' \"\\\"//\" br##\"\"# //\"##",
+            "a / b",
+        ] {
+            assert!(!has_comment(bare), "{bare}");
+        }
+        for commented in [
+            "{ // why",
+            "&'a str /* why */",
+            "fn f() {} // why",
+            "fn f() { /* why */ }",
+            "/// why\nfn f() {}",
+            "//! why",
+            "fn f() { \"",
+            "r#\"x\"",
+        ] {
+            assert!(has_comment(commented), "{commented}");
+        }
     }
 
     #[test]
