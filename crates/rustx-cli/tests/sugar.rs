@@ -209,6 +209,18 @@ fn a_trait_with_its_blanket_impl_becomes_a_bound_preset() {
 }
 
 #[test]
+fn let_bindings_before_a_move_closure_become_a_capture_list() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_captures.rs"]);
+    insta::assert_snapshot!("sugar_captures_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_captures.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    assert_eq!(
+        success(&["expand", rustx.to_str().unwrap()]),
+        success(&["expand", "tests/fixtures/sugar_captures.rs"])
+    );
+}
+
+#[test]
 fn forwarding_impls_after_a_struct_become_delegate_attributes() {
     let converted = success(&["sugar", "tests/fixtures/sugar_delegate.rs"]);
     insta::assert_snapshot!("sugar_delegate_rs", converted);
