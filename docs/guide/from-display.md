@@ -68,6 +68,8 @@ impl ::std::error::Error for LoadError {}
 
 Placeholders are positional (`{0}`) for tuple variants and named (`{key}`) for struct variants, checked against the variant's fields. On valid Rust, outside `sugar!`, the same is [`#[rustx::display]`](attribute-macros.md) with `from` spelled `Io(#[from] io::Error)`.
 
+[`rustx-cli sugar`](cli.md) turns an enum followed by these impls back into `from` variants and `#[display]`. It matches them token for token, so only impls written as above convert, bindings named `__rustx_value`, `__rustx_f` and `__rustx_arg0` included; a `Display` whose arms rustfmt wrapped in `{ .. }`, as in the listing above, stays as written while its `From` impls convert.
+
 ## Limits
 
 - No constructors are generated, although the problem file's implementation note mentions them.

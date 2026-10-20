@@ -181,6 +181,19 @@ fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
 }
 
 #[test]
+fn generated_from_and_display_impls_become_from_variants_and_display_attributes() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_from_display.rs"]);
+    insta::assert_snapshot!("sugar_from_display_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_from_display.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("impl ::std::error::Error for LoadError {}"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_file_without_a_sugar_shape_comes_back_byte_for_byte() {
     let path = "tests/fixtures/sugar_plain.rs";
     let source =
