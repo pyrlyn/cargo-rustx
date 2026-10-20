@@ -11,13 +11,17 @@
 //! the body of a `where` list, but never inside the tokens a macro reads, nor the comma that
 //! makes a one-element tuple.
 
+mod bound_presets;
 mod capture_lists;
 mod commas;
 mod field_defaults;
+mod from_display;
 mod inline_bounds;
 mod into_params;
+mod item_lists;
 mod param_defaults;
 mod prefix_types;
+mod rc_borrows;
 mod rc_values;
 mod std_paths;
 mod string_literals;
@@ -60,7 +64,8 @@ pub(crate) trait ReverseRule {
 // statement removal starts at its body's `{`, so it wins over a `var` edit inside it. `throws`
 // edits a return type and the bytes around a tail's value. An `into` edit starts in the
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
-// edit replaces one `String::from(lit)` call, which holds no other rule's shape.
+// edit replaces one `String::from(lit)` call, which holds no other rule's shape. A bound preset
+// edit spans a trait and its blanket impl, so an earlier rule's edit inside its bounds wins.
 // A capture list's edits leave out its captures and closure, so edits inside them never overlap.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
@@ -73,6 +78,11 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    // Its `from` edit ends where another rule's edit of a variant type starts, so both are kept
+    // and the driver's check keeps whichever expands back; its removal of the impls wins any
+    // later edit inside them.
+    &from_display::FromDisplay,
+    &bound_presets::BoundPresets,
     &capture_lists::CaptureLists,
 ];
 
@@ -237,6 +247,16 @@ pub(super) fn bounds(tokens: TokenStream) -> Option<(Span, Span)> {
     let mut all = Vec::new();
     leaves(tokens, &mut all);
     Some((all.first()?.1, all.last()?.1))
+}
+
+/// The byte range of `tokens` in the source, from its first token to its last.
+pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
+    let (first, last) = bounds(tokens)?;
+    Some(first.byte_range().start..last.byte_range().end)
+}
+
+pub(super) fn has_comment(text: &str) -> bool {
+    text.contains("//") || text.contains("/*")
 }
 
 /// Every token of `tokens` with its span, delimiters included, in source order.

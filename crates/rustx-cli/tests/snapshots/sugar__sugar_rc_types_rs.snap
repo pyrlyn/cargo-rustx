@@ -17,7 +17,7 @@ pub struct Node {
 pub type Link = rc Node;
 
 pub fn parent_of(node: &rc Node) -> Option<rc Node> {
-    node.borrow().parent.as_ref().and_then(Weak::upgrade)
+    node.parent.as_ref().and_then(Weak::upgrade)
 }
 
 pub fn swap(node: Rc<RefCell<Node>>, with: Node) -> Node {
