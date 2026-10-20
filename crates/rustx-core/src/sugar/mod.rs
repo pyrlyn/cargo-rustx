@@ -11,6 +11,7 @@
 //! the body of a `where` list, but never inside the tokens a macro reads, nor the comma that
 //! makes a one-element tuple.
 
+mod capture_lists;
 mod commas;
 mod field_defaults;
 mod inline_bounds;
@@ -60,6 +61,7 @@ pub(crate) trait ReverseRule {
 // edits a return type and the bytes around a tail's value. An `into` edit starts in the
 // signature, before any edit of the rebindings it removes, so it wins those too. A string literal
 // edit replaces one `String::from(lit)` call, which holds no other rule's shape.
+// A capture list's edits leave out its captures and closure, so edits inside them never overlap.
 const RULES: &[&dyn ReverseRule] = &[
     &var::LetMut,
     &turbofish::Turbofish,
@@ -71,6 +73,7 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    &capture_lists::CaptureLists,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
