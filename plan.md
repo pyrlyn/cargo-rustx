@@ -7,10 +7,10 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T19 | todo | P2 | 5 | 55% | |
-| T19.14 | todo | P2 | 2 | 0% | |
-| T19.15 | todo | P2 | 3 | 0% | |
-| T19.16 | todo | P2 | 2 | 0% | |
-| T19.17 | todo | P2 | 4 | 0% | |
+| T19.14 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
+| T19.15 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
+| T19.16 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
+| T19.17 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
 | T19.18 | todo | P3 | 3 | 0% | |
 | T19.19 | todo | P3 | 3 | 0% | |
 | T19.20 | todo | P3 | 4 | 0% | |
@@ -49,24 +49,32 @@ Reversing them needs a driver check that compares up to lifetime renaming and ca
 
 Done when: `sugar/capture_lists.rs` converts a block made only of `let x = <expr of x>;` statements followed by a `move` closure tail, exactly as the pass builds it; anything else in the block (other statements, a non-`move` closure, a `let` with a pattern or type) stays; unit tests, a `rustx-cli sugar` snapshot case and a line in `docs/guide/capture-lists.md` and `docs/guide/cli.md`.
 
+
+Plan: add `sugar/capture_lists.rs` and register it in `sugar/mod.rs`; unit tests at the bottom of the module; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/capture-lists.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.15. Reverse rule: drop the borrows on `rc` bindings
 
 `passes/rc_borrows.rs` (problem 16) adds `.borrow()` / `.borrow_mut()` on field accesses and value-method calls of a binding typed `rc T`, `&rc T` or bound to an `rc e` value. Today the `rc_values` and `prefix_types` rules keep such a binding plain when the pass would borrow on it (`would_borrow`), so converted code keeps `Rc<RefCell<T>>`. The rule removes exactly the borrows the pass would add back, so the binding can become `rc`.
 
 Done when: a binding converts to `rc` together with its accesses when removing every explicit borrow and expanding gives the original tokens; a binding with a borrow the pass would not add back (a held guard, `try_borrow`, a borrow passed on) stays as today; unit tests, a snapshot case, and `docs/guide/rc.md` and `docs/guide/cli.md` updated.
 
+
+Plan: in `sugar/rc_values.rs` and `sugar/prefix_types.rs`, replace the `would_borrow` fallback with removing the borrows the pass adds back (shared logic in a new `sugar/rc_borrows.rs`, registered in `sugar/mod.rs` if it edits on its own); unit tests at the bottom of each module; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/rc.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.16. Reverse rule: supertrait plus blanket impl back to `bound` presets
 
 `passes/bound_presets.rs` (problem 21) turns `bound Name = A + B;` into a trait with those supertraits and a blanket impl for every type that meets them. The rule turns that pair back into the preset.
 
 Done when: a trait with no items whose only impl is the blanket impl the pass generates converts to `bound`; a trait with items, another impl, generics the pass does not write or a different blanket impl stays; unit tests, a snapshot case, and `docs/guide/bound-presets.md` and `docs/guide/cli.md` updated.
 
+
+Plan: add `sugar/bound_presets.rs` and register it in `sugar/mod.rs`; unit tests at the bottom of the module; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/bound-presets.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.17. Reverse rule: `From`, `Display` and `Error` impls back to `from` variants and `#[display]`
 
 `passes/from_display.rs` (problem 05) turns `Io(from io::Error)` into a `From` impl and `#[display(..)]` into `Display` and `Error` impls. The rule turns hand-written impls of exactly that shape back into the sugar, the way `thiserror` users write it.
 
 Done when: a `From<X> for E` impl whose body is `E::V(e)` for a one-field variant of `X` becomes `V(from X)` and the impl is removed; `Display` and `Error` impls the `#[display]` lowering would generate become the attribute; anything the pass would generate differently (extra statements, other bounds, a second `From` source for the variant) stays; unit tests, a snapshot case, and `docs/guide/from-display.md` and `docs/guide/cli.md` updated.
 
+
+Plan: add `sugar/from_display.rs` and register it in `sugar/mod.rs`; unit tests at the bottom of the module; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/from-display.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.18. Reverse rule: newtype impls back to `#[newtype]`
 
 `passes/newtype.rs` (problem 20) gives a one-field tuple struct `new` and one impl per flag (`deref`, `display`, `from_str`, `validate = f`). The rule turns a struct followed by exactly those impls into the attribute with the matching flags.
