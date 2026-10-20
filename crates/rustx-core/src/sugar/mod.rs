@@ -14,6 +14,7 @@
 mod bound_presets;
 mod capture_lists;
 mod commas;
+mod data;
 mod delegate;
 mod field_defaults;
 mod from_display;
@@ -90,6 +91,9 @@ const RULES: &[&dyn ReverseRule] = &[
     // starting earlier that overlaps one of its edits drops all of it; it wins any set starting
     // later, such as an edit inside the impls.
     &delegate::Delegate,
+    // Its first edit adds the attribute before the struct's `struct` or visibility, so it wins any
+    // later edit inside the generated items it removes, and edits inside the struct stay.
+    &data::Data,
 ];
 
 /// Replaces the bytes `range` of the source with `text`.
