@@ -17,6 +17,7 @@ mod inline_bounds;
 mod into_params;
 mod param_defaults;
 mod prefix_types;
+mod rc_borrows;
 mod rc_values;
 mod std_paths;
 mod string_literals;

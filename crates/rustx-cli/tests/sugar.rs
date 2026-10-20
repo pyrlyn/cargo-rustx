@@ -57,6 +57,19 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn explicit_borrows_on_rc_bindings_go_with_the_conversion() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_rc_borrows.rs"]);
+    insta::assert_snapshot!("sugar_rc_borrows_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_rc_borrows.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("counters.borrow_mut().items.push(value)"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_generated_impl_default_becomes_field_defaults() {
     let converted = success(&["sugar", "tests/fixtures/sugar_field_defaults.rs"]);
     insta::assert_snapshot!("sugar_field_defaults_rs", converted);
