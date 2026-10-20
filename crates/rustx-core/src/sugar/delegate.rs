@@ -281,7 +281,10 @@ mod tests {
     const LOGGED_SUGAR: &str = "use std::io::Write;\n\npub struct Logged {\n    \
          #[delegate(Write)]\n    inner: Vec<u8>,\n    lines: usize,\n}\n";
 
+    /// The rule itself proposes nothing, so no other rule's check can be what keeps it out.
     fn unchanged(source: &str) {
+        let file = syn::parse_file(source).unwrap();
+        assert_eq!(Delegate.edits(&file, source), Vec::new(), "{source}");
         assert_eq!(sugar(source).unwrap(), source);
     }
 
@@ -306,6 +309,53 @@ mod tests {
         assert_sugar(
             &generic(&short),
             &generic(&LOGGED_SUGAR.replace("use std::io::Write;", "use std::io::{self, Write};")),
+        );
+    }
+
+    #[test]
+    fn iterator_and_hash_table_traits_convert_with_their_associated_type_and_generic_method() {
+        assert_sugar(
+            "struct Ids {\n    it: Range<u32>,\n}\n\
+             impl ::core::iter::Iterator for Ids {\n    \
+             type Item = <Range<u32> as ::core::iter::Iterator>::Item;\n    #[inline]\n    \
+             fn next(&mut self) -> ::core::option::Option<Self::Item> {\n        \
+             ::core::iter::Iterator::next(&mut self.it)\n    }\n}\n\
+             impl ::core::iter::DoubleEndedIterator for Ids {\n    #[inline]\n    \
+             fn next_back(&mut self) -> ::core::option::Option<Self::Item> {\n        \
+             ::core::iter::DoubleEndedIterator::next_back(&mut self.it)\n    }\n}\n\
+             impl ::core::hash::Hash for Ids {\n    #[inline]\n    \
+             fn hash<H: ::core::hash::Hasher>(&self, __rustx_arg0: &mut H) {\n        \
+             ::core::hash::Hash::hash(&self.it, __rustx_arg0)\n    }\n}\n",
+            "struct Ids {\n    #[delegate(Iterator, DoubleEndedIterator, Hash)]\n    \
+             it: Range<u32>,\n}\n",
+        );
+    }
+
+    #[test]
+    fn buf_read_and_seek_table_traits_convert() {
+        assert_sugar(
+            "struct Lines<R> {\n    r: R,\n}\n\
+             impl<R> ::std::io::BufRead for Lines<R> {\n    #[inline]\n    \
+             fn fill_buf(&mut self) -> ::std::io::Result<&[u8]> {\n        \
+             ::std::io::BufRead::fill_buf(&mut self.r)\n    }\n    #[inline]\n    \
+             fn consume(&mut self, __rustx_arg0: usize) {\n        \
+             ::std::io::BufRead::consume(&mut self.r, __rustx_arg0)\n    }\n}\n\
+             impl<R> ::std::io::Seek for Lines<R> {\n    #[inline]\n    \
+             fn seek(&mut self, __rustx_arg0: ::std::io::SeekFrom) -> ::std::io::Result<u64> {\n        \
+             ::std::io::Seek::seek(&mut self.r, __rustx_arg0)\n    }\n}\n",
+            "struct Lines<R> {\n    #[delegate(BufRead, Seek)]\n    r: R,\n}\n",
+        );
+    }
+
+    #[test]
+    fn another_rules_edit_earlier_in_the_struct_is_kept_with_the_delegation() {
+        // Neither edit overlaps the other's, so both sets stay.
+        assert_sugar(
+            &format!(
+                "struct S {{ a: Box<dyn Fn() + Send + Sync>, b: u8 }}\n{}",
+                fmt_impl("Debug", "b")
+            ),
+            "struct S { a: ~Fn(), #[delegate(Debug)] b: u8 }\n",
         );
     }
 

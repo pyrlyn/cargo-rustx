@@ -73,8 +73,10 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
-    // Its first edit sits at a field inside the struct, so another rule's edit earlier in the
-    // struct wins and the impls stay; its removal of the impls wins any later edit inside them.
+    // Its set inserts attributes at fields and removes the impls after the struct. Another rule's
+    // edit of the struct that overlaps none of these, such as a field type, is kept with it. A set
+    // starting earlier that overlaps one of its edits drops all of it; it wins any set starting
+    // later, such as an edit inside the impls.
     &delegate::Delegate,
 ];
 
