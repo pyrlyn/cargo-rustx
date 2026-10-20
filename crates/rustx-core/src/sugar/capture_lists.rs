@@ -19,12 +19,12 @@
 //! them, and a `,` added there is a token the expansion does not write, so the check refuses it.
 //! Blocks inside a macro call's arguments stay, as for `var`: `syn` does not parse macro bodies.
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
 use syn::{Expr, ExprBlock, ExprClosure, ExprMatch, Pat, Stmt};
 
-use super::{Edit, ReverseRule, bounds};
+use super::{Edit, ReverseRule, has_comment, span_range};
 
 pub(crate) struct CaptureLists;
 
@@ -88,44 +88,44 @@ fn capture_list(source: &str, block: &ExprBlock) -> Option<Vec<Edit>> {
         return None;
     }
 
-    let byte = |span: Span, end: bool| {
-        let range = span.byte_range();
-        if end { range.end } else { range.start }
-    };
-    let spans = captures
+    let ranges = captures
         .iter()
-        .map(|capture| bounds(capture.to_token_stream()))
+        .map(|capture| span_range(capture.to_token_stream()))
         .collect::<Option<Vec<_>>>()?;
-    let (_, closure_end) = bounds(closure.to_token_stream())?;
-    let open = match closure.asyncness {
+    let closure_end = span_range(closure.to_token_stream())?.end;
+    let (open, close) = (
+        block.block.brace_token.span.open().byte_range(),
+        block.block.brace_token.span.close().byte_range(),
+    );
+    let prefix = match closure.asyncness {
         Some(_) => "async move[",
         None => "move[",
     };
     // From `{` to the first capture, between captures, from the last capture to `move` and from
     // the closure to `}` there are only `let`, names, `=`, `;`, `async` and `move`.
     let mut edits = vec![Edit {
-        range: byte(block.block.brace_token.span.open(), false)..byte(spans[0].0, false),
-        text: open.to_owned(),
+        range: open.start..ranges[0].start,
+        text: prefix.to_owned(),
     }];
-    for pair in spans.windows(2) {
+    for pair in ranges.windows(2) {
         edits.push(Edit {
-            range: byte(pair[0].1, true)..byte(pair[1].0, false),
+            range: pair[0].end..pair[1].start,
             text: ", ".to_owned(),
         });
     }
     edits.push(Edit {
-        range: byte(spans[spans.len() - 1].1, true)..byte(keyword, true),
+        range: ranges[ranges.len() - 1].end..keyword.byte_range().end,
         text: "]".to_owned(),
     });
     edits.push(Edit {
-        range: byte(closure_end, true)..byte(block.block.brace_token.span.close(), true),
+        range: closure_end..close.end,
         text: String::new(),
     });
-    // None of those tokens holds a `/`, so one there starts a comment the edit would drop.
+    // A comment in those bytes would be dropped with them.
     let bare = edits.iter().all(|edit| {
         source
             .get(edit.range.clone())
-            .is_some_and(|gap| !gap.contains('/'))
+            .is_some_and(|gap| !has_comment(gap))
     });
     bare.then_some(edits)
 }
