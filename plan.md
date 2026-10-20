@@ -11,9 +11,9 @@ A syntax layer over Rust: sugar desugars into ordinary Rust through procedural m
 | T19.15 | in progress | P2 | 3 | 0% | Claude / opus-5.5 |
 | T19.16 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 | T19.17 | in progress | P2 | 4 | 0% | Claude / opus-5.5 |
-| T19.18 | todo | P3 | 3 | 0% | |
-| T19.19 | todo | P3 | 3 | 0% | |
-| T19.20 | todo | P3 | 4 | 0% | |
+| T19.18 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
+| T19.19 | in progress | P3 | 3 | 0% | Claude / opus-5.5 |
+| T19.20 | in progress | P3 | 4 | 0% | Claude / opus-5.5 |
 | T19.21 | todo | P2 | 3 | 0% | |
 | T19.22 | todo | P2 | 2 | 0% | |
 | T19.23 | todo | P2 | 4 | 0% | |
@@ -81,18 +81,24 @@ Plan: add `sugar/from_display.rs` and register it in `sugar/mod.rs`; unit tests 
 
 Done when: every combination of flags the pass supports converts back, impls the pass would not generate keep the struct as written; unit tests, a snapshot case, and `docs/guide/newtype.md` and `docs/guide/cli.md` updated.
 
+
+Plan: add `sugar/newtype.rs` and register it in `sugar/mod.rs`; unit tests at the bottom of the module, one per flag combination and per shape that must stay; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/newtype.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.19. Reverse rule: forwarding impls back to `#[delegate]`
 
 `passes/delegate.rs` (problem 07) gives a struct a trait impl forwarding every method to a field marked `#[delegate(Trait)]`. The rule marks the field and removes an impl of exactly that shape, for the std traits in the pass's table and traits declared in the same file.
 
 Done when: a forwarding impl the pass would generate converts; an impl that forwards only some methods, adapts arguments or results, or names a trait the pass cannot list stays; unit tests, a snapshot case, and `docs/guide/delegate.md` and `docs/guide/cli.md` updated.
 
+
+Plan: add `sugar/delegate.rs` and register it in `sugar/mod.rs`; unit tests at the bottom of the module, one per flag combination and per shape that must stay; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/delegate.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.20. Reverse rule: constructor, getters and builder back to `#[data]`
 
 `passes/data.rs` (problem 08) gives a struct with named fields a constructor, getters, optional setters and an optional builder. The rule turns a struct followed by exactly that code into `#[data]` with the matching flags. Lowest value of the rules: hand-written impls rarely match the generated code token for token.
 
 Done when: every flag combination the pass supports converts back, and code that differs in any way (docs, attributes, order, an extra method) stays; unit tests, a snapshot case, and `docs/guide/data.md` and `docs/guide/cli.md` updated.
 
+
+Plan: add `sugar/data.rs` and register it in `sugar/mod.rs`; unit tests at the bottom of the module, one per flag combination and per shape that must stay; a fixture in `crates/rustx-cli/tests/fixtures/` with its `rustx-cli sugar` snapshot; update `docs/guide/data.md` and `docs/guide/cli.md`. Verify with `just check`.
 ### T19.21. Round-trip tests over every expansion
 
 Each rule has its own tests; nothing yet checks the conversion as a whole. For every snapshot case in `crates/rustx-core/tests/cases/` and every Rust example in `docs/guide/`, expand it, run `sugar` on the result and expand again: the tokens must equal the first expansion, and `sugar` on the expansion must give back the original sugar wherever a rule covers every item it uses. A file no rule matches must come back byte for byte.
