@@ -142,8 +142,10 @@ fn borrows(name: &Ident, tokens: TokenStream) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::sugar::sugar;
+    use crate::sugar::prefix_types::PrefixTypes;
+    use crate::sugar::rc_values::RcValues;
     use crate::sugar::tests::assert_sugar;
+    use crate::sugar::{Edit, ReverseRule, convert, sugar};
 
     const USES: &str = "use std::cell::RefCell;\nuse std::rc::Rc;\n";
 
@@ -319,5 +321,60 @@ mod tests {
                  Rc::new(RefCell::new(n.size))\n}\n",
             ),
         );
+    }
+
+    #[test]
+    fn a_shadowing_let_or_closure_parameter_of_the_name_keeps_every_borrow() {
+        // The pass's scope ends at the new binding, so it would not add back the borrow after it;
+        // these are conservative misses the test pins.
+        keeps_borrows(
+            "fn f(n: Rc<RefCell<Node>>) -> u64 {\n    let a = n.borrow().size;\n    \
+             let n = other();\n    a + n.borrow().size\n}\n",
+            "fn f(n: rc Node) -> u64 {\n    let a = n.borrow().size;\n    \
+             let n = other();\n    a + n.borrow().size\n}\n",
+        );
+        keeps_borrows(
+            "fn f(n: Rc<RefCell<Node>>, x: RefCell<Node>) -> u64 {\n    \
+             let g = |n: &RefCell<Node>| n.borrow().size;\n    n.borrow().size + g(&x)\n}\n",
+            "fn f(n: rc Node, x: RefCell<Node>) -> u64 {\n    \
+             let g = |n: &RefCell<Node>| n.borrow().size;\n    n.borrow().size + g(&x)\n}\n",
+        );
+    }
+
+    /// Rewrites the bytes of `0` as they are, starting before any other rule's edit there.
+    struct Cover(&'static str);
+
+    impl ReverseRule for Cover {
+        fn edits(&self, _: &syn::File, source: &str) -> Vec<Edit> {
+            let at = source.find(self.0).unwrap();
+            vec![Edit {
+                range: at..at + self.0.len(),
+                text: self.0.to_owned(),
+            }]
+        }
+    }
+
+    #[test]
+    fn the_removals_are_kept_or_dropped_with_the_binding_edit() {
+        let typed = with_uses("fn f(n: Rc<RefCell<Node>>) -> u64 {\n    n.borrow().size\n}\n");
+        let file = syn::parse_file(&typed).unwrap();
+        let [group] = &PrefixTypes.edit_groups(&file, &typed)[..] else {
+            panic!("one set of edits")
+        };
+        assert_eq!(group.len(), 2, "the type and its borrow in one set");
+        // An earlier edit over the type wins, so the borrow stays with the type.
+        let rules: [&dyn ReverseRule; 2] = [&Cover("n: Rc<RefCell<Node>>"), &PrefixTypes];
+        assert_eq!(convert(&typed, &rules).unwrap(), typed);
+
+        let value = with_uses(
+            "fn f() -> usize {\n    let v = Rc::new(RefCell::new(Vec::new()));\n    v.borrow().len()\n}\n",
+        );
+        let file = syn::parse_file(&value).unwrap();
+        let [group] = &RcValues.edit_groups(&file, &value)[..] else {
+            panic!("one set of edits")
+        };
+        assert_eq!(group.len(), 2, "the value and its borrow in one set");
+        let rules: [&dyn ReverseRule; 2] = [&Cover("v = Rc::new"), &RcValues];
+        assert_eq!(convert(&value, &rules).unwrap(), value);
     }
 }
