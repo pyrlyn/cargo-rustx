@@ -27,9 +27,11 @@
 //! `rc_borrows` tracks a parameter, `let` or closure parameter typed `rc T` or `&rc T` and borrows
 //! on its field accesses and value-method calls (problem 16), which changes plain code such as
 //! `n.replace(v)`. Such a binding keeps its type: the rule asks the pass's own scan rather than
-//! leave the edit to the driver's check. `weak T` is never tracked.
+//! leave the edit to the driver's check. A binding that borrows explicitly where the pass would
+//! (`n.borrow().size`) converts together with the removal of those borrows (`sugar/rc_borrows`,
+//! T19.15), in one set of edits. `weak T` is never tracked.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{ToTokens, quote};
@@ -42,6 +44,7 @@ use syn::{
 };
 
 use super::bounds;
+use super::rc_borrows::removals;
 use super::rc_values::apply_inside;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule};
@@ -50,6 +53,10 @@ pub(crate) struct PrefixTypes;
 
 impl ReverseRule for PrefixTypes {
     fn edits(&self, file: &syn::File, source: &str) -> Vec<Edit> {
+        self.edit_groups(file, source).concat()
+    }
+
+    fn edit_groups(&self, file: &syn::File, source: &str) -> Vec<Vec<Edit>> {
         let paths = StdPaths::of(file);
         let shapes = Shapes {
             rc: paths.normalise(quote!(::std::rc::Rc)),
@@ -63,7 +70,15 @@ impl ReverseRule for PrefixTypes {
         };
         let mut finder = Finder::new(source, &shapes);
         finder.visit_file(file);
-        finder.edits
+        let mut borrows = finder.borrows;
+        finder
+            .edits
+            .into_iter()
+            .map(|edit| {
+                let removed = borrows.remove(&edit.range.start).unwrap_or_default();
+                [vec![edit], removed].concat()
+            })
+            .collect()
     }
 }
 
@@ -288,6 +303,8 @@ struct Finder<'a> {
     shapes: &'a Shapes,
     /// Start offsets of binding types that `rc_borrows` would track and borrow through.
     tracked: HashSet<usize>,
+    /// Explicit borrows to remove with the edit of the `rc` binding type that starts at the key.
+    borrows: HashMap<usize, Vec<Edit>>,
     edits: Vec<Edit>,
 }
 
@@ -297,6 +314,7 @@ impl<'a> Finder<'a> {
             source,
             shapes,
             tracked: HashSet::new(),
+            borrows: HashMap::new(),
             edits: Vec::new(),
         }
     }
@@ -353,7 +371,8 @@ impl<'a> Finder<'a> {
         Some(Edit::between(first, found.last, &text))
     }
 
-    /// Records `typed` when `rc_borrows` would track it as an `rc` binding and borrow in `scope`.
+    /// Records `typed` when `rc_borrows` would track it as an `rc` binding and borrow in `scope`
+    /// as written, or else the explicit borrows in `scope` its conversion removes.
     fn track(&mut self, typed: &PatType, scope: &[Stmt]) {
         let ty = match &*typed.ty {
             Type::Reference(reference) => &*reference.elem,
@@ -374,11 +393,18 @@ impl<'a> Finder<'a> {
                 ..
             })
         );
-        if rc
-            && crate::passes::would_borrow(ident, scope)
-            && let Some((first, _)) = bounds(typed.ty.to_token_stream())
-        {
-            self.tracked.insert(first.byte_range().start);
+        if !rc {
+            return;
+        }
+        if crate::passes::would_borrow(ident, scope) {
+            if let Some((first, _)) = bounds(typed.ty.to_token_stream()) {
+                self.tracked.insert(first.byte_range().start);
+            }
+        } else if let Some((first, _)) = bounds(ty.to_token_stream()) {
+            let removed = removals(ident, scope, self.source);
+            if !removed.is_empty() {
+                self.borrows.insert(first.byte_range().start, removed);
+            }
         }
     }
 
@@ -587,7 +613,7 @@ mod tests {
                  impl Iterator for It {\n    type Item = rc Node;\n    \
                  fn next(&mut self) -> Option<Self::Item> { None }\n}\n\
                  fn size(node: &rc Node, up: weak Node) -> Option<rc Node> {\n    \
-                 let _ = node.borrow().children.len();\n    up.upgrade()\n}\n\
+                 let _ = node.children.len();\n    up.upgrade()\n}\n\
                  fn all(v: &[Link]) -> iter rc Node {\n    \
                  let f = |n: rc Node| -> rc (u8, u8) { drop(n); g() };\n    \
                  let x: rc u8 = rc 1;\n    v.iter().cloned()\n}\n",

@@ -35,8 +35,9 @@ use syn::{
     UseName, UseRename,
 };
 
+use super::item_lists::for_each_list;
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, apply, has_comment, item_lists, span_range};
+use super::{Edit, ReverseRule, apply, has_comment, span_range};
 use crate::tokens::syntax::{is_str_literal, is_string};
 
 pub(crate) struct FieldDefaults;
@@ -53,9 +54,7 @@ impl ReverseRule for FieldDefaults {
             converted: Vec::new(),
             edits: Vec::new(),
         };
-        for list in item_lists(file) {
-            units.list(&list);
-        }
+        for_each_list(file, |items| units.list(items));
 
         let mut declared = Declared::default();
         declared.visit_file(file);

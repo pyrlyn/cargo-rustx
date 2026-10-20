@@ -33,8 +33,9 @@ use syn::{
     Visibility,
 };
 
+use super::item_lists::for_each_list;
 use super::std_paths::StdPaths;
-use super::{Edit, ReverseRule, has_comment, item_lists, span_range};
+use super::{Edit, ReverseRule, has_comment, span_range};
 
 pub(crate) struct Newtypes;
 
@@ -51,18 +52,14 @@ impl ReverseRule for Newtypes {
             source,
             paths: &paths,
         };
-        item_lists(file)
-            .iter()
-            .flat_map(|list| {
-                list.iter()
-                    .enumerate()
-                    .filter_map(|(at, item)| match item {
-                        Some(Item::Struct(item)) => units.unit(item, &list[at + 1..], list),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect()
+        let mut groups = Vec::new();
+        for_each_list(file, |list| {
+            groups.extend(list.iter().enumerate().filter_map(|(at, item)| match item {
+                Some(Item::Struct(item)) => units.unit(item, &list[at + 1..], list),
+                _ => None,
+            }));
+        });
+        groups
     }
 }
 

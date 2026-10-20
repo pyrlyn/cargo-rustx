@@ -57,6 +57,19 @@ fn rc_values_written_with_short_std_names_become_rc_sugar() {
 }
 
 #[test]
+fn explicit_borrows_on_rc_bindings_go_with_the_conversion() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_rc_borrows.rs"]);
+    insta::assert_snapshot!("sugar_rc_borrows_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_rc_borrows.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("counters.borrow_mut().items.push(value)"),
+        "{expanded}"
+    );
+}
+
+#[test]
 fn a_generated_impl_default_becomes_field_defaults() {
     let converted = success(&["sugar", "tests/fixtures/sugar_field_defaults.rs"]);
     insta::assert_snapshot!("sugar_field_defaults_rs", converted);
@@ -163,6 +176,34 @@ fn string_from_a_literal_in_a_place_typed_string_becomes_the_literal() {
     let expanded = success(&["expand", rustx.to_str().unwrap()]);
     assert!(
         expanded.contains("::std::string::String::from(\"Ann\")"),
+        "{expanded}"
+    );
+}
+
+#[test]
+fn generated_from_and_display_impls_become_from_variants_and_display_attributes() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_from_display.rs"]);
+    insta::assert_snapshot!("sugar_from_display_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_from_display.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains("impl ::std::error::Error for LoadError {}"),
+        "{expanded}"
+    );
+}
+
+#[test]
+fn a_trait_with_its_blanket_impl_becomes_a_bound_preset() {
+    let converted = success(&["sugar", "tests/fixtures/sugar_bound_presets.rs"]);
+    insta::assert_snapshot!("sugar_bound_presets_rs", converted);
+    let rustx = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("sugar_bound_presets.rustx");
+    std::fs::write(&rustx, converted).unwrap();
+    let expanded = success(&["expand", rustx.to_str().unwrap()]);
+    assert!(
+        expanded.contains(
+            "impl<__RustxSelf: ?::core::marker::Sized + Clone + Eq + Hash> Key for __RustxSelf {}"
+        ),
         "{expanded}"
     );
 }
