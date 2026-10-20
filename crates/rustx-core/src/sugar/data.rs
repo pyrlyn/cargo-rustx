@@ -167,7 +167,14 @@ mod tests {
         );
     }
 
+    /// The rule itself proposes no edit, so the driver's check is not what keeps `source`.
+    fn no_edits(source: &str) {
+        let file = syn::parse_file(source).unwrap();
+        assert_eq!(Data.edits(&file, source), [], "{source}");
+    }
+
     fn unchanged(source: &str) {
+        no_edits(source);
         assert_eq!(sugar(source).unwrap(), source);
     }
 
@@ -236,6 +243,16 @@ mod tests {
         assert_sugar(
             &format!("mod m {{ {plain} }}\nfn f() {{ {plain} let x = 1; }}\n"),
             &format!("mod m {{ #[data] {written} }}\nfn f() {{ #[data] {written} let x = 1; }}\n"),
+        );
+    }
+
+    #[test]
+    fn a_struct_after_other_code_on_its_line_gets_the_attribute_on_that_line() {
+        let one_line = "#[derive(Debug)] pub struct User { id: u64, name: String }\n";
+        let source = generated("#[data]", USER).replacen(USER, one_line, 1);
+        assert_sugar(
+            &source,
+            "#[derive(Debug)] #[data] pub struct User { id: u64, name: String }\n\nfn after() {}\n",
         );
     }
 
@@ -311,6 +328,7 @@ mod tests {
     fn a_builder_that_differs_from_the_passs_stays() {
         // Other rules may still rewrite inside it (`build` becomes a `throws` fn).
         let not_data = |source: String| {
+            no_edits(&source);
             let out = sugar(&source).unwrap();
             assert!(
                 !out.contains("#[data") && out.contains("impl User {"),
@@ -336,6 +354,16 @@ mod tests {
         ));
         unchanged(&source.replacen("#[allow(dead_code)]", "// why\n#[allow(dead_code)]", 1));
         unchanged(&source.replacen("        self.id\n", "        // why\n        self.id\n", 1));
+    }
+
+    #[test]
+    fn a_new_that_leaves_out_a_field_with_a_default_stays() {
+        let source = generated(
+            "#[data]",
+            "pub struct User {\n    id: u64,\n    #[default(1)]\n    n: u8,\n}\n",
+        );
+        assert!(source.contains("pub fn new(id: u64) -> Self"), "{source}");
+        unchanged(&source);
     }
 
     #[test]
