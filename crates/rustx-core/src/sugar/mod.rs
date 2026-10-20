@@ -14,10 +14,13 @@
 mod bound_presets;
 mod commas;
 mod field_defaults;
+mod from_display;
 mod inline_bounds;
 mod into_params;
+mod item_lists;
 mod param_defaults;
 mod prefix_types;
+mod rc_borrows;
 mod rc_values;
 mod std_paths;
 mod string_literals;
@@ -73,6 +76,10 @@ const RULES: &[&dyn ReverseRule] = &[
     &throws::Throws,
     &into_params::IntoParams,
     &string_literals::StringLiterals,
+    // Its `from` edit ends where another rule's edit of a variant type starts, so both are kept
+    // and the driver's check keeps whichever expands back; its removal of the impls wins any
+    // later edit inside them.
+    &from_display::FromDisplay,
     &bound_presets::BoundPresets,
 ];
 
