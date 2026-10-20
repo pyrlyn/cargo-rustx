@@ -31,10 +31,11 @@ use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::visit::{self, Visit};
 use syn::{
-    Block, Expr, ExprAssign, ExprStruct, Fields, ImplItem, Item, ItemImpl, ItemMod, ItemStruct,
-    Member, Stmt, UseName, UseRename,
+    Expr, ExprAssign, ExprStruct, Fields, ImplItem, Item, ItemImpl, ItemStruct, Member, Stmt,
+    UseName, UseRename,
 };
 
+use super::item_lists::for_each_list;
 use super::std_paths::StdPaths;
 use super::{Edit, ReverseRule, apply, bounds};
 use crate::tokens::syntax::{is_str_literal, is_string};
@@ -53,7 +54,7 @@ impl ReverseRule for FieldDefaults {
             converted: Vec::new(),
             edits: Vec::new(),
         };
-        units.visit_file(file);
+        for_each_list(file, |items| units.list(items));
 
         let mut declared = Declared::default();
         declared.visit_file(file);
@@ -86,9 +87,7 @@ struct Units<'a> {
 }
 
 impl Units<'_> {
-    /// `None` marks a statement between items, which breaks adjacency.
-    fn list<'i>(&mut self, items: impl Iterator<Item = Option<&'i Item>>) {
-        let items: Vec<Option<&Item>> = items.collect();
+    fn list(&mut self, items: &[Option<&Item>]) {
         for pair in items.windows(2) {
             if let [Some(Item::Struct(item)), Some(Item::Impl(imp))] = pair
                 && let Some(edit) = self.unit(item, imp)
@@ -215,28 +214,6 @@ impl Units<'_> {
                 self.paths.normalise(file.into_token_stream())
                     == self.paths.normalise(quote!(#item #imp))
             })
-    }
-}
-
-impl<'ast> Visit<'ast> for Units<'_> {
-    fn visit_file(&mut self, file: &'ast syn::File) {
-        self.list(file.items.iter().map(Some));
-        visit::visit_file(self, file);
-    }
-
-    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
-        if let Some((_, items)) = &module.content {
-            self.list(items.iter().map(Some));
-        }
-        visit::visit_item_mod(self, module);
-    }
-
-    fn visit_block(&mut self, block: &'ast Block) {
-        self.list(block.stmts.iter().map(|stmt| match stmt {
-            Stmt::Item(item) => Some(item),
-            _ => None,
-        }));
-        visit::visit_block(self, block);
     }
 }
 

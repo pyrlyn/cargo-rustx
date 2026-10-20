@@ -15,6 +15,7 @@ mod commas;
 mod field_defaults;
 mod inline_bounds;
 mod into_params;
+mod item_lists;
 mod param_defaults;
 mod prefix_types;
 mod rc_values;
