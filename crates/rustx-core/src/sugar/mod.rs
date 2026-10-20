@@ -245,9 +245,30 @@ pub(super) fn span_range(tokens: TokenStream) -> Option<Range<usize>> {
     Some(first.byte_range().start..last.byte_range().end)
 }
 
-/// Whether removing `text` would drop a comment.
+/// Whether removing `text`, a run of whole tokens, would drop a comment, a doc comment included.
+/// `//` or `/*` inside a string or char literal is no comment, so this lexes `text` rather than
+/// searching it: the lexer drops comments, so a byte outside every token that is not whitespace
+/// is one. Text that does not lex counts as a comment, so the caller keeps it.
 pub(super) fn has_comment(text: &str) -> bool {
-    text.contains("//") || text.contains("/*")
+    let Ok(tokens) = text.parse::<TokenStream>() else {
+        return true;
+    };
+    let mut all = Vec::new();
+    leaves(tokens, &mut all);
+    let mut covered = vec![false; text.len()];
+    for (_, span) in all {
+        let range = span.byte_range();
+        let Some(written) = text.get(range.clone()) else {
+            return true;
+        };
+        // A doc comment lexes into `#[doc = ".."]` tokens spanning the comment.
+        if written.starts_with("//") || written.starts_with("/*") {
+            return true;
+        }
+        covered[range].fill(true);
+    }
+    text.char_indices()
+        .any(|(at, c)| !covered[at] && !c.is_whitespace())
 }
 
 /// Every item list of `file`: the file, inline modules and blocks, at any depth, each before the
@@ -486,6 +507,23 @@ pub(crate) mod tests {
         assert!(err.to_string().contains("as written"), "{err}");
         let start = err.span().start();
         assert_eq!((start.line, start.column), (2, 9));
+    }
+
+    #[test]
+    fn comment_markers_inside_literals_are_no_comments() {
+        assert!(!has_comment(
+            " impl A { fn f() { g(\"http://x/*\", '/', b\"//\", r\"/*\") } }\n"
+        ));
+        assert!(!has_comment("  \n"));
+        for commented in [
+            "fn f() {} // why",
+            "fn f() { /* why */ }",
+            "/// why\nfn f() {}",
+            "//! why",
+            "fn f() { \"",
+        ] {
+            assert!(has_comment(commented), "{commented}");
+        }
     }
 
     #[test]

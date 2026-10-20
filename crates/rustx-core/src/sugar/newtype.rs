@@ -254,8 +254,11 @@ mod tests {
     const NEW: &str = "#[allow(dead_code)]\nimpl Id {\n    pub fn new(__rustx_inner: u64) -> Self {\n        \
                        Self(__rustx_inner)\n    }\n}\n";
 
-    /// Other rules may still edit `source`; this one leaves it alone.
+    /// This rule proposes no edit for `source`, and the driver with it alone changes nothing;
+    /// other rules may still edit it.
     fn unchanged(source: &str) {
+        let file = syn::parse_file(source).unwrap();
+        assert_eq!(Newtypes.edits(&file, source), Vec::<Edit>::new());
         assert_eq!(convert(source, &[&Newtypes]).unwrap(), source);
     }
 
@@ -417,6 +420,25 @@ mod tests {
              type Target = [T];\n        fn deref(&self) -> &[T] { &self.0 }\n    }\n}\n",
             "mod m {\n    #[newtype(deref)]\n    \
              pub struct List<T: Clone>(Vec<T>) where T: Default;\n}\n",
+        );
+    }
+
+    #[test]
+    fn a_struct_after_other_code_on_its_line_gets_the_attribute_inline() {
+        assert_sugar(
+            &format!("fn f() {{}} pub struct Id(u64);\n{NEW}"),
+            "fn f() {} #[newtype] pub struct Id(u64);\n",
+        );
+    }
+
+    #[test]
+    fn comment_markers_inside_a_display_string_do_not_block_it() {
+        assert_sugar(
+            "pub struct Url(String);\n#[allow(dead_code)]\nimpl Url { pub fn new(__rustx_inner: String) -> \
+             Self { Self(__rustx_inner) } }\nimpl ::core::fmt::Display for Url { fn fmt(&self, \
+             __rustx_f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result { \
+             ::core::write!(__rustx_f, \"see http://x/{0} /*\", &self.0) } }\n",
+            "#[newtype(display = \"see http://x/{0} /*\")]\npub struct Url(String);\n",
         );
     }
 
