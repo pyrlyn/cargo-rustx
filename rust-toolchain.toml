@@ -1,6 +1,6 @@
 # The one Rust version for local work and CI. The MSRV (rust-version in Cargo.toml) is a
 # separate promise and does not follow it.
 [toolchain]
-channel = "1.99.0"
+channel = "1.99.1"
 profile = "minimal"
 components = ["rustfmt", "clippy"]
