@@ -67,3 +67,26 @@ mod guide {
         BoundPresets = "bound-presets.md",
     }
 }
+
+/// The pages of `docs/cases`: ordinary Rust beside the same behavior in rustx. Compiled and run
+/// as doc tests, the same way as the guide pages. A page that is not listed here is not checked.
+#[cfg(doctest)]
+mod cases {
+    macro_rules! pages {
+        ($($name:ident = $file:literal,)*) => {$(
+            #[doc = include_str!(concat!("../../../docs/cases/", $file))]
+            pub struct $name;
+        )*};
+    }
+
+    pages! {
+        Index = "README.md",
+        Settings = "settings.md",
+        Workers = "workers.md",
+        Scan = "scan.md",
+        Rows = "rows.md",
+        Orders = "orders.md",
+        Tree = "tree.md",
+        Plugins = "plugins.md",
+    }
+}

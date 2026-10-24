@@ -33,6 +33,7 @@ The [user guide](docs/guide/README.md) has a page per entry point and per sugar 
 
 - Entry points: [`sugar!`](docs/guide/sugar-macro.md), [attribute macros](docs/guide/attribute-macros.md), [`#[sugared]`](docs/guide/sugared.md), [`build.rs`](docs/guide/build-rs.md), [`rustx-cli expand` and `sugar`](docs/guide/cli.md), [`rustx-cli fmt`](docs/guide/fmt.md), [the `dyn` feature](docs/guide/dyn-feature.md).
 - Sugar items: the [index](docs/guide/README.md#sugar-items), in the order of the catalog below.
+- Cases: [ordinary Rust beside the same behavior in rustx](docs/cases/README.md).
 
 ## Catalog
 

@@ -48,3 +48,7 @@ rustx = ".."
 | 21 | [`bound` presets](bound-presets.md) | `bound Key = Clone + Eq + Hash;` |
 
 The number is the problem file's. General limits (no type information, one macro sees only its own input) are in [ARCHITECTURE.md](../../ARCHITECTURE.md), section h.
+
+## Cases
+
+[Longer fragments](../cases/README.md) put several sugar items in one piece of code and show the ordinary Rust beside it. Those examples are compiled as doc tests too.
