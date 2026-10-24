@@ -6,7 +6,44 @@
 
 use proc_macro2::{Ident, Span};
 use syn::punctuated::Punctuated;
-use syn::{Attribute, Expr, ExprLit, GenericArgument, Lit, Path, PathArguments, Token, Type};
+use syn::{Attribute, Expr, ExprLit, GenericArgument, Lit, Meta, Path, PathArguments, Token, Type};
+
+/// Copies only the conditions controlling an item's existence, including nested `cfg_attr`.
+/// Other branches such as `derive` or `doc` belong to the original item, not generated siblings.
+#[must_use]
+pub fn conditional_attributes(attrs: &[Attribute]) -> Vec<Attribute> {
+    attrs
+        .iter()
+        .filter_map(|attr| {
+            Some(Attribute {
+                meta: conditional_meta(&attr.meta)?,
+                ..attr.clone()
+            })
+        })
+        .collect()
+}
+
+fn conditional_meta(meta: &Meta) -> Option<Meta> {
+    if meta.path().is_ident("cfg") {
+        return Some(meta.clone());
+    }
+    let Meta::List(list) = meta else { return None };
+    if !list.path.is_ident("cfg_attr") {
+        return None;
+    }
+    let args = list
+        .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+        .ok()?;
+    let mut args = args.iter();
+    let predicate = args.next()?;
+    let conditions: Vec<_> = args.filter_map(conditional_meta).collect();
+    if conditions.is_empty() {
+        return None;
+    }
+    let mut list = list.clone();
+    list.tokens = quote::quote!(#predicate, #(#conditions),*);
+    Some(Meta::List(list))
+}
 
 /// Prefix of every name the passes generate; reserved, so user names cannot collide with them.
 pub(crate) const RESERVED_PREFIX: &str = "__rustx_";
@@ -115,6 +152,23 @@ pub(crate) fn is_marker(attr: &Attribute) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conditional_attributes_keep_nested_gates_but_not_derive_branches() {
+        let item: syn::ItemStruct = syn::parse_quote! {
+            #[cfg(unix)]
+            #[cfg_attr(all(), derive(Debug), cfg_attr(any(), cfg(test), doc = "text"))]
+            #[cfg_attr(all(), derive(Clone))]
+            #[doc = "original"]
+            struct S;
+        };
+        let expected: syn::ItemStruct = syn::parse_quote! {
+            #[cfg(unix)]
+            #[cfg_attr(all(), cfg_attr(any(), cfg(test)))]
+            struct S;
+        };
+        assert_eq!(conditional_attributes(&item.attrs), expected.attrs);
+    }
 
     #[test]
     fn combined_errors_keep_every_message_in_order() {

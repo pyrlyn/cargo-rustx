@@ -3,6 +3,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::DeriveInput;
+use syn::ext::IdentExt;
 
 use super::named_fields;
 
@@ -11,7 +12,7 @@ pub(crate) fn expand(input: &DeriveInput, prefix: &str) -> syn::Result<TokenStre
     let inits = named_fields(input)?.into_iter().map(|(f, cfg)| {
         let id = f.ident.as_ref().expect("named");
         let ty = &f.ty;
-        let key = format!("{prefix}{}", id.to_string().to_uppercase());
+        let key = format!("{prefix}{}", id.unraw().to_string().to_uppercase());
         let missing = match &cfg.default {
             Some(d) => quote!(#d),
             None => {
