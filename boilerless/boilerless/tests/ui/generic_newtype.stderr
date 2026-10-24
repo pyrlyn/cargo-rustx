@@ -1,0 +1,5 @@
+error: `convert` pattern does not support generic parameters
+ --> tests/ui/generic_newtype.rs:4:9
+  |
+4 | struct W<T>(T);
+  |         ^^^

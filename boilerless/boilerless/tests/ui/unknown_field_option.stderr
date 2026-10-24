@@ -1,0 +1,5 @@
+error: unknown field option `defualt`; expected `skip` or `default = EXPR`
+ --> tests/ui/unknown_field_option.rs:4:19
+  |
+4 | struct S { #[boil(defualt = 1)] a: u8 }
+  |                   ^^^^^^^
