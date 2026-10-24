@@ -9,13 +9,17 @@ check: fmt-check clippy test msrv
 
 fmt-check:
     cargo fmt --all --check
+    cargo fmt --manifest-path boilerless/Cargo.toml --all --check
 
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --manifest-path boilerless/Cargo.toml --workspace --all-targets -- -D warnings
 
 test:
     cargo nextest run --workspace
     cargo test --workspace --doc
+    cargo test --manifest-path boilerless/Cargo.toml --workspace
+    python3 -m unittest discover boilerless/tools/ra-macros/tests
 
 # The lowest supported toolchain must still build the crates.
 msrv:

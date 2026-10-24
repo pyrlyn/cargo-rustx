@@ -110,15 +110,13 @@ fn unnest(formatted: &str, levels: usize) -> Option<&str> {
 
 /// Whether two expansions mean the same, up to trailing commas that mean nothing.
 ///
-/// prettyplease settles trailing commas in syntax it knows, but prints macro arguments as they
-/// are written, and rustfmt adds a trailing comma when it breaks `vec![..]` over lines, so here
-/// they are ignored inside macro arguments too. A comma that makes a one-element tuple, `(x,)`,
-/// is kept, because without it the meaning changes.
+/// Macro arguments and attributes stay exact: even a trailing comma can select another macro
+/// arm. The formatter protects macro inputs before calling rustfmt.
 fn same_expansion(before: &str, after: &str) -> bool {
     let tokens = |text: &str| {
         text.parse::<TokenStream>()
             .ok()
-            .map(|t| without_trailing_commas(t, MacroTokens::Ignored))
+            .map(|t| without_trailing_commas(t, MacroTokens::Kept))
     };
     match (tokens(before), tokens(after)) {
         (Some(before), Some(after)) => before.to_string() == after.to_string(),
@@ -208,18 +206,18 @@ mod tests {
     }
 
     #[test]
-    fn a_trailing_comma_rustfmt_adds_to_vec_arguments_keeps_the_expansion() {
+    fn a_trailing_comma_in_macro_arguments_changes_the_expansion() {
         let before = expansion("fn f() { let v: Vec<String> = vec![\"a\", \"b\"]; }");
         let after = expansion("fn f() { let v: Vec<String> = vec![\"a\", \"b\",]; }");
         assert_ne!(before, after);
-        assert!(same_expansion(&before, &after));
+        assert!(!same_expansion(&before, &after));
     }
 
     #[test]
     fn a_comma_that_makes_a_tuple_or_any_other_token_still_differs() {
         let tuple = |source| expansion(&format!("fn f() {{ m!({source}); }}"));
         assert!(!same_expansion(&tuple("x"), &tuple("x,")));
-        assert!(same_expansion(&tuple("x, y"), &tuple("x, y,")));
+        assert!(!same_expansion(&tuple("x, y"), &tuple("x, y,")));
         assert!(!same_expansion(&tuple("x, y"), &tuple("x, z")));
     }
 }

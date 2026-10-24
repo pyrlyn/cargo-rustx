@@ -20,5 +20,5 @@ mod expand;
 mod files;
 
 pub use diagnostic::render;
-pub use expand::{Kind, expand_source};
+pub use expand::{Kind, expand_source, is_sugar};
 pub use files::{Error, expand_dir, expand_file};

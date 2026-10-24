@@ -32,6 +32,18 @@ enum Back {
 }
 
 impl Placeholder {
+    /// Macro inputs are observable tokens, including whitespace seen by stringification.
+    pub(super) fn verbatim(
+        source: &str,
+        range: Range<usize>,
+        pre: &'static str,
+        post: &str,
+    ) -> Self {
+        let mut placeholder = Self::new(source, range.clone(), pre, post);
+        source[range].clone_into(&mut placeholder.sugar);
+        placeholder
+    }
+
     pub(super) fn new(source: &str, range: Range<usize>, pre: &'static str, post: &str) -> Self {
         let (sugar, post) = (normalize(&source[range.clone()]), post.to_owned());
         Self {

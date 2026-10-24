@@ -178,10 +178,26 @@ mod tests {
              s += String::from(\"k\");\n    \
              let l = Other { name: String::from(\"l\") };\n    \
              let m: String = (String::from(\"m\"));\n    \
-             let n: Option<String> = Option::Some(String::from(\"n\"));\n    \
+             let n: Option<String> = other::Some(String::from(\"n\"));\n    \
              let o: Vec<String> = my::vec![String::from(\"o\")];\n    \
              let p: my::String = String::from(\"p\");\n}\n",
         ));
+    }
+
+    #[test]
+    fn qualified_some_constructors_round_trip_with_string_literals() {
+        for constructor in [
+            "Option::Some",
+            "::core::option::Option::Some",
+            "::std::option::Option::Some",
+        ] {
+            assert_sugar(
+                &format!(
+                    "fn f() {{ let n: Option<String> = {constructor}(String::from(\"n\")); }}"
+                ),
+                &format!("fn f() {{ let n: Option<String> = {constructor}(\"n\"); }}"),
+            );
+        }
     }
 
     #[test]

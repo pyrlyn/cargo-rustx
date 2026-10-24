@@ -8,7 +8,7 @@ use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
 
 use super::angle::{angle_depth, matching_close};
 use super::map_sequences;
-use super::punct::is_punct;
+use super::punct::{is_joint, is_punct};
 
 /// Applies `rewrite` to every parameter of every `fn` signature in `tokens`, nested ones too.
 ///
@@ -35,8 +35,9 @@ where
 }
 
 /// Index of the parameter group when `fn` stands at `i`: `fn name(..)` or `fn name<..>(..)`.
-pub(crate) fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
-    if !matches!(&seq[i], TokenTree::Ident(word) if word == "fn")
+#[must_use]
+pub fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
+    if !matches!(seq.get(i), Some(TokenTree::Ident(word)) if word == "fn")
         || !matches!(seq.get(i + 1)?, TokenTree::Ident(_))
     {
         return None;
@@ -49,6 +50,40 @@ pub(crate) fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
         TokenTree::Group(group) if group.delimiter() == Delimiter::Parenthesis => Some(at),
         _ => None,
     }
+}
+
+/// Index of the comma that ends the argument starting at `from`, or the end of `args`.
+#[must_use]
+pub fn argument_end(args: &[TokenTree], from: usize) -> usize {
+    let mut at = from;
+    while matches!(args.get(at), Some(TokenTree::Ident(word)) if word == "move" || word == "async")
+    {
+        let capture = matches!(&args[at], TokenTree::Ident(word) if word == "move");
+        at += 1;
+        if capture
+            && matches!(args.get(at), Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Bracket)
+        {
+            at += 1;
+        }
+    }
+    // A closure's parameters may hold commas and `name: Type`; they end at the next `|`.
+    if args.get(at).is_some_and(|tree| is_punct(tree, '|')) {
+        let empty =
+            is_joint(&args[at], '|') && args.get(at + 1).is_some_and(|tree| is_punct(tree, '|'));
+        at = if empty {
+            at + 2
+        } else {
+            args[at + 1..]
+                .iter()
+                .position(|tree| is_punct(tree, '|'))
+                .map_or(args.len(), |close| at + close + 2)
+        };
+    }
+    let at = at.min(args.len());
+    args[at..]
+        .iter()
+        .position(|tree| is_punct(tree, ','))
+        .map_or(args.len(), |comma| at + comma)
 }
 
 fn rewrite_parameters<F>(group: &Group, rewrite: &mut F) -> syn::Result<TokenStream>

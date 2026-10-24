@@ -37,7 +37,10 @@ fn signature(sig: &mut Signature, body: Option<&mut Block>) -> syn::Result<()> {
             FnArg::Typed(param) => match take(&mut param.attrs) {
                 Some(ParamDefault { eq, expr }) => {
                     first_default.get_or_insert(eq);
-                    match expr.and_then(|expr| unwrap(param, index, eq, &expr)) {
+                    match expr.and_then(|mut expr| {
+                        crate::passes::string_literals::convert_value(&param.ty, &mut expr);
+                        unwrap(param, index, eq, &expr)
+                    }) {
                         Ok(stmt) => unwraps.push(stmt),
                         Err(err) => combine(&mut errors, err),
                     }

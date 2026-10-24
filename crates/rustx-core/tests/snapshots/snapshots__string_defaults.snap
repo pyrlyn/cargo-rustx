@@ -1,0 +1,14 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/string_defaults.rustx
+---
+fn greet(name: ::core::option::Option<String>) -> String {
+    let name: String = name.unwrap_or_else(|| ::std::string::String::from("admin"));
+    name
+}
+fn main() {
+    greet(::core::option::Option::None);
+    greet(::core::option::Option::Some(::std::string::String::from("ann")));
+    greet(::core::option::Option::Some(::std::string::String::from("bob")));
+}
