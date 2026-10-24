@@ -1,5 +1,6 @@
 use boilerless::Boil;
+struct Value;
 #[derive(Boil)]
 #[boil(builder)]
-struct S { a: u8 }
-fn main() { let _: S = S::builder().a("not a number").build().unwrap(); }
+struct S { a: Value }
+fn main() { let _: S = S::builder().a("not a value").build().unwrap(); }
