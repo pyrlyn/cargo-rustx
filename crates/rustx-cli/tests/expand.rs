@@ -3,6 +3,8 @@
 // `allow-unwrap-in-tests` only covers `#[test]` fns; the helpers below are test code as well.
 #![allow(clippy::unwrap_used)]
 
+mod support;
+
 use std::process::{Command, Output};
 
 /// Paths are given relative to the crate so the error lines are the same on every machine.
@@ -72,4 +74,11 @@ fn a_missing_subcommand_is_a_usage_error() {
     let out = rustx_cli(&[]);
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("expand"));
+}
+
+#[test]
+fn conditional_expansions_compile_and_keep_the_enabled_behavior() {
+    let output = expand("tests/fixtures/expand_conditions.rs");
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("expand_conditions");
+    assert_eq!(support::compile_and_run(output.as_bytes(), &dir), b"2\n");
 }

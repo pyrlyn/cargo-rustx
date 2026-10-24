@@ -63,3 +63,10 @@ replaces a user field. See `boilerless/tests/e2e/builder_skipped_generics.rs` fo
 example with a skipped type, a lifetime, a const parameter, and a colliding field name.
 
 From the repository root, `just check` checks both workspaces and the Python switcher tests.
+
+## Raw identifiers
+
+The `r#` escape is syntax, not part of generated strings: a config field `r#type` with prefix
+`"APP_"` reads `APP_TYPE`; an enum variant `r#type` has `as_str()` and `variant_name()` equal
+to `"type"`. An explicit `#[boil(rename = "r#literal")]` keeps the exact requested string.
+See `boilerless/tests/e2e/raw_identifiers.rs` for a runnable example covering all three patterns.

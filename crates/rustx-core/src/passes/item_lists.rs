@@ -7,7 +7,9 @@
 use std::mem;
 
 use syn::visit_mut::{self, VisitMut};
-use syn::{Block, Item, ItemMod, Stmt};
+use syn::{Attribute, Block, Item, ItemMod, Stmt};
+
+use crate::tokens::syntax::conditional_attributes;
 
 /// An element of an item list: an item, or a block statement that may be one.
 pub(super) trait Entry: Sized {
@@ -54,9 +56,44 @@ pub(super) fn insert_after<T: Entry>(
     mut generate: impl FnMut(&mut Item) -> Vec<Item>,
 ) {
     for mut entry in mem::take(list) {
-        let generated = entry.item_mut().map(&mut generate).unwrap_or_default();
+        let generated = entry
+            .item_mut()
+            .map(|item| {
+                let mut generated = generate(item);
+                if let Some(attrs) = type_or_impl_attrs(item) {
+                    for child in &mut generated {
+                        inherit_conditions(attrs, child);
+                    }
+                }
+                generated
+            })
+            .unwrap_or_default();
         list.push(entry);
         list.extend(generated.into_iter().map(T::from_item));
+    }
+}
+
+/// Generated siblings exist only when the type they implement exists. Keep any conditions
+/// the generator already supplied (field defaults do this), without copying derive/doc attrs.
+pub(super) fn inherit_conditions(owner: &[Attribute], generated: &mut Item) {
+    let Some(attrs) = type_or_impl_attrs(generated) else {
+        return;
+    };
+    let conditions: Vec<_> = conditional_attributes(owner)
+        .into_iter()
+        .filter(|attr| !attrs.contains(attr))
+        .collect();
+    attrs.splice(0..0, conditions);
+}
+
+/// The type declarations these derive-like passes accept and the items they generate.
+fn type_or_impl_attrs(item: &mut Item) -> Option<&mut Vec<Attribute>> {
+    match item {
+        Item::Struct(item) => Some(&mut item.attrs),
+        Item::Enum(item) => Some(&mut item.attrs),
+        Item::Union(item) => Some(&mut item.attrs),
+        Item::Impl(item) => Some(&mut item.attrs),
+        _ => None,
     }
 }
 
@@ -119,5 +156,40 @@ mod tests {
             file.into_token_stream().to_string(),
             expected.into_token_stream().to_string()
         );
+    }
+
+    #[test]
+    fn conditions_follow_generated_siblings_at_every_depth() {
+        let mut file: syn::File = syn::parse_quote! {
+            #[cfg(any())] #[derive(Clone)] struct A;
+            mod m { #[cfg_attr(all(), cfg(any()))] struct B; }
+            fn f() { #[cfg(any())] struct C; }
+        };
+        for_each_list(&mut file, &mut Copies);
+        let expected: syn::File = syn::parse_quote! {
+            #[cfg(any())] #[derive(Clone)] struct A;
+            #[cfg(any())] struct ACopy;
+            mod m {
+                #[cfg_attr(all(), cfg(any()))] struct B;
+                #[cfg_attr(all(), cfg(any()))] struct BCopy;
+            }
+            fn f() { #[cfg(any())] struct C; #[cfg(any())] struct CCopy; }
+        };
+        assert_eq!(file, expected);
+    }
+
+    #[test]
+    fn inherited_conditions_are_not_duplicated() {
+        let owner: syn::ItemStruct = syn::parse_quote!(
+            #[cfg(any())]
+            struct S;
+        );
+        let mut generated: Item = syn::parse_quote!(
+            #[cfg(any())]
+            impl S {}
+        );
+        let expected = generated.clone();
+        inherit_conditions(&owner.attrs, &mut generated);
+        assert_eq!(generated, expected);
     }
 }

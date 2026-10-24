@@ -34,7 +34,7 @@ mod var;
 
 pub use commas::{MacroTokens, without_trailing_commas};
 
-use std::ops::Range;
+use std::{collections::BTreeMap, ops::Range};
 
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use quote::ToTokens;
@@ -202,11 +202,31 @@ fn non_overlapping(text: &str, groups: impl Iterator<Item = Vec<Edit>>) -> Vec<V
     // Stable, so of two sets at one position the earlier rule wins.
     groups.sort_by_key(|group| group.first().map(|edit| edit.range.start));
     let mut kept: Vec<Vec<Edit>> = Vec::with_capacity(groups.len());
+    // Accepted ranges do not overlap. Only the predecessor and the first successor can
+    // conflict with a new edit; rescanning every accepted edit makes large files quadratic.
+    let mut occupied: BTreeMap<usize, usize> = BTreeMap::new();
     for group in groups {
-        let free = group
-            .iter()
-            .all(|edit| kept.iter().flatten().all(|old| !overlap(old, edit)));
+        let free = group.iter().all(|edit| {
+            let range = &edit.range;
+            let predecessor = occupied.range(..=range.start).next_back();
+            let successor = occupied
+                .range((
+                    std::ops::Bound::Excluded(range.start),
+                    std::ops::Bound::Unbounded,
+                ))
+                .next();
+            predecessor.is_none_or(|(_, end)| *end <= range.start)
+                && successor.is_none_or(|(start, _)| *start >= range.end)
+        });
         if free {
+            // Publish the ranges only after accepting the whole group. A zero-width
+            // insertion may precede a replacement at the same start; keep the larger end.
+            for edit in &group {
+                occupied
+                    .entry(edit.range.start)
+                    .and_modify(|end| *end = (*end).max(edit.range.end))
+                    .or_insert(edit.range.end);
+            }
             kept.push(group);
         }
     }
@@ -490,6 +510,62 @@ pub(crate) mod tests {
             convert(source, &[&second, &first]).unwrap(),
             "fn\n f() {}\n"
         );
+    }
+
+    #[test]
+    fn edit_selection_matches_a_pairwise_reference_at_range_boundaries() {
+        let source = "aéx";
+        let ranges = [0..0, 0..1, 0..3, 1..1, 1..2, 2..3, 3..3, 4..4];
+        for combination in 0..4096 {
+            let edits: Vec<_> = (0..4)
+                .map(|i| Edit {
+                    range: ranges[(combination >> (3 * i)) & 7].clone(),
+                    text: i.to_string(),
+                })
+                .collect();
+            let groups = vec![
+                vec![edits[0].clone(), edits[2].clone()],
+                vec![edits[1].clone()],
+                vec![edits[3].clone()],
+            ];
+            let mut ordered = groups.clone();
+            for group in &mut ordered {
+                group.sort_by_key(|e| e.range.start);
+            }
+            ordered.sort_by_key(|g| g[0].range.start);
+            let mut expected: Vec<Vec<Edit>> = Vec::new();
+            for group in ordered {
+                if group.iter().all(|e| source.get(e.range.clone()).is_some())
+                    && group.windows(2).all(|p| !overlap(&p[0], &p[1]))
+                    && group
+                        .iter()
+                        .all(|e| expected.iter().flatten().all(|old| !overlap(old, e)))
+                {
+                    expected.push(group);
+                }
+            }
+            assert_eq!(
+                non_overlapping(source, groups.into_iter()),
+                expected,
+                "{combination}"
+            );
+        }
+    }
+
+    #[test]
+    fn edit_selection_handles_many_disjoint_edits() {
+        let source = "x".repeat(20_000);
+        let groups = (0..source.len()).map(|i| {
+            vec![Edit {
+                range: i..i + 1,
+                text: "y".into(),
+            }]
+        });
+        let start = std::time::Instant::now();
+        let kept = non_overlapping(&source, groups);
+        eprintln!("20,000 disjoint edits: {:?}", start.elapsed());
+        assert_eq!(kept.len(), source.len());
+        assert_eq!(apply(&source, &flatten(&kept)), "y".repeat(source.len()));
     }
 
     #[test]
