@@ -1,0 +1,14 @@
+# Configuration for pyrlyn/ci's ci.yml, called from pipeline.yml (docs/config.md in
+# pyrlyn/ci). Language CI stays in ci.yml; this file turns on the scans.
+version: 1
+
+codeql:
+  languages: [actions, rust]
+
+# Snyk stays off (pyrlyn/ci default).
+snyk:
+  enabled: false
+
+# No .NET project in this repository: pyrlyn/ci's dotnet job would only report "no project".
+dotnet:
+  enabled: false
