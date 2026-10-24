@@ -3,6 +3,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::DeriveInput;
+use syn::ext::IdentExt;
 
 use super::variants;
 
@@ -12,7 +13,7 @@ pub(crate) fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let ids: Vec<_> = vs.iter().map(|v| &v.ident).collect();
     let count = ids.len();
     let idx = (0..count).map(|i| quote!(#i));
-    let strs = ids.iter().map(ToString::to_string);
+    let strs = ids.iter().map(|id| id.unraw().to_string());
     let (index_body, name_body) = if ids.is_empty() {
         (quote!(match *self {}), quote!(match *self {}))
     } else {

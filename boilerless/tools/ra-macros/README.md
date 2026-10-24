@@ -23,6 +23,12 @@ After switching, reload the window or run **rust-analyzer: Restart server**.
 
 ## Tests
 
+Trailing commas are accepted outside JSON strings. Values such as `"**/*.rs"`, `"https://host"`
+and `"x,}"` remain unchanged when toggling macros. Actual line or block comments are rejected
+without rewriting the file. Settings must be a JSON object, and
+`rust-analyzer.diagnostics.disabled`, when present, must be an array of strings. Invalid input
+produces a concise error and leaves both settings and backups untouched.
+
 These tests run in CI and `just check`; to run them separately from the repository root:
 
 ```sh

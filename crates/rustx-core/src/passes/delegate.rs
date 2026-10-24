@@ -63,7 +63,7 @@ use self::forward::Target;
 use self::spec::Delegation;
 use super::borrows;
 use super::impl_header::ImplHeader;
-use super::item_lists::{Entry, ExpandList, for_each_list};
+use super::item_lists::{Entry, ExpandList, for_each_list, inherit_conditions};
 use crate::tokens::syntax::{combine, take_attr};
 
 const ATTR: &str = "delegate";
@@ -241,7 +241,9 @@ impl Walk {
             generics: &owner.generics,
         };
         let tr = path.to_token_stream();
-        syn::parse2(header.implement(span, &tr, &quote!(#(#items)*))).map(Some)
+        let mut generated = syn::parse2(header.implement(span, &tr, &quote!(#(#items)*)))?;
+        inherit_conditions(&owner.attrs, &mut generated);
+        Ok(Some(generated))
     }
 
     /// The path the impl names and the items to forward, in the order the module docs list.
