@@ -1,0 +1,5 @@
+error: unknown boil pattern `bulder`; expected one of: builder, getters, setters, new, error, enum_str, convert, newtype, registry, config
+ --> tests/ui/unknown_pattern.rs:3:8
+  |
+3 | #[boil(bulder)]
+  |        ^^^^^^

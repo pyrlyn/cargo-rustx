@@ -1,0 +1,5 @@
+error: #[derive(Boil)] needs at least one pattern, e.g. #[boil(builder)]; available: builder, getters, setters, new, error, enum_str, convert, newtype, registry, config
+ --> tests/ui/no_pattern.rs:3:8
+  |
+3 | struct S { a: u8 }
+  |        ^

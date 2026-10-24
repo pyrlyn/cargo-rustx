@@ -1,0 +1,5 @@
+error: duplicate boil pattern `getters`
+ --> tests/ui/duplicate_pattern.rs:3:17
+  |
+3 | #[boil(getters, getters)]
+  |                 ^^^^^^^

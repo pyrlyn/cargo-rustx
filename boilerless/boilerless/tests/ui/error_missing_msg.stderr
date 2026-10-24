@@ -1,0 +1,5 @@
+error: `error` pattern: every variant needs #[boil(msg = "...")]
+ --> tests/ui/error_missing_msg.rs:4:33
+  |
+4 | enum E { #[boil(msg = "ok")] A, B }
+  |                                 ^

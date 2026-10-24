@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/rustx-core", "crates/rustx-macros", "crates/rustx", "crates/rustx-cli", "crates/rustx-build", "examples/build-rs"]
 resolver = "3"
+exclude = ["boilerless"]
 
 [workspace.package]
 version = "0.1.0"

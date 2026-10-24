@@ -1,0 +1,11 @@
+error: `enum_str` pattern expects an enum with only unit variants (#[boil(enum_str)]; variant: #[boil(rename = "...")])
+ --> tests/ui/wrong_shape.rs:4:6
+  |
+4 | enum E { A(u8) }
+  |      ^
+
+error: `builder` pattern expects a struct with named fields (#[boil(builder)]; field: #[boil(default = EXPR)] | #[boil(skip)])
+ --> tests/ui/wrong_shape.rs:7:8
+  |
+7 | struct T(u8);
+  |        ^

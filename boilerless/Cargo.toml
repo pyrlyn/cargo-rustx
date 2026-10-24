@@ -1,0 +1,17 @@
+# Nested workspace: kept apart from the rustx workspace so its syn version and
+# test setup cannot affect the main build.
+[workspace]
+members = ["macros", "boilerless"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.85"
+
+[workspace.dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "extra-traits"] }
+trybuild = "1"

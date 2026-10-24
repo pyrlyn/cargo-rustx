@@ -1,0 +1,15 @@
+[package]
+name = "boilerless-macros"
+description = "Proc-macros behind boilerless: parse -> rules -> codegen."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
