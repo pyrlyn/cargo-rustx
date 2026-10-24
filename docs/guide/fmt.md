@@ -57,3 +57,10 @@ refused.rustx:3:9: rustfmt cannot parse this, probably sugar `rustx-cli fmt` doe
 
 - `bound` and `derive` preset items are kept as written; the code around them is formatted.
 - Lines that rustfmt cannot format stay verbatim, as in ordinary Rust.
+- Macro inputs and `macro_rules!` bodies stay verbatim. Even `vec!` can be shadowed by a
+  user macro that distinguishes a trailing comma, so formatting must not add one. The code
+  around the invocation is still formatted.
+- In Rust files, only actual `sugar!` calls in the syntax tree are formatted, including
+  `::rustx::sugar!` and parenthesised or bracketed invocations. Tokens inside another macro
+  are opaque: `inspect!(sugar! { struct S { a: u8 } })` is left as written because
+  `inspect!` may match those tokens without ever invoking `sugar!`.

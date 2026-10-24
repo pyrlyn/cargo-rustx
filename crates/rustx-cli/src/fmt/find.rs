@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
+use rustx_core::token_tools::{angle_depth, argument_end, matching_close, parameter_list};
 use syn::visit_mut::{self, VisitMut};
 
 use super::mapped::Placeholder;
@@ -28,8 +29,41 @@ pub(super) fn find(source: &str, tokens: TokenStream, file: &mut syn::File) -> V
         rc_values,
         found,
     };
+    OpaqueMacros {
+        source,
+        found: &mut finder.found,
+    }
+    .visit_file_mut(file);
     finder.walk(tokens, Delimiter::None);
     finder.found
+}
+
+/// A macro may distinguish commas or consume Rust-looking tokens without expanding them.
+struct OpaqueMacros<'a> {
+    source: &'a str,
+    found: &'a mut Vec<Placeholder>,
+}
+
+impl VisitMut for OpaqueMacros<'_> {
+    fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+        let span = mac.delimiter.span();
+        let range = span.open().byte_range().start..span.close().byte_range().end;
+        let (pre, post) = match mac.delimiter {
+            syn::MacroDelimiter::Paren(_) => ("(", ")"),
+            syn::MacroDelimiter::Bracket(_) => ("[", "]"),
+            syn::MacroDelimiter::Brace(_) if mac.path.is_ident("macro_rules") => {
+                ("{ (", ") => {}; }")
+            }
+            syn::MacroDelimiter::Brace(_) => ("{", "}"),
+        };
+        // Generated macros may carry the span of a sugar keyword rather than source delimiters.
+        if self.source.get(range.clone()).is_some_and(|text| {
+            text.starts_with(&pre[..1]) && text.ends_with(&post[post.len() - 1..])
+        }) {
+            self.found
+                .push(Placeholder::verbatim(self.source, range, pre, post));
+        }
+    }
 }
 
 struct News(HashSet<Range<usize>>);
@@ -384,45 +418,12 @@ fn type_follows(seq: &[TokenTree], i: usize) -> bool {
         || ((after_arrow(seq, i) || after_prefix) && type_punct(next))
 }
 
-/// The comma after the argument that starts at `from`, past the parameters of a closure, which
-/// hold commas and `name: Type` of their own.
-fn argument_end(args: &[TokenTree], from: usize) -> usize {
-    let mut at = from;
-    while is_named(args.get(at), "move") || is_named(args.get(at), "async") {
-        at += 1;
-    }
-    if is_punct(args.get(at), '|') {
-        at = if is_joint_punct(args.get(at)) && is_punct(args.get(at + 1), '|') {
-            at + 2
-        } else {
-            (at + 1..args.len())
-                .find(|&k| is_punct(args.get(k), '|'))
-                .map_or(args.len(), |close| close + 1)
-        };
-    }
-    (at..args.len())
-        .find(|&k| is_punct(args.get(k), ','))
-        .unwrap_or(args.len())
-}
-
 /// A `=` at `i` that is neither part of `==`, `=>`, `<=` and the like nor followed by one.
 fn lone_equals(seq: &[TokenTree], i: usize) -> bool {
     let next = seq.get(i + 1);
     is_punct(seq.get(i), '=')
         && !is_joint_punct(seq.get(i.wrapping_sub(1)))
         && !(is_joint_punct(seq.get(i)) && (is_punct(next, '=') || is_punct(next, '>')))
-}
-
-/// The parameter group when `fn` stands at `i`: `fn name(..)` or `fn name<..>(..)`.
-fn parameter_list(seq: &[TokenTree], i: usize) -> Option<usize> {
-    if !matches!(seq.get(i + 1), Some(TokenTree::Ident(_))) {
-        return None;
-    }
-    let mut at = i + 2;
-    if is_punct(seq.get(at), '<') {
-        at = matching_close(seq, at)? + 1;
-    }
-    group(seq.get(at), Delimiter::Parenthesis).then_some(at)
 }
 
 /// A single `:` right before `i`, not part of `::`.
@@ -448,33 +449,6 @@ fn expression_start(seq: &[TokenTree], i: usize) -> bool {
     statement_start(seq, i)
         || (is_punct(before(1), '>') && is_punct(before(2), '='))
         || (is_punct(before(1), '=') && !is_joint_punct(before(1)) && !is_joint_punct(before(2)))
-}
-
-/// The angle-bracket depth after `seq[j]`; the `>` of `->` and `=>` closes nothing.
-fn angle_depth(seq: &[TokenTree], j: usize, depth: usize) -> usize {
-    let before = seq.get(j.wrapping_sub(1));
-    let arrow = is_joint_punct(before) && (is_punct(before, '-') || is_punct(before, '='));
-    match &seq[j] {
-        TokenTree::Punct(p) if p.as_char() == '<' => depth + 1,
-        TokenTree::Punct(p) if p.as_char() == '>' && !arrow => depth.saturating_sub(1),
-        _ => depth,
-    }
-}
-
-/// The `>` that closes the `<` at `open`, if it closes before a `;`.
-fn matching_close(seq: &[TokenTree], open: usize) -> Option<usize> {
-    let mut depth = 0;
-    for j in open..seq.len() {
-        if is_punct(seq.get(j), ';') {
-            return None;
-        }
-        let was = depth;
-        depth = angle_depth(seq, j, depth);
-        if was > 0 && depth == 0 {
-            return Some(j);
-        }
-    }
-    None
 }
 
 #[cfg(test)]
@@ -534,7 +508,7 @@ mod tests {
         let text = round_trip("enum E { Io(from std::io::Error) }");
         assert_eq!(text, "enum E { Io(&'_R0 std::io::Error) }");
         let text = round_trip("fn f(x: &mut u8) -> &mut from(x) u8 { todo!() }");
-        assert_eq!(text, "fn f(x: &mut u8) -> &'_R0 mut u8 { todo!() }");
+        assert_eq!(text, "fn f(x: &mut u8) -> &'_R0 mut u8 { todo!(_R1) }");
     }
 
     #[test]

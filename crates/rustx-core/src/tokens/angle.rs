@@ -10,8 +10,12 @@ use super::punct::{is_arrow, is_punct};
 /// Angle-bracket depth after the token at `at`, given the depth before it.
 ///
 /// Each `>` of a `>>` closes one level; the `>` of `->` closes none.
-pub(crate) fn angle_depth(seq: &[TokenTree], at: usize, depth: usize) -> usize {
-    match &seq[at] {
+#[must_use]
+pub fn angle_depth(seq: &[TokenTree], at: usize, depth: usize) -> usize {
+    let Some(tree) = seq.get(at) else {
+        return depth;
+    };
+    match tree {
         tree if is_punct(tree, '<') => depth + 1,
         tree if is_punct(tree, '>') && !is_arrow(seq, at) => depth.saturating_sub(1),
         _ => depth,
@@ -19,9 +23,16 @@ pub(crate) fn angle_depth(seq: &[TokenTree], at: usize, depth: usize) -> usize {
 }
 
 /// Index of the `>` that closes the `<` at `open`, or `None` if the sequence ends first.
-pub(crate) fn matching_close(seq: &[TokenTree], open: usize) -> Option<usize> {
+#[must_use]
+pub fn matching_close(seq: &[TokenTree], open: usize) -> Option<usize> {
+    if !seq.get(open).is_some_and(|tree| is_punct(tree, '<')) {
+        return None;
+    }
     let mut depth = 0;
     for at in open..seq.len() {
+        if is_punct(&seq[at], ';') {
+            return None;
+        }
         depth = angle_depth(seq, at, depth);
         if depth == 0 {
             return Some(at);

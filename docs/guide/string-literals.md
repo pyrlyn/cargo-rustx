@@ -59,5 +59,6 @@ fn demo() -> (Contact, String) {
 
 - The type must be written, as `String`, `Option<String>` (the literal in `Some(..)`) or `Vec<String>` (the literals of `vec![..]`), and only in fn bodies: a `let` annotation, a local or field assigned, a parameter of a fn of the input called by path, and the fields of a literal of a struct of the input (`Self { .. }` too).
 - Return values, method call arguments, `HashMap` keys, `const` and `static` items, struct literals inside macro arguments and anything that is not a literal stay explicit. So do byte and C strings.
-- The defaults of [parameter defaults](param-defaults.md) and the arguments given for defaulted parameters stay explicit too: write `user: String = String::from("admin")`.
+- [Parameter defaults](param-defaults.md) also convert literals: `user: String = "admin"` allocates only when omitted. Supplied literals convert in ordinary call expressions; macro arguments remain opaque to this typed conversion.
+- `Some` may be qualified as `Option::Some`, `std::option::Option::Some` or `core::option::Option::Some`. Nested `Option` wrappers are followed, including the wrapper introduced for a defaulted parameter.
 - Types are recognised by their written path (`String`, `std::string::String`), so an alias or a renamed import is not; structs and fns are matched by name.

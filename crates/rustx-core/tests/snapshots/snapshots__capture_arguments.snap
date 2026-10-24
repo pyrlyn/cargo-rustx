@@ -1,0 +1,19 @@
+---
+source: crates/rustx-core/tests/snapshots.rs
+expression: expanded
+input_file: crates/rustx-core/tests/cases/capture_arguments.rustx
+---
+fn h(f: impl Fn(u8, u8) -> u8, extra: ::core::option::Option<u8>) -> u8 {
+    let extra: u8 = extra.unwrap_or(0);
+    f(1, 2) + extra
+}
+fn main() {
+    let c = 3;
+    h(
+        {
+            let c = c;
+            move |a: u8, b: u8| a + b + c
+        },
+        ::core::option::Option::Some(4),
+    );
+}

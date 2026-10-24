@@ -24,11 +24,7 @@ rustx::sugar! {
         }
 
         pub fn demo() -> Vec<String> {
-            vec![
-                connect("db"),
-                connect("db", port: 6432),
-                connect("db", timeout_ms: 100),
-            ]
+            vec![connect("db"), connect("db", port: 6432), connect("db", timeout_ms: 100)]
         }
     }
 }

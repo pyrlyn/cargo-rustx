@@ -51,6 +51,14 @@ pub(crate) fn named_fields(input: &DeriveInput) -> syn::Result<Vec<(&Field, Fiel
     }
 }
 
+/// Constructors and skipped builder fields must use the same default expression.
+fn field_default(config: &FieldConfig) -> TokenStream {
+    config.default.as_ref().map_or_else(
+        || quote::quote!(::core::default::Default::default()),
+        |value| quote::quote!(#value),
+    )
+}
+
 /// The inner type of a one-field tuple struct.
 pub(crate) fn newtype_inner(input: &DeriveInput) -> syn::Result<&Type> {
     if let Data::Struct(s) = &input.data

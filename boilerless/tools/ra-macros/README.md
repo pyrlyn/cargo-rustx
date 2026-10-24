@@ -23,7 +23,7 @@ After switching, reload the window or run **rust-analyzer: Restart server**.
 
 ## Tests
 
-The repo CI only runs cargo, so run these by hand (stdlib only, no dependencies):
+These tests run in CI and `just check`; to run them separately from the repository root:
 
 ```sh
 python3 -m unittest discover boilerless/tools/ra-macros/tests

@@ -12,6 +12,7 @@ mod attribute;
 mod passes;
 #[cfg(feature = "sugar")]
 mod sugar;
+pub mod token_tools;
 mod tokens;
 
 pub use attribute::{AttributeMacro, expand_attribute};

@@ -1,0 +1,5 @@
+fn h(f: impl Fn(u8, u8) -> u8, extra: u8 = 0) -> u8 { f(1, 2) + extra }
+fn main() {
+    let c = 3;
+    h(move[c] |a: u8, b: u8| a + b + c, extra: 4);
+}
