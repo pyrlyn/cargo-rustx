@@ -7,17 +7,17 @@
 use std::ops::Range;
 use std::path::Path;
 
-use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use rustx_build::Kind;
+use syn::spanned::Spanned;
+use syn::visit_mut::VisitMut;
 
 use super::{format_sugar, located, same_expansion};
 
 /// `source`, a Rust file read from `path`, with every `sugar!` body formatted.
 pub(super) fn format(path: &Path, source: &str) -> Result<String, String> {
-    let tokens: TokenStream =
-        syn::parse_str(source).map_err(|err| rustx_build::render(path, source, err))?;
+    let mut file = parse(source).map_err(|err| rustx_build::render(path, source, err))?;
     let mut bodies = Vec::new();
-    find(tokens, &mut bodies);
+    Bodies(&mut bodies).visit_file_mut(&mut file);
     let mut out = source.to_owned();
     for (invocation, body) in bodies.into_iter().rev() {
         let line = source[..invocation].rfind('\n').map_or(0, |at| at + 1);
@@ -29,6 +29,33 @@ pub(super) fn format(path: &Path, source: &str) -> Result<String, String> {
         out.replace_range(body, &formatted);
     }
     Ok(out)
+}
+
+/// `parse_file` strips the BOM and shebang, but edits need offsets in the original source.
+fn parse(source: &str) -> syn::Result<syn::File> {
+    let file = syn::parse_file(source)?;
+    let preamble = usize::from(source.starts_with('\u{feff}')) * '\u{feff}'.len_utf8()
+        + file.shebang.as_ref().map_or(0, String::len);
+    if preamble == 0 {
+        Ok(file)
+    } else {
+        syn::parse_str(&pad_before(source, preamble))
+    }
+}
+
+/// Byte-sized blanks keep both UTF-8 offsets and line numbers of the code after a prefix.
+fn pad_before(source: &str, from: usize) -> String {
+    let padding: String = source[..from]
+        .chars()
+        .map(|c| {
+            if c == '\n' {
+                "\n".to_owned()
+            } else {
+                " ".repeat(c.len_utf8())
+            }
+        })
+        .collect();
+    padding + &source[from..]
 }
 
 /// The text between the braces of the body at `body`, formatted at `indent` plus one level.
@@ -43,17 +70,7 @@ fn format_body(
     }
     // Blanks in place of the text before the body keep every offset, line and column the same
     // as in the file, so errors and rustfmt's positions point into the file.
-    let padding: String = source[..body.start]
-        .chars()
-        .map(|c| {
-            if c == '\n' {
-                "\n".to_owned()
-            } else {
-                " ".repeat(c.len_utf8())
-            }
-        })
-        .collect();
-    let text = padding + &source[body.clone()];
+    let text = pad_before(&source[..body.end], body.start);
     let width: usize = indent.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum();
     let (expanded, formatted) = format_sugar(path, source, &text, body.start, width / 4 + 1)?;
     let after = rustx_build::expand_source(&formatted, Kind::Sugar).ok();
@@ -65,41 +82,19 @@ fn format_body(
     Ok(format!("\n{formatted}{indent}"))
 }
 
-/// Each `sugar! { .. }` or `rustx::sugar! { .. }` in `tokens`: where the invocation starts and
-/// the byte range between its braces. Bodies are not searched, since formatting one formats
-/// what it holds.
-fn find(tokens: TokenStream, bodies: &mut Vec<(usize, Range<usize>)>) {
-    let seq: Vec<TokenTree> = tokens.into_iter().collect();
-    for (i, tree) in seq.iter().enumerate() {
-        let TokenTree::Group(group) = tree else {
-            continue;
-        };
-        match sugar_path(&seq, i) {
-            Some(start) if group.delimiter() == Delimiter::Brace => {
-                let open = group.span_open().byte_range().end;
-                bodies.push((start, open..group.span_close().byte_range().start));
-            }
-            _ => find(group.stream(), bodies),
+/// Only AST macro calls are executable here; tokens inside other macros stay opaque.
+struct Bodies<'a>(&'a mut Vec<(usize, Range<usize>)>);
+
+impl VisitMut for Bodies<'_> {
+    fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+        if rustx_build::is_sugar(mac) {
+            let span = mac.delimiter.span();
+            self.0.push((
+                mac.path.span().byte_range().start,
+                span.open().byte_range().end..span.close().byte_range().start,
+            ));
         }
     }
-}
-
-/// Where the path of a `sugar!` call starts when the group at `i` is its body: `sugar!` or
-/// `rustx::sugar!`, the paths the expander resolves.
-fn sugar_path(seq: &[TokenTree], i: usize) -> Option<usize> {
-    let at = |k: usize| i.checked_sub(k).and_then(|k| seq.get(k));
-    let punct =
-        |k: usize, ch: char| matches!(at(k), Some(TokenTree::Punct(p)) if p.as_char() == ch);
-    let named = |k: usize, name: &str| matches!(at(k), Some(TokenTree::Ident(n)) if n == name);
-    if !punct(1, '!') || !named(2, "sugar") {
-        return None;
-    }
-    let start = |k: usize| at(k).map(|tree| tree.span().byte_range().start);
-    if !punct(3, ':') {
-        return start(2);
-    }
-    let rooted = punct(4, ':') && named(5, "rustx") && !punct(6, ':');
-    rooted.then(|| start(5)).flatten()
 }
 
 #[cfg(test)]
@@ -108,13 +103,26 @@ mod tests {
 
     fn bodies(source: &str) -> Vec<&str> {
         let mut found = Vec::new();
-        find(source.parse().unwrap(), &mut found);
+        Bodies(&mut found).visit_file_mut(&mut parse(source).unwrap());
         found.into_iter().map(|(_, body)| &source[body]).collect()
     }
 
     #[test]
     fn sugar_and_rustx_sugar_bodies_are_found_where_they_are_called() {
-        let source = "rustx::sugar! { a } fn f() { sugar! { b } } x::sugar! { c } sugar!(d);";
-        assert_eq!(bodies(source), [" a ", " b "]);
+        let source = "rustx::sugar! { a } fn f() { sugar! { b } } x::sugar! { c } sugar!(d); ::rustx::sugar![e];";
+        assert_eq!(bodies(source), [" a ", " b ", "d", "e"]);
+    }
+
+    #[test]
+    fn source_preambles_and_unicode_keep_body_offsets() {
+        let source =
+            "\u{feff}#!/usr/bin/env rust-script\n// café\n::rustx::sugar! { fn café() {} }";
+        assert_eq!(bodies(source), [" fn café() {} "]);
+    }
+
+    #[test]
+    fn macro_definitions_and_foreign_macro_inputs_are_opaque() {
+        let source = "macro_rules! m { () => { sugar! { not Rust } }; } fn f() { inspect!(sugar! { not Rust }); }";
+        assert_eq!(bodies(source), [] as [&str; 0]);
     }
 }

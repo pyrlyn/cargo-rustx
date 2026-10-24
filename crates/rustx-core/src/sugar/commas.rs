@@ -19,8 +19,8 @@ use crate::tokens::punct::{is_joint, is_punct};
 pub enum MacroTokens {
     /// Kept as written inside macro calls and attributes, since the macro may tell them apart.
     Kept,
-    /// Ignored there as well, for comparing a formatter's output with its input: rustfmt adds a
-    /// trailing comma to macro arguments it formats as Rust (`vec![..]`).
+    /// Ignored there as well. Use only when the caller already knows those macros ignore
+    /// trailing commas; the formatter uses `Kept` because even `vec!` may be shadowed.
     Ignored,
 }
 

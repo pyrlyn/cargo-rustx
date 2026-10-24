@@ -1,6 +1,6 @@
 //! Runs `rustx-cli fmt` on copies of the fixtures, so the checked-in files never change.
 //!
-//! Formatting needs `rustfmt` on `PATH`; without it the tests that format print a note and pass.
+//! Formatting needs `rustfmt` on `PATH`, supplied by the project toolchain.
 
 // `allow-unwrap-in-tests` only covers `#[test]` fns; the helpers below are test code as well.
 #![allow(clippy::unwrap_used)]
@@ -46,6 +46,64 @@ fn copy(test: &str, source: &Path) -> PathBuf {
 
 fn expand(path: &Path) -> Output {
     rustx_cli(&["expand"], path)
+}
+
+/// Comparing executed expansions catches macro arms that token normalisation would hide.
+fn execute(path: &Path) -> Vec<u8> {
+    let expanded = expand(path);
+    assert!(
+        expanded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&expanded.stderr)
+    );
+    let source = path.with_file_name("expanded.rs");
+    let executable = path.with_file_name(format!("expanded{}", std::env::consts::EXE_SUFFIX));
+    fs::write(&source, expanded.stdout).unwrap();
+    let compiled = Command::new("rustc")
+        .args(["--edition=2024", "--crate-name", "fmt_regression"])
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    let run = Command::new(executable).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    run.stdout
+}
+
+#[test]
+fn formatting_preserves_macro_behavior() {
+    for fixture in ["fmt_macro_comma.rustx", "fmt_foreign_macro.rs"] {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(fixture);
+        let path = copy(fixture, &source);
+        let before = execute(&path);
+        assert_eq!(before, b"1\n", "{fixture}");
+        let out = rustx_cli(&["fmt"], &path);
+        assert!(
+            out.status.success(),
+            "{fixture}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(execute(&path), before, "{fixture}");
+        if fixture == "fmt_foreign_macro.rs" {
+            assert_eq!(fs::read(&path).unwrap(), fs::read(&source).unwrap());
+        }
+        assert!(
+            rustx_cli(&["fmt", "--check"], &path).status.success(),
+            "{fixture}"
+        );
+    }
 }
 
 /// The expansion of `path` after rustfmt, so a trailing comma rustfmt adds inside `vec![..]`,

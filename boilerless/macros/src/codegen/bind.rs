@@ -2,7 +2,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{FnArg, ImplItem, ItemImpl, Pat, Path};
+use syn::{FnArg, GenericParam, ImplItem, ItemImpl, Pat, Path, Signature};
 
 pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
     if attr.is_empty() {
@@ -25,36 +25,59 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenS
     for it in &block.items {
         let ImplItem::Fn(f) = it else { continue };
         let mut sig = f.sig.clone();
-        let mut args = Vec::new();
-        for (i, a) in sig.inputs.iter_mut().enumerate() {
-            match a {
-                FnArg::Receiver(_) => args.push(quote!(self)),
-                FnArg::Typed(t) => match &*t.pat {
-                    Pat::Ident(p) => {
-                        let id = &p.ident;
-                        args.push(quote!(#id));
-                    }
-                    _ => {
-                        let id = quote::format_ident!("__arg{}", i);
-                        *t.pat = syn::parse_quote!(#id);
-                        args.push(quote!(#id));
-                    }
-                },
-            }
-        }
+        let args = arguments(&mut sig);
         let fname = &sig.ident;
-        let call = quote!(<#self_ty>::#fname(#(#args),*));
+        let generics = sig.generics.params.iter().filter_map(|param| match param {
+            GenericParam::Type(param) => {
+                let id = &param.ident;
+                Some(quote!(#id))
+            }
+            GenericParam::Const(param) => {
+                let id = &param.ident;
+                Some(quote!(#id))
+            }
+            GenericParam::Lifetime(_) => None,
+        });
+        let generics: Vec<_> = generics.collect();
+        let turbofish = (!generics.is_empty()).then(|| quote!(::<#(#generics),*>));
+        let call = quote!(<#self_ty>::#fname #turbofish (#(#args),*));
         let call = if sig.asyncness.is_some() {
             quote!(#call.await)
         } else {
             call
         };
-        methods.push(quote!(#sig { #call }));
+        let conditions = f
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("cfg") || attr.path().is_ident("cfg_attr"));
+        methods.push(quote!(#(#conditions)* #sig { #call }));
     }
     Ok(quote! {
         #block
         impl #impl_g #tr for #self_ty #where_c { #(#methods)* }
     })
+}
+
+// A destructuring pattern cannot be forwarded as an expression.
+fn arguments(sig: &mut Signature) -> Vec<TokenStream> {
+    let mut args = Vec::new();
+    for (i, a) in sig.inputs.iter_mut().enumerate() {
+        match a {
+            FnArg::Receiver(_) => args.push(quote!(self)),
+            FnArg::Typed(t) => match &*t.pat {
+                Pat::Ident(p) => {
+                    let id = &p.ident;
+                    args.push(quote!(#id));
+                }
+                _ => {
+                    let id = quote::format_ident!("__arg{}", i);
+                    *t.pat = syn::parse_quote!(#id);
+                    args.push(quote!(#id));
+                }
+            },
+        }
+    }
+    args
 }
 
 #[cfg(test)]

@@ -19,8 +19,8 @@ use syn::parse::ParseStream;
 use syn::token::Paren;
 use syn::{Expr, ExprMacro, Macro, MacroDelimiter, Token};
 
-use crate::tokens::params::parameter_list;
-use crate::tokens::punct::{is_joint, is_punct, is_single_colon};
+use crate::tokens::params::{argument_end, parameter_list};
+use crate::tokens::punct::{is_punct, is_single_colon};
 use crate::tokens::syntax::{RESERVED_PREFIX, combine, introduced_span};
 use crate::tokens::{map_sequences, map_sequences_reporting};
 
@@ -86,33 +86,6 @@ fn arguments(stream: TokenStream, errors: &mut Option<syn::Error>) -> TokenStrea
         start = end + 1;
     }
     out.into_iter().collect()
-}
-
-/// Index of the comma that ends the argument starting at `from`, or the end of `args`.
-fn argument_end(args: &[TokenTree], from: usize) -> usize {
-    let mut at = from;
-    while matches!(args.get(at), Some(TokenTree::Ident(word)) if word == "move" || word == "async")
-    {
-        at += 1;
-    }
-    // A closure's parameters may hold commas and `name: Type`; they end at the next `|`.
-    if args.get(at).is_some_and(|tree| is_punct(tree, '|')) {
-        let empty =
-            is_joint(&args[at], '|') && args.get(at + 1).is_some_and(|tree| is_punct(tree, '|'));
-        at = if empty {
-            at + 2
-        } else {
-            args[at + 1..]
-                .iter()
-                .position(|tree| is_punct(tree, '|'))
-                .map_or(args.len(), |close| at + close + 2)
-        };
-    }
-    let at = at.min(args.len());
-    args[at..]
-        .iter()
-        .position(|tree| is_punct(tree, ','))
-        .map_or(args.len(), |comma| at + comma)
 }
 
 /// `name: value` → `__rustx_named!(name = value)`; the `=` keeps the span of the `:`.

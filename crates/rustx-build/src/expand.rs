@@ -54,7 +54,8 @@ pub fn expand_source(source: &str, kind: Kind) -> syn::Result<String> {
 }
 
 /// Whether `mac` calls the `sugar!` macro: `sugar!` after a `use`, or by its `rustx` path.
-fn is_sugar(mac: &Macro) -> bool {
+#[must_use]
+pub fn is_sugar(mac: &Macro) -> bool {
     let segments: Vec<String> = mac
         .path
         .segments

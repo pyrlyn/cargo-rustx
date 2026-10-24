@@ -56,7 +56,7 @@ pub(crate) fn derived_paths(attrs: &[Attribute]) -> impl Iterator<Item = Path> +
 }
 
 /// The generic arguments of `ty` when it is written as the std type `name` of `module`: bare,
-/// or as `std::module::name` or `alloc::module::name`. A macro sees only the written path, so a
+/// or through `std` or `alloc`; `Option` also accepts `core::option`. A macro sees only the written path, so a
 /// renamed import or an alias is not recognised.
 pub(crate) fn std_type<'a>(ty: &'a Type, module: &str, name: &str) -> Option<&'a PathArguments> {
     let Type::Path(path) = ty else {
@@ -69,7 +69,10 @@ pub(crate) fn std_type<'a>(ty: &'a Type, module: &str, name: &str) -> Option<&'a
         .collect::<Option<_>>()?;
     let in_std = match &prefix[..] {
         [] => true,
-        [root, inner] => (root == "std" || root == "alloc") && inner == module,
+        [root, inner] => {
+            (root == "std" || root == "alloc" || (root == "core" && module == "option"))
+                && inner == module
+        }
         _ => false,
     };
     (path.qself.is_none() && in_std && last.ident == name).then_some(&last.arguments)
@@ -170,6 +173,7 @@ mod tests {
         for other in [
             "my::String",
             "std::String",
+            "core::string::String",
             "String<u8>",
             "<T as X>::String",
             "&String",
@@ -183,6 +187,7 @@ mod tests {
                 .map(|arg| quote::ToTokens::to_token_stream(arg).to_string())
         };
         assert_eq!(argument("std::option::Option<u8>").as_deref(), Some("u8"));
+        assert_eq!(argument("core::option::Option<u8>").as_deref(), Some("u8"));
         for other in ["Option", "Option<'a>", "Option<u8, u8>", "Option<N = u8>"] {
             assert_eq!(argument(other), None, "{other}");
         }

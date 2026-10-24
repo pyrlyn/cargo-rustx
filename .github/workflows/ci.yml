@@ -46,9 +46,13 @@ jobs:
         with:
           tool: cargo-nextest,just
       - run: cargo fmt --all --check
+      - run: cargo fmt --manifest-path boilerless/Cargo.toml --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --manifest-path boilerless/Cargo.toml --workspace --all-targets -- -D warnings
       - run: cargo nextest run --workspace
       - run: cargo test --workspace --doc
+      - run: cargo test --manifest-path boilerless/Cargo.toml --workspace
+      - run: python3 -m unittest discover boilerless/tools/ra-macros/tests
 
   msrv:
     runs-on: ubuntu-latest

@@ -47,3 +47,23 @@ A constant default uses `unwrap_or`, any other `unwrap_or_else(|| ..)`, so a def
 - Named arguments are evaluated in declaration order, not in the order written, and a call with generic arguments (`f::<T>(..)`) takes none.
 - Defaults must be trailing. A bare `<` in a default reads as generics: write `ok: bool = (a < b)`. A non-constant default runs in a closure, so `?`, `return` and `.await` in it act on that closure.
 - A string literal is not converted into a `String` default or argument (see [string literals](string-literals.md)).
+
+## Owned string defaults
+
+A string literal in a `String` default becomes an owned string. Allocation happens only
+when the argument is omitted. Supplied literals in ordinary call expressions are converted
+too, including named arguments. As with other typed string conversions, macro token bodies
+are not typed positions: bind the call result before passing it to an assertion macro.
+
+```rust
+use rustx::sugar;
+sugar! {
+    fn greet(name: String = "admin") -> String { name }
+}
+assert_eq!(greet(None), "admin");
+assert_eq!(greet(Some(String::from("ann"))), "ann");
+```
+
+Inside the sugar body, the calls are `greet()`, `greet("ann")`, or `greet(name: "ann")`.
+Outside it, use the expanded `Option<String>` signature as above. The compiled
+`tests/pass/default_strings_and_captures.rs` example exercises all three sugar spellings.

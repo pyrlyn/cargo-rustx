@@ -40,3 +40,20 @@ fn counter(name: Arc<String>, log: Arc<Vec<String>>) -> impl Fn() -> usize {
 - A capture binds the variable it starts with, followed only through method calls (`a`, `a.clone()`, `a.lock().unwrap().clone()`). Field access, `&a`, paths and `self` are errors, as are an empty list and a name captured twice.
 - The list must be followed by a closure: `move[..] async ||` and async blocks are errors.
 - Like `var`, it is rewritten inside macro-call arguments too.
+
+## Capturing in a call argument
+
+Commas in the closure parameters belong to the closure, not to the surrounding call.
+Capture lists also work beside named arguments:
+
+```rust
+use rustx::sugar;
+sugar! {
+    fn apply(f: impl Fn(u8, u8) -> u8, extra: u8 = 0) -> u8 { f(1, 2) + extra }
+    fn demo() {
+        let base = 3;
+        assert_eq!(apply(move[base] |a: u8, b: u8| a + b + base, extra: 4), 10);
+    }
+}
+demo();
+```

@@ -1,0 +1,10 @@
+//! A local vec macro deliberately gives its trailing comma meaning.
+macro_rules! vec {
+    ($a:expr, $b:expr) => { 1 };
+    ($a:expr, $b:expr,) => { 2 };
+}
+
+fn main() {
+    let value = vec!["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"];
+    println!("{}", value);
+}

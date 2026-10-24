@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::DeriveInput;
 
-use super::named_fields;
+use super::{field_default, named_fields};
 
 pub(crate) fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let name = &input.ident;
@@ -15,8 +15,10 @@ pub(crate) fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         let id = f.ident.as_ref().expect("named");
         let ty = &f.ty;
         match (&cfg.default, cfg.skip) {
-            (Some(d), _) => inits.push(quote!(#id: #d)),
-            (None, true) => inits.push(quote!(#id: ::core::default::Default::default())),
+            (Some(_), _) | (None, true) => {
+                let value = field_default(&cfg);
+                inits.push(quote!(#id: #value));
+            }
             (None, false) => {
                 params.push(quote!(#id: impl ::core::convert::Into<#ty>));
                 inits.push(quote!(#id: #id.into()));

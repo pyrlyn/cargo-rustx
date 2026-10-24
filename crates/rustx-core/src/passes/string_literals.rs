@@ -29,13 +29,18 @@ use syn::{Expr, Type};
 
 use super::macro_args::MacroArgs;
 use super::typed_positions::{Convert, walk_file};
-use crate::tokens::syntax::{is_str_literal, is_string, std_argument};
+use crate::tokens::syntax::{is_str_literal, is_string, std_argument, std_type};
 
 // Every AST pass has this signature; this one has nothing to report.
 #[expect(clippy::unnecessary_wraps)]
 pub(super) fn lower(file: &mut syn::File) -> syn::Result<()> {
     walk_file(file, &mut Strings(from_literal));
     Ok(())
+}
+
+/// Defaults are still typed here, before their parameter becomes an Option.
+pub(super) fn convert_value(target: &Type, value: &mut Expr) {
+    Strings(from_literal).convert(target, value, None);
 }
 
 /// The places where a literal becomes a `String`, and what happens at each: `.0` gets every
@@ -55,21 +60,44 @@ impl<F: FnMut(&mut Expr) -> bool> Convert for Strings<F> {
         let holds_string = |module, name| std_argument(target, module, name).is_some_and(is_string);
         if is_string(target) {
             (self.0)(value);
-        } else if holds_string("option", "Option") {
+        } else if let Some(inner) = std_argument(target, "option", "Option") {
             if let Expr::Call(call) = value
                 && let Expr::Path(func) = &*call.func
                 && func.qself.is_none()
-                && func.path.is_ident("Some")
+                && some_constructor(&func.path)
                 && call.args.len() == 1
             {
                 for arg in &mut call.args {
-                    (self.0)(arg);
+                    self.convert(inner, arg, None);
                 }
             }
         } else if holds_string("vec", "Vec") {
             vec_elements(value, &mut self.0);
         }
     }
+}
+
+/// Defaulted calls use the qualified constructor; ordinary code may import Some.
+fn some_constructor(path: &syn::Path) -> bool {
+    let mut parent = path.clone();
+    if parent
+        .segments
+        .pop()
+        .is_none_or(|last| last.ident != "Some")
+    {
+        return false;
+    }
+    parent.segments.is_empty()
+        || std_type(
+            &Type::Path(syn::TypePath {
+                attrs: Vec::new(),
+                qself: None,
+                path: parent,
+            }),
+            "option",
+            "Option",
+        )
+        .is_some()
 }
 
 /// `"text"` → `::std::string::String::from("text")`, at the literal's span.
