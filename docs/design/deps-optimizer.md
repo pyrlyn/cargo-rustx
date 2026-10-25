@@ -11,7 +11,7 @@ Measured on Ivan's Mac on 2026-10-21 (926 GB volume, ~2 GB free at the time):
 | All build dirs | 208 GB | 783 |
 | of which cargo `target/` | ~190 GB | |
 | Claude Code worktree targets (`.claude/worktrees/*`) | 109 GB | 16 |
-| Our `-wt` / `.rtok/worktrees` targets | 44.5 GB | 11 |
+| Our `-wt` / `.tokcli/worktrees` targets | 44.5 GB | 11 |
 | `/tmp` targets | 32 GB | 648 |
 | Xcode CoreSimulator (not cargo) | 16 GB | |
 | sccache (default 10 GB cap, full) | 10 GB | |
@@ -133,7 +133,7 @@ Commands:
 ```sh
 cargo install cargo-hakari cargo-sweep
 cargo hakari init workspace-hack && cargo hakari generate && cargo hakari manage-deps
-cargo sweep --time 3 ~/.cache/cargo-target/rtok/0
+cargo sweep --time 3 ~/.cache/cargo-target/tokcli/0
 sccache --show-stats
 # duplicates report
 find ~/.cache/cargo-target -name 'lib*.rlib' | sed -E 's#.*/lib(.+)-[0-9a-f]+\.rlib#\1#' | sort | uniq -c | sort -rn | head
@@ -151,7 +151,7 @@ find ~/.cache/cargo-target -name 'lib*.rlib' | sed -E 's#.*/lib(.+)-[0-9a-f]+\.r
 ## 7. Rollout
 
 1. Profile settings + `CARGO_INCREMENTAL=0` in each repo (no tooling needed).
-2. `cargo hakari` workspace-hack in the biggest repos (rtok, ketch, kerf, crates).
+2. `cargo hakari` workspace-hack in the biggest repos (the token CLI, the package manager, kerf, crates).
 3. Shim with file-lock pool, no daemon; enable for agents only.
 4. Disk guard + cleanup policy as a launchd job.
 5. Daemon with leases; then CI self-hosted runners.
