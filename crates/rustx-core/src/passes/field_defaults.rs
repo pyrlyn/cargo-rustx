@@ -140,7 +140,7 @@ impl Lower {
             return None;
         }
         let span = item.ident.span();
-        let cfgs = item.attrs.iter().filter(|attr| is_cfg(attr));
+        let cfgs = crate::tokens::syntax::conditional_attributes(&item.attrs);
         let header = ImplHeader {
             ident: &item.ident,
             generics: &item.generics,
@@ -242,7 +242,7 @@ impl VisitMut for Lower {
 /// `name: <default>` for the generated literal, taking the default off the field.
 fn field_value(field: &mut Field) -> TokenStream {
     let name = &field.ident;
-    let cfgs = field.attrs.iter().filter(|attr| is_cfg(attr));
+    let cfgs = crate::tokens::syntax::conditional_attributes(&field.attrs);
     let value = field.default.take().map_or_else(
         || quote_spanned!(name.span()=> ::core::default::Default::default()),
         |(_, expr)| default_value(&expr, &field.ty).into_token_stream(),
@@ -258,10 +258,6 @@ pub(super) fn default_value(expr: &Expr, ty: &Type) -> Expr {
     } else {
         expr.clone()
     }
-}
-
-fn is_cfg(attr: &Attribute) -> bool {
-    attr.path().is_ident("cfg")
 }
 
 /// The span of `Default` in the struct's `#[derive(..)]`, if it derives it.

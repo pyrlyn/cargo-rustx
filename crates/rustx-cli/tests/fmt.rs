@@ -5,6 +5,8 @@
 // `allow-unwrap-in-tests` only covers `#[test]` fns; the helpers below are test code as well.
 #![allow(clippy::unwrap_used)]
 
+mod support;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -56,28 +58,7 @@ fn execute(path: &Path) -> Vec<u8> {
         "{}",
         String::from_utf8_lossy(&expanded.stderr)
     );
-    let source = path.with_file_name("expanded.rs");
-    let executable = path.with_file_name(format!("expanded{}", std::env::consts::EXE_SUFFIX));
-    fs::write(&source, expanded.stdout).unwrap();
-    let compiled = Command::new("rustc")
-        .args(["--edition=2024", "--crate-name", "fmt_regression"])
-        .arg(&source)
-        .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
-    assert!(
-        compiled.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compiled.stderr)
-    );
-    let run = Command::new(executable).output().unwrap();
-    assert!(
-        run.status.success(),
-        "{}",
-        String::from_utf8_lossy(&run.stderr)
-    );
-    run.stdout
+    support::compile_and_run(&expanded.stdout, path.parent().unwrap())
 }
 
 #[test]

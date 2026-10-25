@@ -45,6 +45,21 @@ bad.rustx:2:5: `throw` is only allowed in a fn returning `T throws`
 
 Not expanded: `sugar!` inside other macros' arguments, and the attribute macros. A `sugar!` in expression position is an error.
 
+Conditions on an invocation (`#[cfg(...)]` and the conditional branches of `#[cfg_attr(...)]`) stay on every item it
+generates, including nested invocations, methods, and items inside function bodies. For example:
+
+```rust
+#[cfg(any())]
+rustx::sugar! { fn platform() -> u8 { 1 } }
+#[cfg(not(any()))]
+rustx::sugar! { fn platform() -> u8 { 2 } }
+assert_eq!(platform(), 2);
+```
+
+The expanded file still selects only the second function. `expand` preserves conditions for
+rustc to evaluate; it does not evaluate Cargo features or target configuration itself, so all
+macro bodies must still be valid rustx syntax.
+
 ## `sugar`: move plain Rust onto sugar
 
 ```sh

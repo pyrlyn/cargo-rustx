@@ -2,6 +2,23 @@
 
 `#[data]` on a struct with named fields generates `new`, getters and, with flags, setters and a builder. Problem: [08, constructors and getters](../../problems/08-constructors-getters.md).
 
+Conditions on the type also gate its generated impls and builder. This applies to `newtype`,
+`delegate`, `from` and `display` impls too. Nested `cfg_attr` conditions are preserved; other
+branches such as `derive` and `doc` stay on the original type:
+
+```rust
+rustx::sugar! {
+    #[cfg_attr(all(), cfg(any()))]
+    #[data(builder)]
+    struct Disabled { value: u8 }
+
+    #[cfg_attr(all(), derive(Debug))]
+    #[data]
+    struct Enabled { value: u8 }
+}
+assert_eq!(Enabled::new(7).value(), 7);
+```
+
 ```rust
 rustx::sugar! {
     #[data(setters, builder)]

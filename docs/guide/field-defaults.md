@@ -46,7 +46,10 @@ fn demo() -> Config {
 }
 ```
 
-A field without a default takes `Default::default()`. Generics, `where` and `cfg` are copied to the impl.
+A field without a default takes `Default::default()`. Generics, `where` and conditions (`cfg`
+and nested `cfg_attr` gates) are copied to the impl. Field conditions also gate their initializers,
+so a disabled field does not require its type or default expression to resolve. Other attributes,
+such as a conditional `derive`, remain on the original declaration.
 
 ## Limits
 

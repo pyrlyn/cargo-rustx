@@ -3,6 +3,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::DeriveInput;
+use syn::ext::IdentExt;
 
 use super::variants;
 use crate::parse::parse_variant;
@@ -15,7 +16,7 @@ pub(crate) fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         let vid = &v.ident;
         let s = parse_variant(v)?
             .rename
-            .map_or_else(|| vid.to_string(), |r| r.value());
+            .map_or_else(|| vid.unraw().to_string(), |r| r.value());
         to.push(quote!(Self::#vid => #s));
         from.push(quote!(#s => ::core::result::Result::Ok(Self::#vid)));
     }

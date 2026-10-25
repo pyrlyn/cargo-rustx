@@ -26,23 +26,34 @@ class JsoncError(ValueError):
 
 def parse(text: str, name: str = "settings.json") -> dict:
     """Parse settings text; tolerates trailing commas, refuses comments."""
-    if re.search(r"^\s*//|/\*", text, re.M):
-        raise JsoncError(f"{name} has comments (JSONC); refusing to rewrite it. Remove comments first.")
-    text = re.sub(r",(\s*[}\]])", r"\1", text)
-    return json.loads(text or "{}")
+    def syntax(match):
+        if match.lastgroup == "comment":
+            raise JsoncError(f"{name} has comments (JSONC); refusing to rewrite it. Remove comments first.")
+        return "" if match.lastgroup == "comma" else match.group()
+
+    # Consume entire quoted strings first, including escaped quotes/backslashes. Syntax-like
+    # text inside a value (glob patterns, URLs, or `,}`) must survive byte for byte.
+    text = re.sub(r'"(?:[^"\\]|\\.)*"|(?P<comment>//|/\*)|(?P<comma>,)(?=\s*[}\]])', syntax, text)
+    data = json.loads(text or "{}")
+    if not isinstance(data, dict):
+        raise ValueError(f"{name}: settings must be a JSON object")
+    return data
 
 
 def load(path: Path) -> dict:
     """Load settings from `path`; a missing file is empty settings."""
     if not path.exists():
         return {}
-    return parse(path.read_text(), str(path))
+    return parse(path.read_text(encoding="utf-8"), str(path))
 
 
 def apply(data: dict, mode: str) -> dict:
     """Return a new settings dict with proc macros switched `on` or `off`."""
     new = dict(data)
-    diag = list(new.get(DIAG_KEY, []))
+    diag = new.get(DIAG_KEY, [])
+    if not isinstance(diag, list) or any(not isinstance(value, str) for value in diag):
+        raise ValueError(f"{DIAG_KEY} must be an array of strings")
+    diag = list(diag)
     if mode == "on":
         new.update({k: True for k in KEYS})
         diag = [d for d in diag if d not in DIAG]  # show macro errors again
@@ -73,7 +84,7 @@ def write(path: Path, data: dict) -> None:
     bak = path.with_suffix(".json.bak")
     if path.exists() and not bak.exists():
         shutil.copy2(path, bak)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def run(mode: str, root: Path, out=sys.stdout, err=sys.stderr) -> bool:
@@ -103,7 +114,7 @@ def main(argv=None) -> None:
         sys.exit(__doc__)
     try:
         run(mode, root)
-    except JsoncError as e:
+    except (ValueError, OSError) as e:
         sys.exit(str(e))
 
 

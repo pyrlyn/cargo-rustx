@@ -64,6 +64,32 @@ class E2E(unittest.TestCase):
         self.assertIn("nothing changed", r.stdout)
         self.assertEqual(snapshot(self.b), first)
 
+    def test_unrelated_strings_survive_on_and_off(self):
+        path = self.b / ".vscode" / "settings.json"
+        path.parent.mkdir()
+        original = {"files.exclude": {"**/*.rs": True}, "label": 'київ,} ",]'}
+        path.write_text(json.dumps(original), encoding="utf-8")
+        for mode in ("off", "on"):
+            result = self.cli(mode, str(self.b), cwd=self.a)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            actual = json.loads(path.read_text(encoding="utf-8"))
+            for key, value in original.items():
+                self.assertEqual(actual[key], value)
+
+    def test_invalid_settings_fail_without_writes_or_traceback(self):
+        path = self.b / ".vscode" / "settings.json"
+        path.parent.mkdir()
+        for text in ('[]', '{broken', '{"a":1 // comment\n}',
+                     '{"rust-analyzer.diagnostics.disabled":null}',
+                     '{"rust-analyzer.diagnostics.disabled":"macro-error"}'):
+            with self.subTest(text=text):
+                path.write_text(text)
+                before = snapshot(self.b)
+                result = self.cli("off", str(self.b), cwd=self.a)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(snapshot(self.b), before)
+
     def test_bad_mode_and_jsonc_exit_nonzero(self):
         r = self.cli("toggle", cwd=self.a)
         self.assertNotEqual(r.returncode, 0)

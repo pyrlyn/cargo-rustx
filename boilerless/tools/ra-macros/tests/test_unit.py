@@ -10,6 +10,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import ra_macros as rm  # noqa: E402
 
 
+class StringPreservation(unittest.TestCase):
+    def test_json_strings_are_never_cleaned_as_syntax(self):
+        values = ['x,}', 'x,]', '**/*.rs', '// comment', 'quote: " and slash: \\', 'київ']
+        for value in values:
+            with self.subTest(value=value):
+                text = json.dumps({'value': value})
+                self.assertEqual(rm.parse(text), {'value': value})
+                self.assertEqual(rm.parse(text[:-1] + ',}'), {'value': value})
+
+    def test_inline_comments_are_rejected(self):
+        for text in ['{"a": 1 // comment\n}', '{"a": 1, /* comment */}']:
+            with self.subTest(text=text), self.assertRaises(rm.JsoncError):
+                rm.parse(text)
+
+    def test_settings_must_be_an_object(self):
+        for text in ['[]', 'null', '"text"', '1']:
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, 'object'):
+                rm.parse(text)
+
+
 class ParseLoad(unittest.TestCase):
     def test_trailing_commas(self):
         self.assertEqual(rm.parse('{"a": [1, 2,], "b": 1,}'), {"a": [1, 2], "b": 1})

@@ -4,10 +4,10 @@
 use std::path::Path;
 
 use proc_macro2::TokenStream;
-use quote::ToTokens;
+use quote::{ToTokens, quote};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::visit_mut::{self, VisitMut};
-use syn::{Block, Expr, ImplItem, Item, Macro, Stmt, TraitItem};
+use syn::{Attribute, Block, Expr, ImplItem, Item, Macro, Stmt, TraitItem};
 
 use crate::diagnostic::is_call_site;
 
@@ -56,15 +56,10 @@ pub fn expand_source(source: &str, kind: Kind) -> syn::Result<String> {
 /// Whether `mac` calls the `sugar!` macro: `sugar!` after a `use`, or by its `rustx` path.
 #[must_use]
 pub fn is_sugar(mac: &Macro) -> bool {
-    let segments: Vec<String> = mac
-        .path
-        .segments
-        .iter()
-        .map(|s| s.ident.to_string())
-        .collect();
-    match segments.as_slice() {
-        [name] => name == "sugar" && mac.path.leading_colon.is_none(),
-        [krate, name] => krate == "rustx" && name == "sugar",
+    let mut segments = mac.path.segments.iter();
+    match (segments.next(), segments.next(), segments.next()) {
+        (Some(name), None, None) => name.ident == "sugar" && mac.path.leading_colon.is_none(),
+        (Some(krate), Some(name), None) => krate.ident == "rustx" && name.ident == "sugar",
         _ => false,
     }
 }
@@ -77,31 +72,34 @@ fn many<T: Parse>(input: ParseStream) -> syn::Result<Vec<T>> {
     Ok(out)
 }
 
-fn item_sugar(item: &Item) -> Option<&Macro> {
+// A macro call and the attributes controlling whether its output exists.
+type Invocation<'a> = (&'a Macro, &'a [Attribute]);
+
+fn item_sugar(item: &Item) -> Option<Invocation<'_>> {
     // `macro_rules! sugar` defines a macro instead of calling one.
     match item {
-        Item::Macro(m) if m.ident.is_none() => Some(&m.mac),
+        Item::Macro(m) if m.ident.is_none() => Some((&m.mac, &m.attrs)),
         _ => None,
     }
 }
 
-fn impl_item_sugar(item: &ImplItem) -> Option<&Macro> {
+fn impl_item_sugar(item: &ImplItem) -> Option<Invocation<'_>> {
     match item {
-        ImplItem::Macro(m) => Some(&m.mac),
+        ImplItem::Macro(m) => Some((&m.mac, &m.attrs)),
         _ => None,
     }
 }
 
-fn trait_item_sugar(item: &TraitItem) -> Option<&Macro> {
+fn trait_item_sugar(item: &TraitItem) -> Option<Invocation<'_>> {
     match item {
-        TraitItem::Macro(m) => Some(&m.mac),
+        TraitItem::Macro(m) => Some((&m.mac, &m.attrs)),
         _ => None,
     }
 }
 
-fn stmt_sugar(stmt: &Stmt) -> Option<&Macro> {
+fn stmt_sugar(stmt: &Stmt) -> Option<Invocation<'_>> {
     match stmt {
-        Stmt::Macro(m) => Some(&m.mac),
+        Stmt::Macro(m) => Some((&m.mac, &m.attrs)),
         _ => None,
     }
 }
@@ -123,12 +121,12 @@ impl Expander {
     fn splice<T>(
         &mut self,
         list: &mut Vec<T>,
-        sugar: fn(&T) -> Option<&Macro>,
+        sugar: fn(&T) -> Option<Invocation<'_>>,
         parse: fn(ParseStream) -> syn::Result<Vec<T>>,
     ) {
         for element in std::mem::take(list) {
             let expanded = match sugar(&element) {
-                Some(mac) if is_sugar(mac) => self.expand(mac, parse),
+                Some((mac, attrs)) if is_sugar(mac) => self.expand(mac, attrs, parse),
                 _ => None,
             };
             match expanded {
@@ -145,10 +143,22 @@ impl Expander {
     fn expand<T>(
         &mut self,
         mac: &Macro,
+        attrs: &[Attribute],
         parse: fn(ParseStream) -> syn::Result<Vec<T>>,
     ) -> Option<Vec<T>> {
         let tokens: TokenStream = match rustx_core::try_expand(mac.tokens.clone()) {
-            Ok(file) => file.into_token_stream(),
+            Ok(file) => {
+                // Conditions on an invocation gate all its output, including nested calls.
+                // Other invocation attributes (e.g. doc comments) do not annotate its output.
+                let conditions = rustx_core::token_tools::conditional_attributes(attrs);
+                if conditions.is_empty() {
+                    file.into_token_stream()
+                } else {
+                    let inner_attrs = &file.attrs;
+                    let items = file.items.iter().map(|item| quote!(#(#conditions)* #item));
+                    quote!(#(#inner_attrs)* #(#items)*)
+                }
+            }
             Err(err) => {
                 self.report(at_invocation(err, mac));
                 return None;
@@ -303,6 +313,33 @@ mod tests {
         assert_eq!(
             out,
             plain("fn a() { let mut x = 1; } fn b() { fn c() { let mut y = 2; } }")
+        );
+    }
+
+    #[test]
+    fn conditional_macro_invocations_keep_every_generated_item_conditional() {
+        let out = rust(
+            "#[cfg(any())] sugar! { fn a() {} fn b() {} }
+             impl S { #[cfg_attr(all(), cfg(any()))] sugar! { fn c() {} } }
+             trait T { #[cfg(any())] sugar! { fn d() {} } }
+             fn f() { #[cfg(any())] sugar! { fn e() {} fn g() {} } }",
+        );
+        assert_eq!(
+            out,
+            plain(
+                "#[cfg(any())] fn a() {} #[cfg(any())] fn b() {}
+                 impl S { #[cfg_attr(all(), cfg(any()))] fn c() {} }
+                 trait T { #[cfg(any())] fn d() {} }
+                 fn f() { #[cfg(any())] fn e() {} #[cfg(any())] fn g() {} }"
+            )
+        );
+    }
+
+    #[test]
+    fn nested_macro_conditions_are_combined_in_order() {
+        assert_eq!(
+            rust("#[cfg(a)] sugar! { #[cfg(b)] sugar! { fn f() {} fn g() {} } }"),
+            plain("#[cfg(a)] #[cfg(b)] fn f() {} #[cfg(a)] #[cfg(b)] fn g() {}")
         );
     }
 
