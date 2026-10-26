@@ -49,9 +49,15 @@ jobs:
       - run: cargo fmt --manifest-path boilerless/Cargo.toml --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo clippy --manifest-path boilerless/Cargo.toml --workspace --all-targets -- -D warnings
-      - run: cargo nextest run --workspace
-      - run: cargo test --workspace --doc
-      - run: cargo test --manifest-path boilerless/Cargo.toml --workspace
+      - name: tests skipped (SKIP_CI_TESTS)
+        if: vars.SKIP_CI_TESTS == 'true' || env.SKIP_CI_TESTS == 'true'
+        run: echo "::notice title=SKIP_CI_TESTS::tests skipped by SKIP_CI_TESTS"
+      - if: vars.SKIP_CI_TESTS != 'true' && env.SKIP_CI_TESTS != 'true'
+        run: cargo nextest run --workspace
+      - if: vars.SKIP_CI_TESTS != 'true' && env.SKIP_CI_TESTS != 'true'
+        run: cargo test --workspace --doc
+      - if: vars.SKIP_CI_TESTS != 'true' && env.SKIP_CI_TESTS != 'true'
+        run: cargo test --manifest-path boilerless/Cargo.toml --workspace
       - run: python3 -m unittest discover boilerless/tools/ra-macros/tests
 
   msrv:
