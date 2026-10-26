@@ -42,6 +42,13 @@ jobs:
           persist-credentials: false
       # rust-toolchain.toml picks the toolchain; rustup installs it on first use.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: pyrlyn/ci/.github/actions/sccache@228d35117ab56821b54c82fdd5751aac71892cd0 # ci#123, re-pin to main after merge
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
       - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
         with:
           tool: cargo-nextest,just
@@ -53,6 +60,8 @@ jobs:
       - run: cargo test --workspace --doc
       - run: cargo test --manifest-path boilerless/Cargo.toml --workspace
       - run: python3 -m unittest discover boilerless/tools/ra-macros/tests
+      - if: always() && env.RUSTC_WRAPPER == 'sccache'
+        run: sccache --show-stats
 
   msrv:
     runs-on: ubuntu-latest
@@ -63,4 +72,13 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install 1.97 --profile minimal
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: pyrlyn/ci/.github/actions/sccache@228d35117ab56821b54c82fdd5751aac71892cd0 # ci#123, re-pin to main after merge
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
       - run: cargo +1.97 check --workspace
+      - if: always() && env.RUSTC_WRAPPER == 'sccache'
+        run: sccache --show-stats
