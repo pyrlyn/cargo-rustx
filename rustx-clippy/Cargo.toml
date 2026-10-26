@@ -1,0 +1,27 @@
+[package]
+name = "rustx-clippy"
+version = "0.1.0"
+edition = "2024"
+description = "dylint lints: misuse of cargo-rustx sugar, and plain Rust the sugar replaces"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/pyrlyn/cargo-rustx"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+clippy_utils = "=0.1.101"
+dylint_linting = "6.2.0"
+
+# The examples are UI tests that use the real `rustx` macros, so attribute macros expand as they
+# do in a user crate (tests/ui.rs runs them through dylint_testing).
+[dev-dependencies]
+dylint_testing = "6.2.0"
+rustx = { path = "../crates/rustx" }
+
+# Not a member of the repository workspace: that one stays on stable Rust.
+[workspace]
+
+[package.metadata.rust-analyzer]
+rustc_private = true
